@@ -1,4 +1,8 @@
 with Ada.Characters.Handling;
+with Ada.Containers.Generic_Sort;
+with Ada.Containers.Ordered_Maps;
+with Ada.Unchecked_Deallocation;
+with Landin.IR.Liveness;
 with Ada.Containers.Vectors;
 with Ada.Containers.Indefinite_Hashed_Maps;
 with Ada.Strings.Hash;
@@ -17,6 +21,7 @@ with Ada.Strings.Fixed;
 with Landin.Backend.Arm32_ABI;
 with Landin.Backend.Site_Counts;
 with Landin.Backend.Work_Arrays;
+with Landin.Backend.Placement;
 with Landin.Types;
 
 package body Landin.Backend.Cortex_M is
@@ -116,15 +121,749 @@ package body Landin.Backend.Cortex_M is
    --  local: an operand's last read precedes reuse, including across calls.
    --  Scratch registers belong to selection. A reused spill home grows to
    --  hold the widest scalar assigned to it.
+   --  D1567: a set of the core registers r0-r15, the Nth bit rN.
+   type Register_Mask is mod 2 ** 16;
+   function Bit (Number : Natural) return Register_Mask
+     is (2 ** Number);
+
+   function Held_Count (Held : Register_Mask) return Natural;
+   function Held_Count (Held : Register_Mask) return Natural is
+      Count : Natural := 0;
+   begin
+      for Number in 0 .. 15 loop
+         if (Held and Bit (Number)) /= 0 then
+            Count := Count + 1;
+         end if;
+      end loop;
+      return Count;
+   end Held_Count;
+
+   --  D1567: the core registers a routine's text writes at each position
+   --  of its layout order (Landin.Backend.Placement), position zero being
+   --  the entry's parameter stores.  A call writes every register AAPCS
+   --  does not preserve.
+   type Write_Masks is array (Natural range <>) of Register_Mask;
+   type Write_Masks_Access is access Write_Masks;
+   procedure Free_Masks is new Ada.Unchecked_Deallocation
+     (Write_Masks, Write_Masks_Access);
+
+   --  r0-r3, r12 and lr, which a call may change.
+   Caller_Saved : constant Register_Mask :=
+     Bit (0) or Bit (1) or Bit (2) or Bit (3) or Bit (12) or Bit (14);
+
+   --  D1567: the core registers one line of a routine's text writes.  A
+   --  label or directive writes none.  An instruction writes its first
+   --  operand, except a comparison, a branch, a barrier, a store or a
+   --  push, which write none but a store's or push's base; a load or pop
+   --  of several writes its list, a long multiply and a doubleword load
+   --  their first two; a call writes every register AAPCS does not
+   --  preserve.  A VFP instruction writes a core register only as a
+   --  transfer's destination.
+   function Written_By (Line : String) return Register_Mask;
+
+   --  D1571: whether a label is one of a routine's traps, which never
+   --  return: a Thumb-1 branch too far for B reaches one with BL, which
+   --  writes only lr, and a routine is no less a leaf for it.
+   function Is_Trap (Target : String) return Boolean
+     is ((Target'Length > 5
+          and then Target (Target'Last - 4 .. Target'Last) = "_trap")
+         or else (Target'Length > 12
+                  and then Target (Target'Last - 11 .. Target'Last)
+                    = "_stack_limit"));
+
+   function Written_By (Line : String) return Register_Mask is
+      HT : constant Character := Character'Val (9);
+
+      function Number_Of (Name : String) return Integer;
+      function Number_Of (Name : String) return Integer is
+         Text : constant String := Trimmed (Name);
+      begin
+         if Text'Length in 2 .. 3 and then Text (Text'First) = 'r'
+           and then (for all C of Text (Text'First + 1 .. Text'Last)
+                     => C in '0' .. '9')
+         then
+            declare
+               Number : constant Natural :=
+                 Natural'Value (Text (Text'First + 1 .. Text'Last));
+            begin
+               return (if Number <= 15 then Number else -1);
+            end;
+         elsif Text = "sp" then
+            return 13;
+         elsif Text = "lr" then
+            return 14;
+         elsif Text = "pc" then
+            return 15;
+         elsif Text = "ip" then
+            return 12;
+         elsif Text = "fp" then
+            return 11;
+         elsif Text = "sl" then
+            return 10;
+         elsif Text = "sb" then
+            return 9;
+         end if;
+         return -1;
+      end Number_Of;
+
+      function One (Name : String) return Register_Mask is
+        (if Number_Of (Name) >= 0 then Bit (Number_Of (Name)) else 0);
+
+      --  The registers a brace list names, ranges included.
+      function List_Of (Text : String) return Register_Mask;
+      function List_Of (Text : String) return Register_Mask is
+         Open : constant Natural := Ada.Strings.Fixed.Index (Text, "{");
+         Close : constant Natural := Ada.Strings.Fixed.Index (Text, "}");
+         Result : Register_Mask := 0;
+         Start : Natural;
+      begin
+         if Open = 0 or else Close < Open then
+            return 16#FFFF#;
+         end if;
+         Start := Open + 1;
+         for Index in Open + 1 .. Close loop
+            if Index = Close or else Text (Index) = ',' then
+               declare
+                  Item : constant String :=
+                    Trimmed (Text (Start .. Index - 1));
+                  Dash : constant Natural :=
+                    Ada.Strings.Fixed.Index (Item, "-");
+               begin
+                  if Dash > 0 then
+                     declare
+                        Low : constant Integer :=
+                          Number_Of (Item (Item'First .. Dash - 1));
+                        High : constant Integer :=
+                          Number_Of (Item (Dash + 1 .. Item'Last));
+                     begin
+                        if Low >= 0 and then High >= Low then
+                           for Number in Low .. High loop
+                              Result := Result or Bit (Number);
+                           end loop;
+                        end if;
+                     end;
+                  else
+                     Result := Result or One (Item);
+                  end if;
+               end;
+               Start := Index + 1;
+            end if;
+         end loop;
+         return Result;
+      end List_Of;
+
+      First : Positive;
+      Space : Natural;
+   begin
+      if Line'Length < 2 or else Line (Line'First) /= HT
+        or else Line (Line'First + 1) = '.'
+      then
+         return 0;
+      end if;
+      First := Line'First + 1;
+      Space := Ada.Strings.Fixed.Index (Line (First .. Line'Last), " ");
+      declare
+         Spelled : constant String :=
+           (if Space = 0 then Line (First .. Line'Last)
+            else Line (First .. Space - 1));
+         Mnemonic : constant String :=
+           (if Spelled'Length > 2
+              and then Spelled (Spelled'Last - 1 .. Spelled'Last)
+                in ".w" | ".n"
+            then Spelled (Spelled'First .. Spelled'Last - 2)
+            else Spelled);
+         Rest : constant String :=
+           (if Space = 0 then "" else Line (Space + 1 .. Line'Last));
+         Comma : constant Natural := Ada.Strings.Fixed.Index (Rest, ",");
+         Target : constant String :=
+           (if Comma = 0 then Rest else Rest (Rest'First .. Comma - 1));
+         Back : constant Boolean := Ada.Strings.Fixed.Index (Rest, "!") > 0;
+         Base : constant String :=
+           (if Back then Rest (Rest'First .. Ada.Strings.Fixed.Index
+                                 (Rest, "!") - 1)
+            else "");
+         Conditions : constant array (1 .. 15) of String (1 .. 2) :=
+           ["eq", "ne", "cs", "cc", "hs", "lo", "mi", "pl", "vs", "vc",
+            "hi", "ls", "ge", "lt", "gt"];
+         function Branches return Boolean is
+           (Mnemonic in "b" | "bx" | "cbz" | "cbnz" | "ble" | "bal"
+            or else (Mnemonic'Length = 3
+                     and then Mnemonic (Mnemonic'First) = 'b'
+                     and then (for some C of Conditions =>
+                                 C = Mnemonic (Mnemonic'First + 1
+                                               .. Mnemonic'Last))));
+         Second : constant String :=
+           (if Comma = 0 then ""
+            else Rest (Comma + 1 .. Rest'Last));
+         Comma_2 : constant Natural := Ada.Strings.Fixed.Index (Second, ",");
+         Second_Name : constant String :=
+           (if Comma_2 = 0 then Second
+            else Second (Second'First .. Comma_2 - 1));
+      begin
+         if Mnemonic = "bl" and then Is_Trap (Trimmed (Rest)) then
+            return Bit (14);
+         elsif Mnemonic in "bl" | "blx" then
+            return Caller_Saved;
+         elsif Branches
+           or else Mnemonic in "cmp" | "cmn" | "tst" | "teq" | "udf" | "nop"
+             | "dmb" | "dsb" | "isb" | "cpsid" | "cpsie" | "wfi" | "wfe"
+             | "sev" | "bkpt" | "msr" | "it" | "ite" | "itt" | "itee"
+             | "itte" | "itet" | "ittt"
+         then
+            return 0;
+         elsif Mnemonic = "push" then
+            return Bit (13);
+         elsif Mnemonic = "pop" then
+            return List_Of (Rest);
+         elsif Mnemonic'Length >= 3
+           and then Mnemonic (Mnemonic'First .. Mnemonic'First + 1) = "st"
+         then
+            return (if Back then One (Base) else 0);
+         elsif Mnemonic'Length >= 3
+           and then Mnemonic (Mnemonic'First .. Mnemonic'First + 2) = "ldm"
+         then
+            return List_Of (Rest) or (if Back then One (Base) else 0);
+         elsif Mnemonic in "umull" | "smull" | "umlal" | "smlal" | "ldrd" then
+            return One (Target) or One (Second_Name);
+         elsif Mnemonic (Mnemonic'First) = 'v' then
+            if Mnemonic in "vmov" | "vmrs" then
+               return One (Target)
+                 or (if Number_Of (Target) >= 0 then One (Second_Name)
+                     else 0);
+            end if;
+            return 0;
+         end if;
+         return One (Target);
+      end;
+   end Written_By;
+
+   --  D1567: a value held in a register holds it from position
+   --  Live_From through Live_Through; a slot over its interval, both in
+   --  layout order.  Register 0 is none: r0 is never offered.
+   type Value_Location is record
+      Register : Natural := 0;
+      Live_From, Live_Through : Natural := 0;
+   end record;
+   package Location_Vectors is new Ada.Containers.Vectors
+     (Positive, Value_Location);
+   type Slot_Location is record
+      Register : Natural := 0;
+      Live_From, Live_Through : Natural := 0;
+   end record;
+   package Slot_Vectors is new Ada.Containers.Vectors
+     (Positive, Slot_Location);
+   type Register_Plan is record
+      Values : Location_Vectors.Vector;
+      Slots : Slot_Vectors.Vector;
+      Held : Register_Mask := 0;
+   end record;
+
+   --  The slots placed in one register for their whole interval, by the
+   --  position each interval opens at.
+   package Reservations is new Ada.Containers.Ordered_Maps
+     (Key_Type => Natural, Element_Type => Positive);
+
+   type Register_List is array (Positive range <>) of Natural;
+
+   --  D1567: size and speed hold slots and values in low registers
+   --  wherever the routine's text, emitted with every value in its home,
+   --  writes none of them: Writes is what that text writes at each
+   --  position.  The placement is RISC-V's (D1503) and arm64's (D1404)
+   --  over the shared usage (Landin.Backend.Placement): each eligible slot
+   --  used twice over its interval, the heaviest first, then in one scan
+   --  each slot stored and read within one block over its span and each
+   --  value from its definition through its last reader, sharing a slot's
+   --  register where the value is that slot's content.  A location holds
+   --  a register only where nothing else writes it, from the first
+   --  position it is live at through the last, both included.  An
+   --  eight-byte scalar keeps its home, as a float does where the float
+   --  unit computes it.  A routine that calls offers r4-r7 first, which
+   --  it saves anyway, and r3 and r1, which a call writes; a leaf the
+   --  other way round, since each of r4-r7 it names costs it a save.
+   function Allocate_Registers
+     (Of_Unit : Landin.IR.Unit; Item : Landin.IR.Item_Id;
+      Facts : Landin.Targets.Target_Facts;
+      Options : Landin.Optimization.Options;
+      Writes : Write_Masks) return Register_Plan;
+
+   function Allocate_Registers
+     (Of_Unit : Landin.IR.Unit; Item : Landin.IR.Item_Id;
+      Facts : Landin.Targets.Target_Facts;
+      Options : Landin.Optimization.Options;
+      Writes : Write_Masks) return Register_Plan
+   is
+      Value_Count : constant Natural := Landin.IR.Value_Count (Of_Unit, Item);
+      Slot_Count : constant Natural := Landin.IR.Slot_Count (Of_Unit, Item);
+      subtype Counts is Landin.Backend.Placement.Counts;
+      package Count_Buffers renames Landin.Backend.Placement.Count_Buffers;
+      use type Landin.Optimization.Objective;
+      Speed : constant Boolean :=
+        Options.Optimize = Landin.Optimization.Speed;
+      Hard : constant Boolean := Arm32_ABI.Uses_VFP (Of_Unit);
+      Use_Of : Landin.Backend.Placement.Usage
+        (Value_Count, Slot_Count, Value_Count + 1);
+      Result : Register_Plan;
+   begin
+      Landin.Backend.Placement.Measure
+        (Of_Unit, Item, Speed, Use_Of, Debugger_Spans => False);
+      if Use_Of.Has_Assembly or else Writes'First /= 0
+        or else Writes'Last /= Value_Count
+      then
+         return Result;
+      end if;
+      Result.Values := Location_Vectors.To_Vector
+        (Value_Location'(others => <>),
+         Ada.Containers.Count_Type (Value_Count));
+      Result.Slots := Slot_Vectors.To_Vector
+        (Slot_Location'(others => <>),
+         Ada.Containers.Count_Type (Slot_Count));
+      declare
+         Calls : constant Boolean :=
+           Use_Of.Calls_Before.Data (Value_Count + 1) > 0;
+         Offered : constant Register_List :=
+           (if Calls then [4, 5, 6, 7, 3, 1] else [3, 1, 5, 4, 6, 7]);
+         type Prefix_Table is array (Offered'Range) of
+           Count_Buffers.Buffer (Value_Count + 2);
+         --  For each offered register, how many positions before each
+         --  position write it: Prefix (I).Data (P + 1) counts positions
+         --  zero through P - 1.
+         Prefix : Prefix_Table;
+         Opening_Data : Count_Buffers.Buffer (Value_Count);
+         Interval_Data : Count_Buffers.Buffer (Slot_Count);
+         Sequence : Counts renames Use_Of.Sequence.Data.all;
+         Lasts : Counts renames Use_Of.Lasts.Data.all;
+         Written_After : Counts renames Use_Of.Written_After.Data.all;
+         Uses : Counts renames Use_Of.Uses.Data.all;
+         Weights : Counts renames Use_Of.Weights.Data.all;
+         Parameter_Of : Counts renames Use_Of.Parameter_Of.Data.all;
+         First_Use : Counts renames Use_Of.First_Use.Data.all;
+         Last_Use : Counts renames Use_Of.Last_Use.Data.all;
+         Across_Blocks : Home_Mask renames Use_Of.Across_Blocks.Data.all;
+         Eligible : Home_Mask renames Use_Of.Eligible.Data.all;
+         Address_Required : Home_Mask
+           renames Use_Of.Address_Required.Data.all;
+         Spans : Landin.IR.Liveness.Interval_Vectors.Vector
+           renames Use_Of.Spans;
+         --  The slots placed in a register, by weight and then as a mark:
+         --  1 for one placed over its interval, 2 for one given a span in
+         --  a single block by the scan; and the slot, if any, whose store
+         --  at a position opens such a span.
+         Interval_Slots : Counts renames Interval_Data.Data.all;
+         Opening : Counts renames Opening_Data.Data.all;
+         Busy_Until : array (0 .. 15) of Natural := [others => 0];
+         Placed : array (0 .. 15) of Reservations.Map;
+         Upcoming : array (0 .. 15) of Reservations.Cursor :=
+           [others => Reservations.No_Element];
+
+         --  Whether a scalar of Kind may be held in a core register.
+         function Holdable (Kind : Landin.Types.Type_Kind) return Boolean is
+           (Kind in Landin.Types.Scalar_Name
+            and then Size_Of (Kind, Facts) /= Landin.Targets.Byte_8
+            and then not (Hard and then Kind in Landin.Types.Float_Name));
+
+         --  Whether the text writes register Number at some position from
+         --  First through Last.
+         function Written (Number, First, Last : Natural) return Boolean;
+         function Written (Number, First, Last : Natural) return Boolean is
+         begin
+            for Index in Offered'Range loop
+               if Offered (Index) = Number then
+                  return Prefix (Index).Data (Last + 2)
+                    > Prefix (Index).Data (First + 1);
+               end if;
+            end loop;
+            return True;
+         end Written;
+
+         function Fits (Number, First, Last : Natural) return Boolean is
+           (not Written (Number, First, Last));
+
+         function Slot_Holdable (Index : Positive) return Boolean is
+           (Holdable (Landin.IR.Type_Of
+              (Of_Unit, Item, Landin.IR.Slot_Id (Index))));
+
+         --  The last position a slot placed in a register holds it.
+         function Holds_Through (Slot : Positive) return Natural is
+           (if Interval_Slots (Slot) = 2 then Last_Use (Slot)
+            else Spans (Slot).Last);
+
+         procedure Place_Intervals;
+         procedure Open (Position : Natural);
+         function Clear (Number, Position, Last : Natural) return Boolean;
+         function Read_In_Place (Value : Positive) return Natural;
+         function Released_By (Value : Positive; Position : Natural)
+            return Natural;
+         function Stored_Into (Value : Positive; Position : Natural)
+            return Natural;
+         procedure Open_Span (Index : Positive; Position : Natural);
+
+         procedure Place_Intervals is
+            Count : Natural := 0;
+
+            function Before (Left, Right : Positive) return Boolean is
+              (Weights (Interval_Slots (Left))
+                 > Weights (Interval_Slots (Right))
+               or else
+                 (Weights (Interval_Slots (Left))
+                    = Weights (Interval_Slots (Right))
+                  and then Interval_Slots (Left) < Interval_Slots (Right)));
+
+            procedure Swap (Left, Right : Positive);
+            procedure Swap (Left, Right : Positive) is
+               Held : constant Natural := Interval_Slots (Left);
+            begin
+               Interval_Slots (Left) := Interval_Slots (Right);
+               Interval_Slots (Right) := Held;
+            end Swap;
+
+            procedure Sort is new Ada.Containers.Generic_Sort
+              (Positive, Before, Swap);
+
+            procedure Place (Position : Positive);
+            procedure Place (Position : Positive) is
+               Index : constant Positive := Interval_Slots (Position);
+               Span : constant Landin.IR.Liveness.Interval := Spans (Index);
+               Slot : Slot_Location renames Result.Slots (Index);
+
+               --  Whether no interval placed in Number meets Span.
+               function Open_In (Number : Natural) return Boolean;
+               function Open_In (Number : Natural) return Boolean is
+                  Below : constant Reservations.Cursor :=
+                    Placed (Number).Floor (Span.Last);
+               begin
+                  return not Reservations.Has_Element (Below)
+                    or else Spans (Reservations.Element (Below)).Last
+                      < Span.First;
+               end Open_In;
+            begin
+               for Number of Offered loop
+                  exit when Slot.Register /= 0;
+                  if Fits (Number, Span.First, Span.Last)
+                    and then Open_In (Number)
+                  then
+                     Placed (Number).Insert (Span.First, Index);
+                     Slot.Register := Number;
+                     Result.Held := Result.Held or Bit (Number);
+                     Slot.Live_From := Span.First;
+                     Slot.Live_Through := Span.Last;
+                  end if;
+               end loop;
+            end Place;
+         begin
+            for Index in 1 .. Slot_Count loop
+               if Eligible (Index) and then Uses (Index) >= 2
+                 and then Slot_Holdable (Index)
+                 and then not Landin.IR.Liveness.Is_Empty (Spans (Index))
+               then
+                  Count := Count + 1;
+                  Interval_Slots (Count) := Index;
+               end if;
+            end loop;
+            Sort (1, Count);
+            for Position in 1 .. Count loop
+               Place (Position);
+            end loop;
+            Interval_Slots := [others => 0];
+            for Number of Offered loop
+               for Cursor in Placed (Number).Iterate loop
+                  Interval_Slots (Reservations.Element (Cursor)) := 1;
+               end loop;
+               Upcoming (Number) := Placed (Number).First;
+            end loop;
+         end Place_Intervals;
+
+         --  The placed intervals opening at Position take their registers
+         --  through their last position.
+         procedure Open (Position : Natural) is
+         begin
+            for Number of Offered loop
+               if Reservations.Has_Element (Upcoming (Number))
+                 and then Reservations.Key (Upcoming (Number)) = Position
+               then
+                  Busy_Until (Number) := Spans
+                    (Reservations.Element (Upcoming (Number))).Last;
+                  Reservations.Next (Upcoming (Number));
+               end if;
+            end loop;
+         end Open;
+
+         --  Whether a value from Position through Last may take register
+         --  Number: nothing holds it now, the next slot interval placed in
+         --  it opens after Last, and nothing writes it in between.
+         function Clear (Number, Position, Last : Natural) return Boolean
+           is (Busy_Until (Number) < Position
+               and then
+                 (not Reservations.Has_Element (Upcoming (Number))
+                  or else Last < Reservations.Key (Upcoming (Number)))
+               and then Fits (Number, Position, Last));
+
+         --  The register of the slot a load reads, when the loaded value
+         --  dies before the slot is next stored and while the slot still
+         --  holds that register: the value may be that register.
+         function Read_In_Place (Value : Positive) return Natural is
+         begin
+            if Landin.IR.Op_Of (Of_Unit, Item, Landin.IR.Value_Id (Value))
+              /= Landin.IR.Load
+            then
+               return 0;
+            end if;
+            declare
+               Slot : constant Positive := Positive (Landin.IR.Slot_Of
+                 (Of_Unit, Item, Landin.IR.Value_Id (Value)));
+            begin
+               if Interval_Slots (Slot) /= 0
+                 and then Lasts (Value) <= Written_After (Value)
+                 and then Lasts (Value) <= Holds_Through (Slot)
+               then
+                  return Result.Slots (Slot).Register;
+               end if;
+            end;
+            return 0;
+         end Read_In_Place;
+
+         --  The register of the slot a load at Position reads for the last
+         --  time, which the loaded value may go on holding while no other
+         --  interval placed there opens.
+         function Released_By (Value : Positive; Position : Natural)
+            return Natural is
+         begin
+            if Landin.IR.Op_Of (Of_Unit, Item, Landin.IR.Value_Id (Value))
+              /= Landin.IR.Load
+            then
+               return 0;
+            end if;
+            declare
+               Slot : constant Positive := Positive (Landin.IR.Slot_Of
+                 (Of_Unit, Item, Landin.IR.Value_Id (Value)));
+               Number : constant Natural := Result.Slots (Slot).Register;
+            begin
+               if Interval_Slots (Slot) /= 0
+                 and then Holds_Through (Slot) = Position
+                 and then Busy_Until (Number) <= Position
+                 and then
+                   (not Reservations.Has_Element (Upcoming (Number))
+                    or else Lasts (Value)
+                      < Reservations.Key (Upcoming (Number)))
+               then
+                  return Number;
+               end if;
+            end;
+            return 0;
+         end Released_By;
+
+         --  The register of the slot whose placed interval opens at the
+         --  store that last uses a value, which the value may hold from
+         --  Position on, so that the store moves nothing.
+         function Stored_Into (Value : Positive; Position : Natural)
+            return Natural
+         is
+            User : constant Landin.IR.Value_Id :=
+              Landin.IR.Value_Id (Sequence (Lasts (Value)));
+         begin
+            if Landin.IR.Op_Of (Of_Unit, Item, User) /= Landin.IR.Store then
+               return 0;
+            end if;
+            declare
+               Slot : constant Positive :=
+                 Positive (Landin.IR.Slot_Of (Of_Unit, Item, User));
+               Number : constant Natural := Result.Slots (Slot).Register;
+            begin
+               if Interval_Slots (Slot) /= 0
+                 and then Spans (Slot).First = Lasts (Value)
+                 and then Busy_Until (Number) < Position
+                 and then Reservations.Has_Element (Upcoming (Number))
+                 and then Reservations.Key (Upcoming (Number))
+                   = Lasts (Value)
+                 and then Reservations.Element (Upcoming (Number)) = Slot
+               then
+                  return Number;
+               end if;
+            end;
+            return 0;
+         end Stored_Into;
+
+         --  The span the store at Position that opens a slot's gives it,
+         --  through the slot's last use: the stored value's own register
+         --  when the value dies there or the slot is never read, so the
+         --  store moves nothing; else the first clear one.
+         procedure Open_Span (Index : Positive; Position : Natural) is
+            Slot : Slot_Location renames Result.Slots (Index);
+            Last : constant Natural := Last_Use (Index);
+            Stored : constant Natural := Result.Values (Positive
+              (Landin.IR.Nth_Operand
+                 (Of_Unit, Item, Landin.IR.Value_Id (Sequence (Position)),
+                  1))).Register;
+
+            procedure Take (Number : Natural);
+            procedure Take (Number : Natural) is
+            begin
+               if Slot.Register = 0 and then Fits (Number, Position, Last)
+               then
+                  Slot.Register := Number;
+                  Slot.Live_From := Position;
+                  Slot.Live_Through := Last;
+                  Busy_Until (Number) :=
+                    Natural'Max (Busy_Until (Number), Last);
+                  Result.Held := Result.Held or Bit (Number);
+               end if;
+            end Take;
+
+            function Free_After (Number : Natural) return Boolean is
+              ((Busy_Until (Number) = Position or else Last = Position)
+               and then
+                 (not Reservations.Has_Element (Upcoming (Number))
+                  or else Last < Reservations.Key (Upcoming (Number))));
+         begin
+            if Stored /= 0 and then Free_After (Stored) then
+               Take (Stored);
+            end if;
+            for Number of Offered loop
+               if Clear (Number, Position, Last) then
+                  Take (Number);
+               end if;
+            end loop;
+            if Slot.Register /= 0 then
+               Interval_Slots (Index) := 2;
+            end if;
+         end Open_Span;
+      begin
+         for Index in Offered'Range loop
+            for Position in 0 .. Value_Count loop
+               Prefix (Index).Data (Position + 2) :=
+                 Prefix (Index).Data (Position + 1)
+                 + (if (Writes (Position) and Bit (Offered (Index))) /= 0
+                    then 1 else 0);
+            end loop;
+         end loop;
+         Place_Intervals;
+         --  A slot loaded and stored in one block only, which stores it
+         --  before reading it, and not placed over its interval, is dead
+         --  before that store and after its last use there.  Like a value
+         --  it needs a register only in between, which the scan gives it
+         --  at the store when it can.
+         for Index in 1 .. Slot_Count loop
+            if Eligible (Index) and then Interval_Slots (Index) = 0
+              and then Slot_Holdable (Index)
+              and then not Across_Blocks (Index)
+              and then Parameter_Of (Index) = 0
+              and then First_Use (Index) /= 0
+              and then Landin.IR.Op_Of
+                (Of_Unit, Item,
+                 Landin.IR.Value_Id (Sequence (First_Use (Index))))
+                = Landin.IR.Store
+            then
+               Opening (First_Use (Index)) := Index;
+            end if;
+         end loop;
+         Open (0);
+         for Position in 1 .. Value_Count loop
+            declare
+               Index : constant Positive := Sequence (Position);
+               Kind : constant Landin.Types.Type_Kind := Landin.IR.Result_Of
+                 (Of_Unit, Item, Landin.IR.Value_Id (Index));
+            begin
+               Open (Position);
+               if Opening (Position) /= 0 then
+                  Open_Span (Opening (Position), Position);
+               end if;
+               if Holdable (Kind) then
+                  declare
+                     Place : Value_Location renames Result.Values (Index);
+                     Last : constant Natural := Lasts (Index);
+
+                     --  Place takes register Number from Position through
+                     --  Last, if it has none yet and Number fits there.
+                     procedure Share (Number : Natural);
+                     procedure Share (Number : Natural) is
+                     begin
+                        if Place.Register = 0 and then Number /= 0
+                          and then Fits (Number, Position + 1, Last)
+                        then
+                           Place.Register := Number;
+                           Place.Live_From := Position;
+                           Place.Live_Through := Last;
+                           Busy_Until (Number) :=
+                             Natural'Max (Busy_Until (Number), Last);
+                           Result.Held := Result.Held or Bit (Number);
+                        end if;
+                     end Share;
+                  begin
+                     if not Address_Required (Index)
+                       and then Last > Position
+                     then
+                        Share (Read_In_Place (Index));
+                        Share (Released_By (Index, Position));
+                        Share (Stored_Into (Index, Position));
+                        for Number of Offered loop
+                           exit when Place.Register /= 0;
+                           if Clear (Number, Position + 1, Last)
+                             and then Busy_Until (Number) < Position
+                           then
+                              Share (Number);
+                           end if;
+                        end loop;
+                     end if;
+                  end;
+               end if;
+            end;
+         end loop;
+      end;
+      return Result;
+   end Allocate_Registers;
+
+   --  Whether no write Writes records meets a register Plan holds over a
+   --  position it holds it at.  A value's own operation may write its
+   --  register as it computes it there, since selection writes a result
+   --  after it has read every operand.
+   function Holds (Plan : Register_Plan; Writes : Write_Masks)
+     return Boolean;
+
+   function Holds (Plan : Register_Plan; Writes : Write_Masks)
+     return Boolean
+   is
+      package Count_Buffers renames Landin.Backend.Placement.Count_Buffers;
+      type Prefix_Table is array (0 .. 15) of
+        Count_Buffers.Buffer (Writes'Length + 1);
+      Prefix : Prefix_Table;
+
+      function Clear (Register, First, Last : Natural) return Boolean is
+        (Register = 0 or else Last < First
+         or else Prefix (Register).Data (Last + 2)
+           = Prefix (Register).Data (First + 1));
+   begin
+      if Writes'First /= 0 then
+         return False;
+      end if;
+      for Register in Prefix'Range loop
+         if (Plan.Held and Bit (Register)) /= 0 then
+            for Position in Writes'Range loop
+               Prefix (Register).Data (Position + 2) :=
+                 Prefix (Register).Data (Position + 1)
+                 + (if (Writes (Position) and Bit (Register)) /= 0
+                    then 1 else 0);
+            end loop;
+         end if;
+      end loop;
+      return (for all Place of Plan.Values =>
+                Clear (Place.Register, Place.Live_From + 1,
+                       Place.Live_Through))
+        and then (for all Place of Plan.Slots =>
+                    Clear (Place.Register, Place.Live_From,
+                           Place.Live_Through));
+   end Holds;
+
+   --  D1567: a slot or value Registers holds in a register has no home.
    function Allocated_Frame
      (Of_Unit : Landin.IR.Unit; Item : Landin.IR.Item_Id;
       Facts : Landin.Targets.Target_Facts;
-      Maximum : Landin.Targets.Byte_Count) return Frame;
+      Maximum : Landin.Targets.Byte_Count;
+      Registers : access constant Register_Plan := null) return Frame;
 
    function Allocated_Frame
      (Of_Unit : Landin.IR.Unit; Item : Landin.IR.Item_Id;
       Facts : Landin.Targets.Target_Facts;
-      Maximum : Landin.Targets.Byte_Count) return Frame
+      Maximum : Landin.Targets.Byte_Count;
+      Registers : access constant Register_Plan := null) return Frame
    is
       package IR renames Landin.IR;
       package L renames Landin.Targets.Layouts;
@@ -194,7 +933,13 @@ package body Landin.Backend.Cortex_M is
 
          procedure Mark (Slot : IR.Slot_Id) is
          begin
-            if Slot /= IR.No_Slot then
+            if Slot /= IR.No_Slot
+              and then (Registers = null
+                        or else Natural (Registers.Slots.Length)
+                          < Positive (Slot)
+                        or else Registers.Slots (Positive (Slot)).Register
+                          = 0)
+            then
                Slots.Data (Positive (Slot)) := True;
             end if;
          end Mark;
@@ -295,6 +1040,11 @@ package body Landin.Backend.Cortex_M is
                end loop;
                if IR.Result_Of (Of_Unit, Item, Value)
                  in Landin.Types.Scalar_Name
+                 and then (Registers = null
+                           or else Natural (Registers.Values.Length)
+                             < Positive (Value)
+                           or else Registers.Values (Positive (Value))
+                             .Register = 0)
                then
                   if Heap_Count > 0 then
                      Home := Take_Home;
@@ -314,15 +1064,19 @@ package body Landin.Backend.Cortex_M is
                          (Landin.Types.Scalar_Name
                             (IR.Result_Of (Of_Unit, Item, Value)), Facts);
                   begin
+                     --  D1563: a home is at least a word, which sp's
+                     --  Thumb-1 offset form reaches.
                      Spills.Data (Home).Size :=
                        Landin.Targets.Byte_Count'Max
                          (Spills.Data (Home).Size,
-                          Landin.Targets.Byte_Count
-                            (Landin.Targets.Bytes (Held)));
+                          Landin.Targets.Byte_Count'Max
+                            (4, Landin.Targets.Byte_Count
+                                  (Landin.Targets.Bytes (Held))));
                      Spills.Data (Home).Alignment :=
                        Landin.Targets.Byte_Alignment'Max
                          (Spills.Data (Home).Alignment,
-                          Landin.Targets.Alignment_Of (Facts, Held));
+                          Landin.Targets.Byte_Alignment'Max
+                            (4, Landin.Targets.Alignment_Of (Facts, Held)));
                   end;
                end if;
             end;
@@ -334,40 +1088,90 @@ package body Landin.Backend.Cortex_M is
          Maximum);
    end Allocated_Frame;
 
-   --  D617: whether ITEM keeps d8-d15 in its frame.  Selection never names
-   --  a call-preserved VFP register; only an assembly block can, declaring
-   --  each one its text names (D630), and a framed routine that holds one
-   --  saves all eight when the profile has a unit.
+   --  D617: the call-preserved VFP registers ITEM keeps in its frame,
+   --  d(Low) to d(High), none when High is zero.  Selection never names
+   --  one; only an assembly block can, declaring each one its text names
+   --  (D630), as d8-d15 or as s16-s31, and the frame saves the run of
+   --  them its blocks declare, where it once saved all eight (D1570).
    --  A call-free leaf holds no block, and a naked body is its own.
-   function Saves_VFP
-     (Of_Unit : Landin.IR.Unit; Item : Landin.IR.Item_Id) return Boolean;
-   VFP_Save_Bytes : constant := 64;
+   type VFP_Run is record
+      Low, High : Natural := 0;
+   end record;
 
-   function Saves_VFP
-     (Of_Unit : Landin.IR.Unit; Item : Landin.IR.Item_Id) return Boolean is
+   function Saved_VFP
+     (Of_Unit : Landin.IR.Unit; Item : Landin.IR.Item_Id) return VFP_Run;
+
+   function VFP_Bytes (Run : VFP_Run) return Landin.Targets.Byte_Count
+     is (if Run.High = 0 then 0
+         else Landin.Targets.Byte_Count (Run.High - Run.Low + 1) * 8);
+
+   function VFP_List (Run : VFP_Run) return String
+     is ("{d" & Trimmed (Run.Low'Image)
+         & (if Run.High > Run.Low then "-d" & Trimmed (Run.High'Image)
+            else "") & "}");
+
+   function Saved_VFP
+     (Of_Unit : Landin.IR.Unit; Item : Landin.IR.Item_Id) return VFP_Run
+   is
+      Result : VFP_Run;
+
+      procedure Include (Number : Natural);
+      procedure Include (Number : Natural) is
+      begin
+         if Result.High = 0 then
+            Result := (Number, Number);
+         else
+            Result := (Natural'Min (Result.Low, Number),
+                       Natural'Max (Result.High, Number));
+         end if;
+      end Include;
    begin
       if not Arm32_ABI.Uses_VFP (Of_Unit)
         or else Landin.IR.Signature_Machine
           (Of_Unit, Landin.IR.Signature_Of (Of_Unit, Item))
             = Landin.Machine.Naked_Routine
       then
-         return False;
+         return Result;
       end if;
-      for Block in 1 .. Landin.IR.Block_Count (Of_Unit, Item) loop
-         for Position in 1 .. Landin.IR.Length
-           (Of_Unit, Item, Landin.IR.Block_Id (Block))
-         loop
-            if Landin.IR.Op_Of
-              (Of_Unit, Item, Landin.IR.Nth_Value
-                 (Of_Unit, Item, Landin.IR.Block_Id (Block), Position))
-              = Landin.IR.Assembly
+      for Index in 1 .. Landin.IR.Value_Count (Of_Unit, Item) loop
+         declare
+            Value : constant Landin.IR.Value_Id := Landin.IR.Value_Id (Index);
+         begin
+            if Landin.IR.Op_Of (Of_Unit, Item, Value) = Landin.IR.Assembly
             then
-               return True;
+               for Operand in 1 .. Landin.IR.Assembly_Operand_Count
+                 (Of_Unit, Item, Value)
+               loop
+                  declare
+                     Name : constant String :=
+                       Ada.Characters.Handling.To_Lower
+                         (Landin.IR.Register_Of
+                            (Landin.IR.Nth_Assembly_Operand
+                               (Of_Unit, Item, Value, Operand)));
+                     Number : Integer := -1;
+                  begin
+                     if Name'Length in 2 .. 3
+                       and then Name (Name'First) in 'd' | 's'
+                       and then (for all C of Name (Name'First + 1
+                                                    .. Name'Last)
+                                 => C in '0' .. '9')
+                     then
+                        Number := Integer'Value
+                          (Name (Name'First + 1 .. Name'Last));
+                        if Name (Name'First) = 's' then
+                           Number := Number / 2;
+                        end if;
+                     end if;
+                     if Number in 8 .. 15 then
+                        Include (Number);
+                     end if;
+                  end;
+               end loop;
             end if;
-         end loop;
+         end;
       end loop;
-      return False;
-   end Saves_VFP;
+      return Result;
+   end Saved_VFP;
 
    function Frame_Is_Addressable
      (Of_Unit : Landin.IR.Unit;
@@ -447,7 +1251,7 @@ package body Landin.Backend.Cortex_M is
       --  bytes and add the six words pushed for the saved registers.
       Overhead : constant Landin.Targets.Byte_Count :=
         Landin.Targets.Byte_Count ((Plan.Core_Used + 1) / 2) * 8 + 24
-        + (if Saves_VFP (Of_Unit, Item) then VFP_Save_Bytes else 0);
+        + VFP_Bytes (Saved_VFP (Of_Unit, Item));
    begin
       if Landin.IR.Is_External (Of_Unit, Item)
         or else Landin.IR.Signature_Machine
@@ -489,6 +1293,10 @@ package body Landin.Backend.Cortex_M is
       --  D605: Thumb-2 multiplies 32 by 32 bits into 64 in one
       --  instruction, so no product needs `__aeabi_lmul` there.
       Has_Long_Multiply : constant Boolean :=
+        Landin.Targets.Levels.Has (Level, Landin.Targets.Levels.Thumb2);
+      --  D1563: Thumb-2's 32-bit encodings, which reach a byte or
+      --  halfword home from sp and any offset up to 4095.
+      Thumb2 : constant Boolean :=
         Landin.Targets.Levels.Has (Level, Landin.Targets.Levels.Thumb2);
       --  D606: Armv8-M loads with acquire and stores with release in one
       --  instruction, so an ordered access needs no DMB beside it.
@@ -535,7 +1343,16 @@ package body Landin.Backend.Cortex_M is
       Pool_Distance : Natural := 0;
       Pool_Generation : Natural := 0;
       Emission_Line : Natural := 0;
-      pragma Unreferenced (Options);
+      --  D1567: while Recording names masks, Put adds what each line
+      --  writes to the mask of position Record_At, unless Record_At is
+      --  negative, outside every position, or the line is Intended, a
+      --  write of a held location's own register.  While Deferring, a
+      --  routine's statistics wait in Pending until its emission is kept.
+      Recording : Write_Masks_Access;
+      Record_At : Integer := -1;
+      Intended : Boolean := False;
+      Deferring : Boolean := False;
+      Pending : Landin.Build_Reports.Routine_Statistics;
 
       function Fresh return String;
       procedure Put (Line : String);
@@ -682,11 +1499,50 @@ package body Landin.Backend.Cortex_M is
       end Address;
 
       procedure Immediate (Register : String; Value : Pattern) is
+         --  Thumb-2's modified immediate: a byte rotated into place, or
+         --  one repeated in the halfwords or in every byte.
+         function Modified return Boolean;
+         function Modified return Boolean is
+            Byte : constant Pattern := Value and 16#FF#;
+         begin
+            if Value = Byte * 16#0001_0001#
+              or else Value = Byte * 16#0100_0100#
+              or else Value = Byte * 16#0101_0101#
+            then
+               return True;
+            end if;
+            for Rotation in 8 .. 31 loop
+               declare
+                  Rotated : constant Pattern :=
+                    ((Value * 2 ** Rotation) or (Value / 2 ** (32 - Rotation)))
+                    and 16#FFFF_FFFF#;
+               begin
+                  if Rotated in 16#80# .. 16#FF# then
+                     return True;
+                  end if;
+               end;
+            end loop;
+            return False;
+         end Modified;
       begin
          if Value > 16#FFFF_FFFF# then
             raise Compiler_Defect with "word constant exceeds ARMv6-M";
          elsif Value <= 255 then
             Emit ("movs " & Register & ", #" & Trimmed (Value'Image));
+         elsif Thumb2 then
+            --  D1564: Thumb-2 makes a constant in one or two instructions
+            --  without a literal: MOV.W's modified immediate, MOVW's
+            --  halfword, and MOVT for the high one.
+            if Modified then
+               Emit ("mov.w " & Register & ", #" & Trimmed (Value'Image));
+            else
+               Emit ("movw " & Register & ", #"
+                 & Trimmed (Pattern'Image (Value and 16#FFFF#)));
+               if Value > 16#FFFF# then
+                  Emit ("movt " & Register & ", #"
+                    & Trimmed (Pattern'Image (Value / 2 ** 16)));
+               end if;
+            end if;
          else
             for Shift in 1 .. 31 loop
                if Value mod 2 ** Shift = 0
@@ -1112,6 +1968,10 @@ package body Landin.Backend.Cortex_M is
       end Unused_Local_Prefix;
 
       Local_Prefix : constant String := Unused_Local_Prefix;
+      --  D1569: a code label is assembler-local, outside the object's
+      --  symbol table, so that a listing does not split a routine at it and
+      --  an image's identity does not move with the program's item count.
+      Label_Prefix : constant String := Unused_Local_Prefix (".L");
       --  ELF debug-only labels must not perturb ld's local-symbol hash table
       --  and consequently the order of generated flash/RAM veneers.
       Debug_Prefix : constant String := Unused_Local_Prefix (".Llandin_");
@@ -1152,6 +2012,12 @@ package body Landin.Backend.Cortex_M is
       procedure Put (Line : String) is
       begin
          Unbounded.Append (Out_Text, Line & LF);
+         if Recording /= null and then Record_At >= 0
+           and then not Intended
+         then
+            Recording (Record_At) :=
+              Recording (Record_At) or Written_By (Line);
+         end if;
          --  Debug records cannot change r6 or introduce an executable
          --  entry. Preserve adjacent-home reuse across those records.
          if Line'Length > 0
@@ -1169,7 +2035,7 @@ package body Landin.Backend.Cortex_M is
       function Fresh return String is
       begin
          Serial := Serial + 1;
-         return Local_Prefix & "cm_step_" & Trimmed (Serial'Image);
+         return Label_Prefix & "cm_step_" & Trimmed (Serial'Image);
       end Fresh;
 
       --  Linker identity, not assembly syntax.  This is also available before
@@ -1330,7 +2196,7 @@ package body Landin.Backend.Cortex_M is
       function Label
         (Item : Landin.IR.Item_Id; Block : Landin.IR.Block_Id)
         return String
-        is (Local_Prefix & Trimmed (Landin.IR.Item_Id'Image (Item))
+        is (Label_Prefix & Trimmed (Landin.IR.Item_Id'Image (Item))
             & "_" & Trimmed (Landin.IR.Block_Id'Image (Block)));
 
       --  Where a field of [0670]'s state sits, and how much room the
@@ -1521,11 +2387,13 @@ package body Landin.Backend.Cortex_M is
       --  emission hands the final one.
       procedure Emit_Routine
         (Item : Landin.IR.Item_Id; Layout : Frame; Probe : Boolean := True;
-         Leaf : Boolean := False; Saves : Low_Set := [others => True]);
+         Leaf : Boolean := False; Saves : Low_Set := [others => True];
+         Registers : access constant Register_Plan := null);
 
       procedure Emit_Routine
         (Item : Landin.IR.Item_Id; Layout : Frame; Probe : Boolean := True;
-         Leaf : Boolean := False; Saves : Low_Set := [others => True]) is
+         Leaf : Boolean := False; Saves : Low_Set := [others => True];
+         Registers : access constant Register_Plan := null) is
          Path_Layouts : Landin.IR.Shape_Measurement.Layout_Cache;
          Before_Serial : constant Natural := Serial;
          Before_Line : constant Natural := Emission_Line;
@@ -1556,8 +2424,9 @@ package body Landin.Backend.Cortex_M is
            Landin.Targets.Byte_Count ((Plan.Core_Used + 1) / 2) * 8;
          --  D617: d8-d15's save, between the laid-out homes and the
          --  incoming staging, so the limit check covers it.
+         Saved_Run : constant VFP_Run := Saved_VFP (Of_Unit, Item);
          VFP_Save : constant Landin.Targets.Byte_Count :=
-           (if Saves_VFP (Of_Unit, Item) then VFP_Save_Bytes else 0);
+           VFP_Bytes (Saved_Run);
          VFP_Save_Offset : constant Landin.Targets.Byte_Count :=
            Extent (Layout) + VFP_Save;
          Homes : constant Landin.Targets.Byte_Count :=
@@ -1566,6 +2435,11 @@ package body Landin.Backend.Cortex_M is
          Return_Label : constant String := Label (Item, 1) & "_return";
          Exit_Count : Natural := 0;
          Current_Value : Landin.IR.Value_Id := Landin.IR.No_Value;
+         --  D1566: a branch its comparison emitted, and how many operands
+         --  read each value.
+         Fused : Landin.IR.Value_Id := Landin.IR.No_Value;
+         Readers : Landin.Backend.Placement.Count_Buffers.Buffer
+           (Landin.IR.Value_Count (Of_Unit, Item));
          Ordinary : constant Boolean := Landin.IR.Signature_Machine
            (Of_Unit, Landin.IR.Signature_Of (Of_Unit, Item))
              = Landin.Machine.Ordinary;
@@ -1751,7 +2625,10 @@ package body Landin.Backend.Cortex_M is
                                  Op : constant String :=
                                    Text (First .. Space - 1);
                               begin
-                                 if Op in "bl" | "blx" | "push" | "pop"
+                                 if (Op in "bl" | "blx" | "push" | "pop"
+                                     and then not (Op = "bl"
+                                       and then Is_Trap (Trimmed (Text
+                                         (Operand_First .. Text'Last)))))
                                    or else (Op in "sub" | "add" | "mov"
                                      and then Operand_First + 1 <= Text'Last
                                      and then Text (Operand_First
@@ -1801,7 +2678,7 @@ package body Landin.Backend.Cortex_M is
                   then Landin.IR.Origin_Of (Of_Unit, Item)
                   else Landin.IR.Origin_Of (Of_Unit, Item, Current_Value)),
                   Reason);
-               Name : constant String := Fresh;
+               Name : constant String := Fresh & "_trap";
             begin
                Edges.Append (Panic_Edge'
                  (Reason, Site, Unbounded.To_Unbounded_String (Name),
@@ -1820,30 +2697,66 @@ package body Landin.Backend.Cortex_M is
          function Kind (Value : Landin.IR.Value_Id)
            return Landin.Types.Scalar_Name
            is (Landin.IR.Result_Of (Of_Unit, Item, Value));
+
+         --  D1567: the register Registers holds a value or slot in, else
+         --  0, and a register's name.
+         function Value_Register (Value : Landin.IR.Value_Id) return Natural
+           is (if Registers = null then 0
+               else Registers.Values (Positive (Value)).Register);
+         function Slot_Register (Slot : Landin.IR.Slot_Id) return Natural
+           is (if Registers = null then 0
+               else Registers.Slots (Positive (Slot)).Register);
+         function Name (Register : Natural) return String
+           is ("r" & Trimmed (Natural'Image (Register)));
+
+         --  D1567: a held scalar narrower than a word is held
+         --  zero-extended, as a load from its home leaves it.
+         procedure Hold
+           (Register : Natural; From : String; Size : Held_Size);
+         procedure Hold
+           (Register : Natural; From : String; Size : Held_Size) is
+         begin
+            Intended := True;
+            if Size = Landin.Targets.Byte_1 then
+               Emit ("uxtb " & Name (Register) & ", " & From);
+            elsif Size = Landin.Targets.Byte_2 then
+               Emit ("uxth " & Name (Register) & ", " & From);
+            elsif From /= Name (Register) then
+               Emit ("mov " & Name (Register) & ", " & From);
+            end if;
+            Intended := False;
+         end Hold;
          function Size_Of_Value (Value : Landin.IR.Value_Id) return Held_Size
            is (Size_Of (Kind (Value), Facts));
          procedure Load_Value
            (Value : Landin.IR.Value_Id; Register : String := "r0");
          procedure Store_Value
-           (Value : Landin.IR.Value_Id; Register : String := "r0");
+           (Value : Landin.IR.Value_Id; Register : String := "r0";
+            Extended : Boolean := False);
          procedure Load_Slot
            (Slot : Landin.IR.Slot_Id; Register : String := "r0");
          procedure Store_Slot
            (Slot : Landin.IR.Slot_Id; Register : String := "r0");
          procedure Scalar_Memory
            (Store : Boolean; Size : Held_Size;
-            Offset : Landin.Targets.Byte_Count; Register : String);
+            Offset : Landin.Targets.Byte_Count; Register : String;
+            Widened : Boolean := False; Extended : Boolean := False);
          procedure Branch (Condition, Target : String);
          procedure Jump (Target : String);
          procedure Long_Jump (Target : String);
          procedure Shorten_Local_Branches;
          procedure Extend (Register : String; Scalar : Landin.Types.Type_Kind);
          procedure Epilogue;
+         procedure Restore_And_Return;
          procedure Return_From_Routine;
 
          procedure Long_Jump (Target : String) is
             Id : constant String := Fresh;
          begin
+            if Is_Trap (Target) then
+               Emit ("bl " & Target);
+               return;
+            end if;
             --  Keep the adjacent address word attached to its label. A
             --  pool inserted after that label makes the load read pool
             --  instructions as a destination. These four emitted lines
@@ -1862,6 +2775,12 @@ package body Landin.Backend.Cortex_M is
             First : constant Positive := Unbounded.Length (Out_Text) + 1;
             Generation : constant Natural := Pool_Generation;
          begin
+            --  D1564: Thumb-2's B reaches 16 MiB, and the assembler
+            --  chooses its narrow or wide encoding.
+            if Thumb2 then
+               Emit ("b " & Target);
+               return;
+            end if;
             Long_Jump (Target);
             --  A distance-triggered pool may have been inserted in this
             --  sequence. Its literals serve earlier loads, so retain the
@@ -1874,27 +2793,69 @@ package body Landin.Backend.Cortex_M is
             end if;
          end Jump;
 
+         function Inverse_Of (Condition : String) return String is
+           (if Condition = "eq" then "ne"
+            elsif Condition = "ne" then "eq"
+            elsif Condition = "cs" then "cc"
+            elsif Condition = "cc" then "cs"
+            elsif Condition = "hi" then "ls"
+            elsif Condition = "ls" then "hi"
+            elsif Condition = "lt" then "ge"
+            elsif Condition = "ge" then "lt"
+            elsif Condition = "gt" then "le"
+            elsif Condition = "le" then "gt"
+            elsif Condition = "vs" then "vc"
+            elsif Condition = "vc" then "vs"
+            elsif Condition = "mi" then "pl"
+            elsif Condition = "pl" then "mi"
+            else raise Compiler_Defect with "invalid ARM condition");
+
+         --  D1566: the block emitted now, and the value after the one
+         --  emitted now in it.
+         Current_Block : Natural := 0;
+         Next_Value : Landin.IR.Value_Id := Landin.IR.No_Value;
+         --  D1567: the layout position of the value emitted now.
+         Tick : Natural := 0;
+
+         --  D1566: a jump to the block laid out next is no instruction.
+         procedure Jump_To_Block (Block : Landin.IR.Block_Id);
+         procedure Jump_To_Block (Block : Landin.IR.Block_Id) is
+         begin
+            if Natural (Block) /= Current_Block + 1 then
+               Jump (Label (Item, Block));
+            end if;
+         end Jump_To_Block;
+
+         --  D1566: to Target when Condition holds, else to Alternative,
+         --  falling through to whichever is laid out next.
+         procedure Transfer
+           (Condition : String; Target, Alternative : Landin.IR.Block_Id);
+         procedure Transfer
+           (Condition : String; Target, Alternative : Landin.IR.Block_Id) is
+            use type Landin.IR.Block_Id;
+         begin
+            if Natural (Target) = Current_Block + 1
+              and then Target /= Alternative
+            then
+               Branch (Inverse_Of (Condition), Label (Item, Alternative));
+            else
+               Branch (Condition, Label (Item, Target));
+               Jump_To_Block (Alternative);
+            end if;
+         end Transfer;
+
          procedure Branch (Condition, Target : String) is
             First : constant Positive := Unbounded.Length (Out_Text) + 1;
             Generation : constant Natural := Pool_Generation;
             Skip : constant String := Fresh;
-            Inverse : constant String :=
-              (if Condition = "eq" then "ne"
-               elsif Condition = "ne" then "eq"
-               elsif Condition = "cs" then "cc"
-               elsif Condition = "cc" then "cs"
-               elsif Condition = "hi" then "ls"
-               elsif Condition = "ls" then "hi"
-               elsif Condition = "lt" then "ge"
-               elsif Condition = "ge" then "lt"
-               elsif Condition = "gt" then "le"
-               elsif Condition = "le" then "gt"
-               elsif Condition = "vs" then "vc"
-               elsif Condition = "vc" then "vs"
-               elsif Condition = "mi" then "pl"
-               elsif Condition = "pl" then "mi"
-               else raise Compiler_Defect with "invalid ARM condition");
+            Inverse : constant String := Inverse_Of (Condition);
          begin
+            --  D1564: Thumb-2's conditional B reaches 1 MiB, and the
+            --  assembler chooses its narrow or wide encoding.
+            if Thumb2 then
+               Emit ("b" & Condition & " " & Target);
+               return;
+            end if;
             Emit ("b" & Inverse & " " & Skip);
             Long_Jump (Target);
             Put (Skip & ":");
@@ -2057,10 +3018,73 @@ package body Landin.Backend.Cortex_M is
          --  line between them may change it or introduce another entry path,
          --  so only reuse the address when the previous access ended the
          --  output.  A nearby home needs at most one immediate adjustment.
+         --  D1563: how far above sp the home Offset names starts, when
+         --  that is known here, else -1: a leaf's sp stays at the bottom
+         --  of its homes from its prologue's reservation on, and a framed
+         --  routine knows its depth from each block's start until an
+         --  assembly block names sp.
+         function Sp_Above (Offset : Landin.Targets.Byte_Count)
+           return Integer
+           is (if Offset > Leaf_Homes then -1
+               elsif Leaf_Frame then Integer (Leaf_Homes - Offset)
+               elsif Sp_Known then Integer (Leaf_Homes - Offset + Sp_Depth)
+               else -1);
+
+         --  D1563: a home is read and written through sp's own offset
+         --  form where one reaches it: Thumb-1's word form up to 1020
+         --  bytes, and at the Thumb-2 levels the byte, halfword and word
+         --  forms up to 4095; else through its address formed in r6.  A
+         --  value's home narrower than a word is a word (Allocated_Frame)
+         --  and Widened: it is written zero-extended, through r7, so a
+         --  word read from it is what a narrower one would read.
          procedure Scalar_Memory
            (Store : Boolean; Size : Held_Size;
-            Offset : Landin.Targets.Byte_Count; Register : String) is
+            Offset : Landin.Targets.Byte_Count; Register : String;
+            Widened : Boolean := False; Extended : Boolean := False)
+         is
+            Above : constant Integer := Sp_Above (Offset);
+            --  A register already zero-extended is stored as a word.
+            Narrow : constant Boolean :=
+              Size in Landin.Targets.Byte_1 | Landin.Targets.Byte_2
+              and then not (Store and then Extended);
+            Moved : constant Held_Size :=
+              (if Widened
+                 and then Size in Landin.Targets.Byte_1
+                   | Landin.Targets.Byte_2
+               then Landin.Targets.Byte_4 else Size);
+            From : constant String :=
+              (if Widened and then Narrow and then Store then "r7"
+               else Register);
+            Last : constant Integer :=
+              Above + (if Moved = Landin.Targets.Byte_8 then 4 else 0);
          begin
+            if Above >= 0 and then Register /= "r6"
+              and then
+                ((Moved in Landin.Targets.Byte_4 | Landin.Targets.Byte_8
+                  and then Above mod 4 = 0 and then Last <= 1020)
+                 or else (Thumb2 and then Last <= 4095))
+            then
+               if Widened and then Narrow and then Store then
+                  Emit ((if Size = Landin.Targets.Byte_1 then "uxtb r7, "
+                         else "uxth r7, ") & Register);
+               end if;
+               declare
+                  Op : constant String :=
+                    (if Store then "str" else "ldr")
+                    & (case Moved is
+                         when Landin.Targets.Byte_1 => "b",
+                         when Landin.Targets.Byte_2 => "h",
+                         when others => "");
+               begin
+                  Emit (Op & " " & From & ", [sp, #"
+                    & Trimmed (Integer'Image (Above)) & "]");
+                  if Moved = Landin.Targets.Byte_8 then
+                     Emit (Op & " " & High (From) & ", [sp, #"
+                       & Trimmed (Integer'Image (Above + 4)) & "]");
+                  end if;
+               end;
+               return;
+            end if;
             if Home_Ready and then Home_Line = Emission_Line
               and then Register /= "r6"
               and then Offset = Home_Offset
@@ -2083,7 +3107,12 @@ package body Landin.Backend.Cortex_M is
             else
                Frame_Address (Offset);
             end if;
-            Memory (Store, Size, Register, "r6");
+            if Widened and then Narrow and then Store then
+               --  Frame_Address may have formed a long offset in r7.
+               Emit ((if Size = Landin.Targets.Byte_1 then "uxtb r7, "
+                      else "uxth r7, ") & Register);
+            end if;
+            Memory (Store, Moved, From, "r6");
             Home_Ready := Register /= "r6";
             Home_Line := Emission_Line;
             Home_Offset := Offset;
@@ -2092,12 +3121,22 @@ package body Landin.Backend.Cortex_M is
          procedure Load_Value
            (Value : Landin.IR.Value_Id; Register : String := "r0") is
          begin
+            if Value_Register (Value) /= 0 then
+               if Register /= Name (Value_Register (Value)) then
+                  Emit ("mov " & Register & ", "
+                    & Name (Value_Register (Value)));
+               end if;
+               return;
+            end if;
             Scalar_Memory (False, Size_Of_Value (Value),
-              Value_Offset (Layout, Value), Register);
+              Value_Offset (Layout, Value), Register, Widened => True);
          end Load_Value;
 
+         --  Extended says that Register already holds the value
+         --  zero-extended, as a load or a comparison leaves it.
          procedure Store_Value
-           (Value : Landin.IR.Value_Id; Register : String := "r0") is
+           (Value : Landin.IR.Value_Id; Register : String := "r0";
+            Extended : Boolean := False) is
             Atoms : constant Landin.IR.Atom_Set_Id :=
               Landin.IR.Atom_Set_Of (Of_Unit, Item, Value);
          begin
@@ -2134,13 +3173,27 @@ package body Landin.Backend.Cortex_M is
                   Put (Done & ":");
                end;
             end if;
+            if Value_Register (Value) /= 0 then
+               Hold (Value_Register (Value), Register,
+                     (if Extended then Landin.Targets.Byte_4
+                      else Size_Of_Value (Value)));
+               return;
+            end if;
             Scalar_Memory (True, Size_Of_Value (Value),
-              Value_Offset (Layout, Value), Register);
+              Value_Offset (Layout, Value), Register, Widened => True,
+              Extended => Extended);
          end Store_Value;
 
          procedure Load_Slot
            (Slot : Landin.IR.Slot_Id; Register : String := "r0") is
          begin
+            if Slot_Register (Slot) /= 0 then
+               if Register /= Name (Slot_Register (Slot)) then
+                  Emit ("mov " & Register & ", "
+                    & Name (Slot_Register (Slot)));
+               end if;
+               return;
+            end if;
             Scalar_Memory (False, Size_Of
               (Landin.IR.Type_Of (Of_Unit, Item, Slot), Facts),
               Slot_Offset (Layout, Slot), Register);
@@ -2149,6 +3202,11 @@ package body Landin.Backend.Cortex_M is
          procedure Store_Slot
            (Slot : Landin.IR.Slot_Id; Register : String := "r0") is
          begin
+            if Slot_Register (Slot) /= 0 then
+               Hold (Slot_Register (Slot), Register, Size_Of
+                 (Landin.IR.Type_Of (Of_Unit, Item, Slot), Facts));
+               return;
+            end if;
             Scalar_Memory (True, Size_Of
               (Landin.IR.Type_Of (Of_Unit, Item, Slot), Facts),
               Slot_Offset (Layout, Slot), Register);
@@ -2163,7 +3221,57 @@ package body Landin.Backend.Cortex_M is
             end if;
          end Extend;
 
+         --  D1567: the register an operation reads a value from: the
+         --  value's own when it is held, else Default after loading it
+         --  there.  Extended as Scalar asks, which a held value, kept
+         --  zero-extended, needs only for a narrow signed scalar; that one
+         --  is loaded to Default and extended there.  A use writes nothing
+         --  through it.
+         function Operand_In
+           (Value : Landin.IR.Value_Id; Default : String;
+            Scalar : Landin.Types.Type_Kind := Landin.Types.U32)
+            return String;
+         function Operand_In
+           (Value : Landin.IR.Value_Id; Default : String;
+            Scalar : Landin.Types.Type_Kind := Landin.Types.U32)
+            return String is
+         begin
+            if Value_Register (Value) /= 0
+              and then Scalar not in Landin.Types.I8 | Landin.Types.I16
+            then
+               return Name (Value_Register (Value));
+            end if;
+            Load_Value (Value, Default);
+            Extend (Default, Scalar);
+            return Default;
+         end Operand_In;
+
+         --  The register an operation writes Value's result to: its own
+         --  when held, else Default.  Store_Value (Value, Result_In ...)
+         --  then completes it.
+         function Result_In
+           (Value : Landin.IR.Value_Id; Default : String := "r0")
+            return String
+           is (if Value_Register (Value) /= 0
+                 and then not Landin.IR.Validates_Atoms (Of_Unit, Item, Value)
+               then Name (Value_Register (Value)) else Default);
+
+         --  D1567: the restores follow every read of the exit that runs
+         --  them, after which nothing is live, so they are not recorded.
          procedure Epilogue is
+            Recorded_At : constant Integer := Record_At;
+            procedure Restore_Saves;
+            procedure Restore_Saves is
+            begin
+               Record_At := -1;
+               Restore_And_Return;
+               Record_At := Recorded_At;
+            end Restore_Saves;
+         begin
+            Restore_Saves;
+         end Epilogue;
+
+         procedure Restore_And_Return is
          begin
             if Probe then
                return;
@@ -2203,9 +3311,9 @@ package body Landin.Backend.Cortex_M is
             end if;
             if VFP_Save > 0 then
                Frame_Address_Through (VFP_Save_Offset, "r6");
-               Emit ("vldmia r6, {d8-d15}");
+               Emit ("vldmia r6, " & VFP_List (Saved_Run));
                if Debug /= null then
-                  for Reg in 8 .. 15 loop
+                  for Reg in Saved_Run.Low .. Saved_Run.High loop
                      Emit (".cfi_restore d" & Trimmed (Reg'Image));
                   end loop;
                end if;
@@ -2251,7 +3359,7 @@ package body Landin.Backend.Cortex_M is
             if Debug /= null then
                Emit (".cfi_restore_state");
             end if;
-         end Epilogue;
+         end Restore_And_Return;
 
          procedure Return_From_Routine is
          begin
@@ -3605,17 +4713,41 @@ package body Landin.Backend.Cortex_M is
                  Array_Length_Of (Storage, Field, Which, Payload, Nested);
                Stride : constant Landin.Targets.Byte_Count :=
                  Element_Bytes_Of (Storage, Field, Which, Payload, Nested);
+               --  D1567: a held index is read in place; a stride of one
+               --  or a power of two needs no multiplication.
+               Index : constant String := Operand_In (Operand (1), "r4");
+               Shift : Natural := 0;
             begin
-               Load_Value (Operand (1), "r4");
                if not Unchecked then
-                  Immediate ("r5", Pattern (Length));
-                  Emit ("cmp r4, r5");
+                  if Pattern (Length) <= 255 then
+                     Emit ("cmp " & Index & ", #"
+                       & Trimmed (Pattern'Image (Pattern (Length))));
+                  else
+                     Immediate ("r5", Pattern (Length));
+                     Emit ("cmp " & Index & ", r5");
+                  end if;
                   Branch ("cs", Trap);
                end if;
-               Immediate ("r5", Pattern (Stride));
-               Emit ("muls r4, r5, r4");
+               while Shift < 31 and then 2 ** (Shift + 1) <= Stride
+                 and then Stride mod 2 ** (Shift + 1) = 0
+               loop
+                  Shift := Shift + 1;
+               end loop;
                Storage_Address (Storage, Field, "r2", Which, Payload, Nested);
-               Emit ("adds r2, r2, r4");
+               if Stride = 1 then
+                  Emit ("adds r2, r2, " & Index);
+               elsif Stride = 2 ** Shift then
+                  Emit ("lsls r4, " & Index & ", #"
+                    & Trimmed (Natural'Image (Shift)));
+                  Emit ("adds r2, r2, r4");
+               else
+                  if Index /= "r4" then
+                     Emit ("mov r4, " & Index);
+                  end if;
+                  Immediate ("r5", Pattern (Stride));
+                  Emit ("muls r4, r5, r4");
+                  Emit ("adds r2, r2, r4");
+               end if;
                if Below'Length > 0 then
                   Add_Offset ("r2", Path_Offset
                     (Element_Shape_Of (Storage, Field, Which, Payload, Nested),
@@ -4202,7 +5334,47 @@ package body Landin.Backend.Cortex_M is
                      Signed : constant Boolean := Kind (Value) in
                        Landin.Types.Integer_Name
                        and then Landin.Types.Is_Signed (Kind (Value));
+                     --  D1567: a word's operation reads held operands in
+                     --  place and writes a held result directly.
+                     In_Place : constant Boolean :=
+                       Size_Of_Value (Value) = Landin.Targets.Byte_4
+                       and then Kind (Value) not in Landin.Types.Float_Name;
                   begin
+                     if In_Place then
+                        declare
+                           Into : constant String := Result_In (Value);
+                           Left : constant String :=
+                             Operand_In (Operand (1), "r0");
+                           Right : constant String :=
+                             Operand_In (Operand (2), "r2");
+                        begin
+                           case Op is
+                              when Landin.IR.Add | Landin.IR.Wrapping_Add =>
+                                 Emit ("adds " & Into & ", " & Left & ", "
+                                   & Right);
+                              when Landin.IR.Subtract
+                                 | Landin.IR.Wrapping_Subtract =>
+                                 Emit ("subs " & Into & ", " & Left & ", "
+                                   & Right);
+                              when others =>
+                                 if Into /= Left then
+                                    Emit ("mov " & Into & ", " & Left);
+                                 end if;
+                                 Emit ((if Op = Landin.IR.Bitwise_And
+                                        then "ands "
+                                        elsif Op = Landin.IR.Bitwise_Or
+                                        then "orrs " else "eors ")
+                                   & Into & ", " & Right);
+                           end case;
+                           if Checked then
+                              Branch ((if Signed then "vs"
+                                elsif Op = Landin.IR.Add then "cs" else "cc"),
+                                Trap);
+                           end if;
+                           Store_Value (Value, Into);
+                        end;
+                        return;
+                     end if;
                      Load_Value (Operand (1));
                      Load_Value (Operand (2), "r2");
                      Extend ("r0", Kind (Value));
@@ -4281,7 +5453,53 @@ package body Landin.Backend.Cortex_M is
                           when Landin.IR.Greater_Than => "hi",
                           when Landin.IR.Greater_Or_Equal => "cs",
                           when others => Condition);
+                     Fuses : constant Boolean :=
+                       Next_Value /= Landin.IR.No_Value
+                       and then Landin.IR.Op_Of (Of_Unit, Item, Next_Value)
+                         = Landin.IR.Branch
+                       and then Landin.IR.Nth_Operand
+                         (Of_Unit, Item, Next_Value, 1) = Value
+                       and then Readers.Data (Positive (Value)) = 1;
                   begin
+                     if not Wide and then Scalar not in Landin.Types.Float_Name
+                     then
+                        --  D1567: held operands are compared in place.
+                        --  D1568: at the Thumb-2 levels an IT block makes
+                        --  the truth value without a branch.
+                        declare
+                           Left : constant String :=
+                             Operand_In (Operand (1), "r0", Scalar);
+                           Right : constant String :=
+                             Operand_In (Operand (2), "r2", Scalar);
+                           Into : constant String := Result_In (Value);
+                        begin
+                           Emit ("cmp " & Left & ", " & Right);
+                           if Fuses then
+                              Fused := Next_Value;
+                              Transfer (Condition,
+                                Landin.IR.Target_Of
+                                  (Of_Unit, Item, Next_Value),
+                                Landin.IR.Alternative_Of
+                                  (Of_Unit, Item, Next_Value));
+                              return;
+                           end if;
+                           if Thumb2 then
+                              Emit ("ite " & Condition);
+                              Emit ("mov" & Condition & " " & Into & ", #1");
+                              Emit ("mov" & Inverse_Of (Condition) & " "
+                                & Into & ", #0");
+                           else
+                              Branch (Condition, Yes);
+                              Emit ("movs " & Into & ", #0");
+                              Jump (Done);
+                              Put (Yes & ":");
+                              Emit ("movs " & Into & ", #1");
+                              Put (Done & ":");
+                           end if;
+                           Store_Value (Value, Into, Extended => True);
+                        end;
+                        return;
+                     end if;
                      Load_Value (Operand (1));
                      Load_Value (Operand (2), "r2");
                      Extend ("r0", Scalar);
@@ -4320,6 +5538,26 @@ package body Landin.Backend.Cortex_M is
                         end if;
                      end if;
                      Emit ("cmp r0, r2");
+                     if Fuses then
+                        --  D1566: the branch after a comparison that only
+                        --  it reads tests the comparison's flags.
+                        Fused := Next_Value;
+                        if not Wide then
+                           Transfer (Condition,
+                             Landin.IR.Target_Of (Of_Unit, Item, Next_Value),
+                             Landin.IR.Alternative_Of
+                               (Of_Unit, Item, Next_Value));
+                        else
+                           Branch (Low_Condition, Yes);
+                           Put (No & ":");
+                           Jump (Label (Item, Landin.IR.Alternative_Of
+                             (Of_Unit, Item, Next_Value)));
+                           Put (Yes & ":");
+                           Jump_To_Block (Landin.IR.Target_Of
+                             (Of_Unit, Item, Next_Value));
+                        end if;
+                        return;
+                     end if;
                      Branch
                        ((if Wide then Low_Condition else Condition),
                         Yes);
@@ -4381,20 +5619,22 @@ package body Landin.Backend.Cortex_M is
                      then
                         Number := 0 - Number;
                      end if;
-                     Immediate ("r0", Number and 16#FFFF_FFFF#);
+                     Immediate (Result_In (Value), Number and 16#FFFF_FFFF#);
                      if Size_Of_Value (Value) = Landin.Targets.Byte_8 then
                         Immediate ("r1", Number / 2 ** 32);
                      end if;
-                     Store_Value (Value);
+                     Store_Value (Value, Result_In (Value), Extended =>
+                       Number < 2 ** (8 * Landin.Targets.Bytes
+                                            (Size_Of_Value (Value))));
                   end;
                when Landin.IR.Truth =>
-                  Immediate ("r0", (if Landin.IR.Truth_Of
+                  Immediate (Result_In (Value), (if Landin.IR.Truth_Of
                     (Of_Unit, Item, Value) then 1 else 0));
-                  Store_Value (Value);
+                  Store_Value (Value, Result_In (Value), Extended => True);
                when Landin.IR.Atom =>
-                  Immediate ("r0", Pattern (Atom_Code
+                  Immediate (Result_In (Value), Pattern (Atom_Code
                     (Atoms_Ranked, Landin.IR.Atom_Of (Of_Unit, Item, Value))));
-                  Store_Value (Value);
+                  Store_Value (Value, Result_In (Value));
                when Landin.IR.Measurement_Kind =>
                   declare
                      Bytes : Landin.Targets.Byte_Count;
@@ -4428,20 +5668,70 @@ package body Landin.Backend.Cortex_M is
                      end if;
                   end;
                when Landin.IR.Load =>
-                  Load_Slot (Landin.IR.Slot_Of (Of_Unit, Item, Value));
-                  Store_Value (Value);
+                  --  D1567: a value read in place is its slot's register
+                  --  and moves nothing; a held slot is already extended.
+                  declare
+                     Held : constant Natural := Slot_Register
+                       (Landin.IR.Slot_Of (Of_Unit, Item, Value));
+                  begin
+                     if Held = 0
+                       or else Landin.IR.Validates_Atoms
+                         (Of_Unit, Item, Value)
+                     then
+                        Load_Slot (Landin.IR.Slot_Of (Of_Unit, Item, Value));
+                        Store_Value (Value, Extended => True);
+                     elsif Held = Value_Register (Value) then
+                        null;
+                     elsif Value_Register (Value) /= 0 then
+                        Hold (Value_Register (Value), Name (Held),
+                              Landin.Targets.Byte_4);
+                     else
+                        Store_Value (Value, Name (Held), Extended => True);
+                     end if;
+                  end;
                when Landin.IR.Store =>
-                  Load_Value (Operand (1));
-                  Store_Slot (Landin.IR.Slot_Of (Of_Unit, Item, Value));
+                  --  A value stored into the slot it shares a register
+                  --  with moves nothing.
+                  declare
+                     Held : constant Natural := Slot_Register
+                       (Landin.IR.Slot_Of (Of_Unit, Item, Value));
+                     Source : constant Natural := Value_Register (Operand (1));
+                  begin
+                     if Held = 0 or else Source = 0 then
+                        Load_Value (Operand (1));
+                        Store_Slot (Landin.IR.Slot_Of (Of_Unit, Item, Value));
+                     elsif Held /= Source then
+                        Hold (Held, Name (Source), Landin.Targets.Byte_4);
+                     end if;
+                  end;
                when Landin.IR.Load_Indirect =>
-                  Load_Value (Operand (1), "r2");
                   if Unaligned_Indirect then
+                     Load_Value (Operand (1), "r2");
                      Byte_Memory (False, Size_Of_Value (Value), "r0", "r2");
+                     Store_Value (Value);
                   else
-                     Memory (False, Size_Of_Value (Value), "r0", "r2");
+                     declare
+                        Base : constant String :=
+                          Operand_In (Operand (1), "r2");
+                        Into : constant String := Result_In (Value);
+                     begin
+                        Memory (False, Size_Of_Value (Value), Into, Base);
+                        Store_Value (Value, Into, Extended => True);
+                     end;
                   end if;
-                  Store_Value (Value);
                when Landin.IR.Store_Indirect =>
+                  if not Unaligned_Indirect then
+                     declare
+                        Base : constant String :=
+                          Operand_In (Operand (1), "r2");
+                        From : constant String :=
+                          Operand_In (Operand (2), "r0");
+                     begin
+                        Memory
+                          (True, Size_Of_Value (Operand (2)), From, Base);
+                     end;
+                     return;
+                  end if;
                   Load_Value (Operand (1), "r2");
                   Load_Value (Operand (2));
                   if Unaligned_Indirect then
@@ -4827,23 +6117,54 @@ package body Landin.Backend.Cortex_M is
                      --  back in registers and is stored there.
                      Hidden : constant Natural :=
                        (if Call.Result.Shape.Composite then 1 else 0);
-                     --  Stack arguments stay at sp; round the register
-                     --  homes to the call boundary's eight-byte alignment.
+                     --  D1565: a call whose register arguments are all
+                     --  scalars loads each into its register last, from
+                     --  its home, which reads no other register.  One that
+                     --  passes a C record in them stages them at sp, the
+                     --  register homes rounded to the call boundary's
+                     --  eight-byte alignment, and loads them together.
+                     Direct : constant Boolean :=
+                       (for all Arg of Call.Arguments =>
+                          not Arg.Shape.Composite or else Arg.Shape.Indirect
+                          or else Arg.Core_Count = 0);
                      Register_Bytes : constant Landin.Targets.Byte_Count :=
-                       Landin.Targets.Byte_Count
-                         ((Call.Core_Used + 1) / 2 * 8);
+                       (if Direct then 0
+                        else Landin.Targets.Byte_Count
+                          ((Call.Core_Used + 1) / 2 * 8));
                      Bytes : constant Landin.Targets.Byte_Count :=
                        Call.Stack_Bytes + Register_Bytes;
+
+                     --  Store r0, and r1 when Pair, Above bytes above sp.
+                     procedure Stage
+                       (Above : Landin.Targets.Byte_Count; Pair : Boolean);
+                     procedure Stage
+                       (Above : Landin.Targets.Byte_Count; Pair : Boolean) is
+                     begin
+                        if Above + 4 <= 1020 then
+                           Emit ("str r0, [sp, #"
+                             & Trimmed (Above'Image) & "]");
+                           if Pair then
+                              Emit ("str r1, [sp, #"
+                                & Trimmed (Landin.Targets.Byte_Count'Image
+                                    (Above + 4)) & "]");
+                           end if;
+                        else
+                           Emit ("mov r6, sp");
+                           Add_Offset ("r6", Above);
+                           Emit ("str r0, [r6]");
+                           if Pair then
+                              Emit ("str r1, [r6, #4]");
+                           end if;
+                        end if;
+                     end Stage;
                   begin
                      if Prepares and then Bytes > Unchecked_Bytes then
                         Check_Limit (Bytes);
                      end if;
                      Reserve (Bytes);
-                     if Call.Result.Shape.Indirect then
+                     if Call.Result.Shape.Indirect and then not Direct then
                         Load_Value (Operand (Offset + 1));
-                        Emit ("mov r6, sp");
-                        Add_Offset ("r6", Call.Stack_Bytes);
-                        Emit ("str r0, [r6]");
+                        Stage (Call.Stack_Bytes, False);
                      end if;
                      for Index in Call.Arguments'Range loop
                         declare
@@ -4862,31 +6183,47 @@ package body Landin.Backend.Cortex_M is
                            elsif Arg.VFP_Count > 0 then
                               VFP_Home (False, Value_Offset (Layout, Actual),
                                         Arm32_ABI.VFP_Register (Arg, 1));
-                           else
+                           elsif Arg.Core_Count = 0 or else not Direct then
                               Load_Value (Actual);
                               Extend ("r0", Kind (Actual));
-                              Emit ("mov r6, sp");
-                              if Arg.Core_Count > 0 then
-                                 Add_Offset ("r6", Call.Stack_Bytes
-                                   + Landin.Targets.Byte_Count
-                                     (Arg.First_Core) * 4);
-                              else
-                                 Add_Offset ("r6", Arg.Stack_At);
-                              end if;
-                              Emit ("str r0, [r6]");
-                              if Size_Of_Value (Actual)
-                                = Landin.Targets.Byte_8
-                              then
-                                 Emit ("str r1, [r6, #4]");
-                              end if;
+                              Stage
+                                ((if Arg.Core_Count > 0
+                                  then Call.Stack_Bytes
+                                    + Landin.Targets.Byte_Count
+                                        (Arg.First_Core) * 4
+                                  else Arg.Stack_At),
+                                 Size_Of_Value (Actual)
+                                   = Landin.Targets.Byte_8);
                            end if;
                         end;
                      end loop;
                      if Indirect then
-                        Load_Value (Operand (1));
-                        Emit ("mov r4, r0");
+                        Load_Value (Operand (1), "r4");
                      end if;
-                     if Call.Core_Used > 0 then
+                     if Direct then
+                        if Call.Result.Shape.Indirect then
+                           Load_Value (Operand (Offset + 1), "r0");
+                        end if;
+                        for Index in Call.Arguments'Range loop
+                           declare
+                              Arg : Arm32_ABI.Location renames
+                                Call.Arguments (Index);
+                              Actual : constant Landin.IR.Value_Id :=
+                                Operand (Index + Offset + Hidden);
+                              Into : constant String :=
+                                "r" & Trimmed (Natural'Image (Arg.First_Core));
+                           begin
+                              if Arg.Core_Count > 0
+                                and then Arg.VFP_Count = 0
+                                and then not (Arg.Shape.Composite
+                                              and then not Arg.Shape.Indirect)
+                              then
+                                 Load_Value (Actual, Into);
+                                 Extend (Into, Kind (Actual));
+                              end if;
+                           end;
+                        end loop;
+                     elsif Call.Core_Used > 0 then
                         Emit ("mov r6, sp");
                         Add_Offset ("r6", Call.Stack_Bytes);
                         case Call.Core_Used is
@@ -5082,15 +6419,11 @@ package body Landin.Backend.Cortex_M is
                      end if;
                   end;
                when Landin.IR.Jump =>
-                  Jump (Label (Item, Landin.IR.Target_Of
-                    (Of_Unit, Item, Value)));
+                  Jump_To_Block (Landin.IR.Target_Of (Of_Unit, Item, Value));
                when Landin.IR.Branch =>
-                  Load_Value (Operand (1));
-                  Emit ("cmp r0, #0");
-                  Branch ("ne", Label (Item, Landin.IR.Target_Of
-                    (Of_Unit, Item, Value)));
-                  Jump (Label (Item, Landin.IR.Alternative_Of
-                    (Of_Unit, Item, Value)));
+                  Emit ("cmp " & Operand_In (Operand (1), "r0") & ", #0");
+                  Transfer ("ne", Landin.IR.Target_Of (Of_Unit, Item, Value),
+                    Landin.IR.Alternative_Of (Of_Unit, Item, Value));
                when Landin.IR.Leave =>
                   if Result in Landin.Types.Aggregate
                     | Landin.Types.Fixed_Array
@@ -5158,6 +6491,19 @@ package body Landin.Backend.Cortex_M is
             end case;
          end Instruction;
       begin
+         Record_At := -1;
+         for Index in 1 .. Landin.IR.Value_Count (Of_Unit, Item) loop
+            for Operand in 1 .. Landin.IR.Operand_Count
+              (Of_Unit, Item, Landin.IR.Value_Id (Index))
+            loop
+               declare
+                  Read : constant Positive := Positive (Landin.IR.Nth_Operand
+                    (Of_Unit, Item, Landin.IR.Value_Id (Index), Operand));
+               begin
+                  Readers.Data (Read) := Readers.Data (Read) + 1;
+               end;
+            end loop;
+         end loop;
          Leaf_Frame := Probe or Leaf;
          Leaf_Homes := Homes;
          for Reg in Saving_Low'Range loop
@@ -5349,14 +6695,15 @@ package body Landin.Backend.Cortex_M is
          Reserve (Homes);
          if VFP_Save > 0 and then not Probe then
             Frame_Address_Through (VFP_Save_Offset, "r6");
-            Emit ("vstmia r6, {d8-d15}");
+            Emit ("vstmia r6, " & VFP_List (Saved_Run));
             if Debug /= null then
-               for Reg in 8 .. 15 loop
+               for Reg in Saved_Run.Low .. Saved_Run.High loop
                   Emit (".cfi_offset d" & Trimmed (Reg'Image) & ", -"
                     & Trimmed (Landin.Targets.Byte_Count'Image
                       (24 + Landin.Targets.Byte_Count (Kept)
                        + VFP_Save_Offset
-                       - Landin.Targets.Byte_Count (Reg - 8) * 8)));
+                       - Landin.Targets.Byte_Count (Reg - Saved_Run.Low)
+                         * 8)));
                end loop;
             end if;
          end if;
@@ -5392,6 +6739,12 @@ package body Landin.Backend.Cortex_M is
                Emit ("mov r6, sp");
                Emit ("stmia r6!, {r0, r1, r2, r3}");
          end case;
+         --  D1567: the parameter stores are position zero; what the
+         --  prologue writes before them holds nothing yet.
+         if not Probe and then Recording /= null then
+            Recording.all := [others => 0];
+            Record_At := 0;
+         end if;
          if Plan.Result.Shape.Indirect then
             Store_Slot (Landin.IR.Nth_Parameter (Of_Unit, Item, 1));
          end if;
@@ -5558,18 +6911,34 @@ package body Landin.Backend.Cortex_M is
             --  Every block starts with sp at the bottom of the homes.
             Sp_Depth := 0;
             Sp_Known := not Leaf_Frame;
+            Current_Block := Block;
             for Position in 1 .. Landin.IR.Length
               (Of_Unit, Item, Landin.IR.Block_Id (Block))
             loop
                Current_Value := Landin.IR.Nth_Value
                  (Of_Unit, Item, Landin.IR.Block_Id (Block), Position);
+               Tick := Tick + 1;
+               if Record_At >= 0 then
+                  Record_At := Tick;
+               end if;
+               Next_Value :=
+                 (if Position < Landin.IR.Length
+                    (Of_Unit, Item, Landin.IR.Block_Id (Block))
+                  then Landin.IR.Nth_Value
+                    (Of_Unit, Item, Landin.IR.Block_Id (Block), Position + 1)
+                  else Landin.IR.No_Value);
                if Debug /= null then
                   Put (Dwarf.Source_Line (Debug.all,
                     Landin.IR.Origin_Of (Of_Unit, Item, Current_Value)));
                end if;
-               Instruction (Current_Value);
+               if Current_Value /= Fused then
+                  Instruction (Current_Value);
+               end if;
             end loop;
          end loop;
+         --  What follows the last value, the shared exit and the traps,
+         --  runs where no location is live.
+         Record_At := -1;
          Sp_Known := False;
          for Edge of Edges loop
             Put (Unbounded.To_String (Edge.Label) & ":");
@@ -5654,7 +7023,7 @@ package body Landin.Backend.Cortex_M is
                --  No byte positions survive the tentative emission. The
                --  final pass builds literal pools and branch sites anew.
                Emit_Routine (Item, Layout, Probe => False, Leaf => Eligible,
-                             Saves => Used_Low);
+                             Saves => Used_Low, Registers => Registers);
                return;
             end;
          end if;
@@ -5685,8 +7054,15 @@ package body Landin.Backend.Cortex_M is
             Landin.Backend.Site_Counts.Add_Lines
               (Counted, Unbounded.Slice
                  (Out_Text, Routine_Start, Unbounded.Length (Out_Text)));
+            if Registers /= null then
+               Counts.Register_Count := Held_Count (Registers.Held);
+            end if;
             Landin.Backend.Site_Counts.Fill (Counted, Counts);
-            Landin.Build_Reports.Append (Report, Counts);
+            if Deferring then
+               Pending := Counts;
+            else
+               Landin.Build_Reports.Append (Report, Counts);
+            end if;
          end;
       end Emit_Routine;
       --  The value a datum's block describes.  [1460] says nothing runs
@@ -7088,8 +8464,78 @@ package body Landin.Backend.Cortex_M is
                 (Landin.IR.Placement_Of (Of_Unit, Item).Boot_Stage
                  and then not Landin.IR.Firmware_Profile (Of_Unit).Has_Stage)
             then
-               Emit_Routine
-                 (Item, Allocated_Frame (Of_Unit, Item, Facts, 16#FFFF_FFC0#));
+               --  D1567: at size and speed a routine is emitted first
+               --  with every value in its home, recording what its text
+               --  writes at each position; then with the slots and values
+               --  Allocate_Registers places where nothing writes their
+               --  registers.  The second emission's writes are checked
+               --  against its plan, and a routine whose check fails keeps
+               --  its first.
+               declare
+                  use type Landin.Optimization.Objective;
+                  Count : constant Natural :=
+                    Landin.IR.Value_Count (Of_Unit, Item);
+                  Start : constant Natural := Unbounded.Length (Out_Text);
+                  Start_Serial : constant Natural := Serial;
+                  Start_Line : constant Natural := Emission_Line;
+                  Start_Generation : constant Natural := Pool_Generation;
+                  Start_Distance : constant Natural := Pool_Distance;
+
+                  procedure Restore;
+                  procedure Restore is
+                  begin
+                     Unbounded.Delete
+                       (Out_Text, Start + 1, Unbounded.Length (Out_Text));
+                     Serial := Start_Serial;
+                     Emission_Line := Start_Line;
+                     Pool_Generation := Start_Generation;
+                     Pool_Distance := Start_Distance;
+                     Literals.Clear;
+                  end Restore;
+               begin
+                  if Options.Optimize /= Landin.Optimization.None
+                    and then Landin.IR.Signature_Machine
+                      (Of_Unit, Landin.IR.Signature_Of (Of_Unit, Item))
+                        /= Landin.Machine.Naked_Routine
+                    and then
+                      (for all Value in 1 .. Count =>
+                         Landin.IR.Op_Of
+                           (Of_Unit, Item, Landin.IR.Value_Id (Value))
+                           /= Landin.IR.Assembly)
+                  then
+                     Recording := new Write_Masks'(0 .. Count => 0);
+                     Deferring := True;
+                  end if;
+                  Emit_Routine
+                    (Item, Allocated_Frame
+                       (Of_Unit, Item, Facts, 16#FFFF_FFC0#));
+                  if Recording /= null then
+                     declare
+                        Placed : aliased constant Register_Plan :=
+                          Allocate_Registers
+                            (Of_Unit, Item, Facts, Options, Recording.all);
+                     begin
+                        if Placed.Held /= 0 then
+                           Restore;
+                           Emit_Routine
+                             (Item, Allocated_Frame
+                                (Of_Unit, Item, Facts, 16#FFFF_FFC0#,
+                                 Placed'Access),
+                              Registers => Placed'Access);
+                           if not Holds (Placed, Recording.all) then
+                              Restore;
+                              Free_Masks (Recording);
+                              Emit_Routine
+                                (Item, Allocated_Frame
+                                   (Of_Unit, Item, Facts, 16#FFFF_FFC0#));
+                           end if;
+                        end if;
+                     end;
+                     Free_Masks (Recording);
+                     Deferring := False;
+                     Landin.Build_Reports.Append (Report, Pending);
+                  end if;
+               end;
             end if;
          end;
       end loop;

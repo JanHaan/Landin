@@ -2342,7 +2342,7 @@
     "runtime/directory-memory": {
       "mode": "execute",
       "profile_limit": "selected-image",
-      "reason": "The memory world's directories with every oracle need about 43 KiB of flash at size/auto, of which the fixture's own main is 17 KiB: the Cortex-M0 backend gives every IR slot, each call's snapshot and aggregate temporary among them, a frame home of its own with no reuse and keeps no value in a register, so main's frame is 2.7 KiB and most of its code moves values between homes. That is register allocation and slot reuse, not the library. Each profile still attempts execution; runtime/directory-memory-firmware lists a directory over core/io.memory within the image and requires execution; this image limit is not runtime evidence.",
+      "reason": "D698: since D1567 the memory world's directories with every oracle fit the reference's 32 KiB at size and speed, about 18 KiB, and execute there; at none/off the image fits too and its stack then overruns the 4 KiB reservation, in memory_refill under main, whose 2.9 KiB frame of aggregate temporaries makes most of the 4.9 KiB depth the stack report gives. Each profile still attempts execution; runtime/directory-memory-firmware lists a directory over core/io.memory within the image and requires execution; this limit is not runtime evidence.",
       "lanes": {
         "esp32c3": {
           "mode": "limit",

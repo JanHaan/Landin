@@ -1088,6 +1088,11 @@ def execute(output, tools, refine, selected=(), profiles=(), lane=None):
                     if own.get('mode') == 'limit' and STACK_OVERRUN in str(error):
                         result.update(verdict='selected-stack-limit', reason=own['reason'],
                                       observed=str(error).split('; inspect ')[0])
+                    elif (lane_of(level) is None and STACK_OVERRUN in str(error)
+                          and row.get('profile_limit') == 'selected-image'):
+                        #  The reference's own limit records its stack too.
+                        result.update(verdict='selected-stack-limit', reason=row['reason'],
+                                      observed=str(error).split('; inspect ')[0])
                     else:
                         result.update(image_limit(
                             run, dict(row, profile_limit='selected-image', reason=own['reason'])

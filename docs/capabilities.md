@@ -1011,7 +1011,10 @@ process ignores SIGPIPE and gives its children the default back.
   values with arm64's placement in the registers a routine's text, emitted
   once with every value in a home, does not write over their intervals,
   checking its second emission against the plan; RV32 holds eight-byte
-  values in register pairs (D1503).
+  values in register pairs (D1503). Cortex-M does the same over r4-r7, r3
+  and r1 at every level, eight-byte values and VFP floats keeping their
+  homes (D1567), and at the Thumb-2 levels branches directly and builds
+  constants with MOVW and MOVT (D1564).
 - **At speed** a direct call to a small routine becomes a copy of its body,
   which the debuggers show as an inlined frame of that routine (D339);
   slices and small structs split into scalars; and a branch whose arms only
@@ -1097,9 +1100,9 @@ Add `--target=darwin-arm64` for native macOS output, then open
   a time in arrival order; its recorded trace of when each request arrived,
   began and ended being answered is held to an oracle for that single-core
   answer at every profile, with controls that overlap, drop, trap and stall
-  (D448, D1034, D1035). It takes about 56 KB of flash at `size`, so it runs
-  on a description of the micro:bit's own 256 KiB nRF51822 rather than the
-  32 KiB reference (D1036).
+  (D448, D1034, D1035). It runs on a description of the micro:bit's own
+  256 KiB nRF51822 (D1036); since D1567 it also links within the 32 KiB
+  reference's flash at `size` and `speed`, about 32 KB.
 - **Example programs.** Every hosted program in
   [`examples.md`](../examples.md)
   runs on every hosted target against its recorded output: everyday tools,

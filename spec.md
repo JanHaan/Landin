@@ -26146,6 +26146,185 @@ corrupt a held value silently; and homes, the measured cost above.
 **Pinned by** `backend/RISC-V keeps values in registers`, the RV64 GDB
 sessions, the RV32 lanes' corpus and `compiler/tests/measure/baselines/`.
 
+### D1563 — Cortex-M reaches its homes from sp, and a value's home is a word
+
+**The tour said** nothing. Cortex-M formed every home's address in r6,
+from r11 or sp, before loading or storing it: the measurement of generated
+code (`compiler/tests/measure/findings.md`) found 30.5% of the firmware
+set's instructions at armv6-m speed-auto forming addresses and 35.2%
+loading and storing homes.
+
+**Chosen:** where sp's distance from the frame is known, which in a leaf is
+always and in a framed routine from each block's start until an assembly
+block names sp, a home is read and written with sp's own offset form:
+Thumb-1's word form up to 1020 bytes, and at the Thumb-2 levels the byte,
+halfword and word forms up to 4095. A scalar value's home is at least a
+word, and one narrower than a word is written zero-extended, through r7
+unless the register already is, so that a word load reads what a byte or
+halfword load would have, which armv6-m can do from sp and a narrower load
+cannot. A source slot keeps its own width, since its cell may be reached
+by address. Elsewhere a home's address is formed in r6 as before.
+
+**The alternatives:** byte and halfword homes formed in r6 at armv6-m,
+which kept the address forming this removes for every bool and narrow
+value; a frame pointer in a low register, which costs one of the eight.
+
+**Pinned by** `backend/Cortex scalar homes reuse adjacent address`,
+`cortex ABI/scalar spill homes` and `compiler/tests/measure/baselines/`.
+
+### D1564 — Thumb-2 branches directly and makes constants without literals
+
+**The tour said** nothing. Every level inverted a conditional transfer over
+an absolute jump through r7, and a constant MOVS could not make came from a
+literal island.
+
+**Chosen:** at the Thumb-2 levels a transfer is one B or conditional B,
+whose narrow or wide encoding the assembler chooses within its 16 MiB and
+1 MiB reach, and a constant is MOV.W's modified immediate, MOVW, or MOVW
+and MOVT, without a literal. ARMv6-M keeps its lowering and the literal
+reach controls.
+
+**The alternatives:** literals at `size`, a word and a load against MOVW
+and MOVT's eight bytes, declined for one form at every objective.
+
+**Pinned by** `cortex ABI/local branches`, the devices lane's cached
+consumer, which reads a register's address from a MOVW and MOVT pair as
+from a literal, and `compiler/tests/measure/baselines/`.
+
+### D1565 — A Cortex-M call loads its scalar register arguments directly
+
+**The tour said** nothing. Every call stored its register arguments in an
+eight-byte-rounded area below sp and loaded them back with LDMIA.
+
+**Chosen:** a call whose register arguments are scalars reserves only its
+stack arguments' area and, last, loads each register argument from where
+its value is, which reads no other register; a call that passes a C record
+in core registers stages them as before.
+
+**The alternatives:** the staging for every call, its cost the area's
+reservation, two stores and a load per argument.
+
+**Pinned by** `cortex ABI/outgoing calls` and `stack report/a closed graph
+on every target`.
+
+### D1566 — A comparison only its branch reads sets the branch's flags
+
+**The tour said** nothing. A comparison made its truth value in a home with
+two branches, and the branch that read it compared it with zero; a jump to
+the block laid out next was a jump.
+
+**Chosen:** when the value after a comparison in its block is the branch
+that is the comparison's only reader, the comparison's flags choose the
+edge, and an edge to the block laid out next falls through, at every level
+and objective.
+
+**The alternatives:** the truth value kept and compared with zero, two
+branches and a home's store and load more for every loop test; the fusion
+at `size` and `speed` alone, which leaves `none` paying for what costs
+nothing to save.
+
+**Pinned by** `cortex ABI/local branches` and the Cortex-M corpus.
+
+### D1567 — Cortex-M keeps values in low registers its emitted text does not write
+
+**The tour said** nothing. Cortex-M gave every slot and value a home at
+every objective.
+
+**Chosen:** at `size` and `speed` Cortex-M places slots and values as
+RISC-V does (D1503): the routine is emitted once with every value in its
+home while the core registers each position writes are recorded, a call
+writing r0-r3, r12 and lr; a location takes one of r4-r7, r3 or r1 only
+where that record writes none over its interval, r4-r7 offered first in a
+routine that calls, which saves them anyway, and last in a leaf, which
+saves each it names; the routine is emitted again and keeps its first
+emission if any write meets a held register. A parameter may take any of
+them, since the entry stores the incoming registers before it reads any.
+An eight-byte scalar keeps its home, as does a float where the float unit
+computes it. A narrower scalar is held zero-extended. Held operands are
+read in place by word arithmetic, comparisons, branches, indirect accesses
+and indexing, and their results, constants and loads are written to their
+own register. Cortex-M's debugging information describes no local, so a
+source variable's register is held over its live interval at `size` too,
+where D1503 holds it throughout; `Landin.Backend.Placement.Measure` takes
+that as a parameter.
+
+**The alternatives:** a fixed register set selection never names, which
+r0-r7's use as scratch leaves empty. High registers at the Thumb-2 levels,
+float values in VFP registers and pairs for eight-byte values are not
+taken here; the register records them.
+
+**Pinned by** the Cortex-M corpus at every level, the firmware and
+evidence lanes, and `compiler/tests/measure/baselines/`.
+
+### D1568 — At the Thumb-2 levels a truth value comes from an IT block
+
+**The tour said** nothing. A comparison's truth value was made with two
+branches at every level.
+
+**Chosen:** at the Thumb-2 levels a word comparison whose value is kept
+makes it with ITE and two conditional MOVs; ARMv6-M keeps its branches.
+
+**The alternatives:** the branches at every level, one more instruction
+and a taken branch for each kept comparison.
+
+**Pinned by** the Cortex-M corpus at `armv7-m`, `armv7e-m` and
+`armv8-m.main`.
+
+### D1569 — Cortex-M's code labels are assembler-local
+
+**The tour said** nothing. A block's label and the emitter's own labels
+were symbols, `L3_1` and `Lcm_step_17`, so a listing split a routine at
+each, and an image's identity moved with the program's item count: an
+import that reached nothing changed every label's number and so the linked
+ELF's symbol table.
+
+**Chosen:** they are `.L` labels, outside the object's symbol table. A data
+object keeps its local symbol.
+
+**The alternatives:** the lane guide saying where a routine's instructions
+are found and the record comparison saying what it is sensitive to, which
+leave every listing split and every record fragile; labels numbered within
+their routine, which keeps them in the symbol table.
+
+**Pinned by** the firmware lane's `unused-import` case, which links the same
+program with and without an import it reaches nothing of and requires the
+same file.
+
+### D1570 — A framed routine saves the float registers its blocks declare
+
+**The tour said** nothing. With a float unit, a framed routine holding any
+assembly block saved and restored all of d8-d15, although a block declares
+each call-preserved float register its text names (D630).
+
+**Chosen:** it saves the run from the lowest to the highest of d8-d15 its
+blocks declare, an s16-s31 declaration counting as the d register that
+holds it, and none when they declare none.
+
+**The alternatives:** a list of exactly the declared registers, which
+VSTM cannot store in one instruction when the run has gaps; all eight,
+sixty-four bytes of stack and sixteen transfers for one register.
+
+**Pinned by** the firmware lane's float cases and the Cortex-M corpus at
+`armv7e-m` with a float unit.
+
+### D1571 — A Thumb-1 branch to a trap is a BL
+
+**The tour said** nothing. At ARMv6-M a branch too far for B to a routine's
+trap inverted its condition over a load of the trap's address into r7 and
+BX, ten to twelve bytes.
+
+**Chosen:** a trap never returns, so a Thumb-1 branch too far for B reaches
+one with BL, four bytes, which writes only lr; a routine whose only BLs are
+to its traps is still a leaf, the build report counts no call for them,
+and register allocation sees no write but lr.
+
+**The alternatives:** a trap stub within B's reach of every branch, which
+needs a placement pass the emitter does not make; the inverted branch over
+a load, its cost above and a write of r7 the allocator must avoid.
+
+**Pinned by** the firmware lane's leaf and trap cases and the Cortex-M
+corpus at `armv6-m`.
+
 ### D1383 — `refine` keeps the compiler's commands and ships four of its tools beside it
 
 **The tour said** nothing; [what refine does today] listed thirteen commands of one executable.
@@ -33856,6 +34035,12 @@ lane run in which every profile of the row executes fails, naming the stale
 entry. The RV32 lanes carry one wherever an RV32 image's text outgrows the
 reference's 32 KiB, or its frames the 4 KiB stack, at a profile where the
 Cortex-M0 image fits, each reason giving the measured overflow.
+
+**Amended on 2026-11-19:** the reference's own run records a stack limit
+too: a row with `profile_limit` whose profile's stack the guard stopped
+past the reservation is a `selected-stack-limit`, its reason the row's, as
+a lane's is. D1567 made `runtime/directory-memory` fit the reference at
+every profile, and at `none` its stack overruns the 4 KiB.
 
 **The alternatives:** a lane `restriction`, which requires every profile
 to fail and so is stale wherever only the unoptimised profile overflows,

@@ -167,6 +167,11 @@ package body Landin.Backend.Site_Counts is
          and then Text (Text'First .. Text'First + Prefix'Length - 1)
            = Prefix);
 
+   function Ends (Text, Suffix : String) return Boolean
+     is (Text'Length >= Suffix'Length
+         and then Text (Text'Last - Suffix'Length + 1 .. Text'Last)
+           = Suffix);
+
    function One_Of (Text : String; Words : String) return Boolean;
    --  Whether Text is one of the space-separated Words.
    function One_Of (Text : String; Words : String) return Boolean is
@@ -281,7 +286,13 @@ package body Landin.Backend.Site_Counts is
 
             function Is_Call return Boolean is
               (case S is
-                  when A64 | Thumb => Mnemonic = "bl",
+                  when A64 => Mnemonic = "bl",
+                  --  D1571: a Thumb-1 branch to a trap, which never
+                  --  returns, is no call.
+                  when Thumb =>
+                     Mnemonic = "bl"
+                     and then not Ends (Operand (1), "_trap")
+                     and then not Ends (Operand (1), "_stack_limit"),
                   when Xtensa => Mnemonic in "call4" | "call8" | "call12",
                   when RISC_V =>
                      Mnemonic = "call"
