@@ -1002,7 +1002,7 @@ abandoned still recovered or refused as D1049 says.
 
 ### R18.72 — A contributed `refine build`
 
-Status: planned
+Status: active
 Depends on: R18.50
 
 `build` is reserved (D1484): `refine build` refuses with L0002, "build is
