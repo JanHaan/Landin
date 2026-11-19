@@ -1054,7 +1054,7 @@ abandoned still recovered or refused as D1049 says.
 
 ### R18.72 — A contributed `refine build`
 
-Status: planned
+Status: complete
 Depends on: R18.50
 
 `build` is reserved (D1484): `refine build` refuses with L0002, "build is
@@ -1076,6 +1076,21 @@ subject) dispatched by `refine build`, listed by `refine help`, shown by
 `refine help build` and given `refine explain RB...`, under the
 dispatcher's black-box controls; the case with no `refine-build` refused
 as the item decides; D1484 amended.
+
+Done: `build` is an external command's name like any other (D1603, D1484
+amended): a `refine-build` on PATH is described, dispatched with
+`LANDIN_REFINE`, listed by `refine help`, run for `refine help build`, asked
+for its prefix by `refine explain` and handed its words by the completion
+scripts, which no longer keep `build` back. With none on PATH, `refine
+build` and `refine help build` are refused with L0002 saying that `refine`
+has no build command of its own and runs a contributed `refine-build`,
+rather than D1463's unknown command, which offered `refine check build`.
+The dispatcher suite and a stand-in `refine-build` in
+`scripts/tests/test_cli_native.py` hold both; refine-build at 265c539 was
+dispatched, listed, helped, explained (`RB0102`) and completed by hand.
+`docs/commands.md` states the whole contract a contributed command meets,
+the description's keys and which may be empty, with an example the native
+tests run (`SR-1417`).
 
 ### R18 gate
 Every existing invocation works or is refused with its new form; every

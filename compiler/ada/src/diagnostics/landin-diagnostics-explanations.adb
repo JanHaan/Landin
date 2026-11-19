@@ -74,7 +74,14 @@ package body Landin.Diagnostics.Explanations is
                & " a target with no hosted system takes neither. `check` t"
                & "akes `--firmware-entry` and `--build-report` as `compile"
                & "` does, and refuses an entry that names no firmware rout"
-               & "ine (D383).",
+               & "ine (D383)."
+               & LF
+               & LF
+               & "`refine` has no `build` command of its own: `refine buil"
+               & "d` runs a contributed `refine-build` on PATH. With none "
+               & "there, `refine build` and `refine help build` are refuse"
+               & "d here, saying so; install one, or compile a program wit"
+               & "h `refine compile` (D1603).",
             when Catalogue.Unreadable_Source =>
                "A source or supplied tool input is missing or cannot be "
                & "read. Check the path and its permissions. Assembly `.inc"

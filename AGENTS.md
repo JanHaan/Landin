@@ -229,7 +229,7 @@ The compiler checks whole programs and may use private caches. Its verified targ
 the project. Keep it current when the representation, verification boundary
 or optimization pipeline changes. It is derived from implementation and
 tests, never an authority for semantics, implementation decisions or work.
-Seven more are derived the same way:
+Eight more are derived the same way:
 
 | document | what it holds |
 |---|---|
@@ -240,8 +240,9 @@ Seven more are derived the same way:
 | `examples.md` | the complete programs the runtime suite executes |
 | `docs/benchmarks.md` | what five of them cost against other languages |
 | `docs/from-c.md` | the Landin form of each C habit, its examples a fixture the test program compiles |
+| `docs/commands.md` | what a contributed `refine-NAME` answers, its example run by the native CLI tests |
 
-All eight are derived; none decides anything.
+All nine are derived; none decides anything.
 
 Compiler stages are Ada packages behind tested seams so a future self-hosting roadmap may replace them incrementally. The current roadmap neither schedules self-hosting nor freezes a serialized cross-language stage protocol.
 

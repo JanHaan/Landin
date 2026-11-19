@@ -469,6 +469,75 @@ class NativeCLI(unittest.TestCase):
         self.assertIn('error[L0695]: refine-ltest at ' + str(tool), refused.stderr)
         self.assertIn('claims L', refused.stderr)
 
+    def test_contributed_build(self):
+        """D1603: a contributed refine-build is `refine build`, and none is said."""
+        tools = self.root / 'build-tools'
+        tools.mkdir()
+        tool = tools / 'refine-build'
+        tool.write_text(
+            '#!/bin/sh\n'
+            'case "$1" in\n'
+            '--describe) printf \'%s\\n\' \'{"format":"landin-command-1",'
+            '"name":"build","summary":"a stand-in build tool","codes":["RB"]}\';;\n'
+            '--help) printf \'usage: refine build\\n\';;\n'
+            'explain) printf \'RB explains %s\\n\' "$2";;\n'
+            '*) printf \'[%s]\' "$@"; printf \'\\n\'; exit 5;;\n'
+            'esac\n')
+        tool.chmod(0o755)
+        bare = dict(os.environ, PATH=os.pathsep.join(
+            entry for entry in os.environ.get('PATH', '').split(os.pathsep)
+            if entry and not (Path(entry) / 'refine-build').exists()))
+        env = dict(bare, PATH=str(tools) + os.pathsep + bare['PATH'])
+
+        def run(environment, *args):
+            return subprocess.run([self.refine, *args], cwd=self.root, env=environment,
+                                  text=True, capture_output=True, timeout=60)
+
+        built = run(env, 'build', '--release', 'app')
+        self.assertEqual((built.returncode, built.stdout), (5, '[--release][app]\n'),
+                         built.stderr)
+        self.assertEqual(run(env, 'help', 'build').stdout, 'usage: refine build\n')
+        self.assertIn('\n  build       a stand-in build tool (' + str(tool) + ')\n',
+                      run(env, 'help').stdout)
+        explained = run(env, 'explain', 'RB0001')
+        self.assertEqual(explained.stdout,
+                         'RB0001 is explained by refine-build at ' + str(tool)
+                         + ', not by Landin\nRB explains RB0001\n', explained.stderr)
+        for words in (('build',), ('help', 'build')):
+            refused = run(bare, *words)
+            self.assertEqual(refused.returncode, 2, refused.stderr)
+            self.assertIn('error[L0002]: refine has no build command of its own',
+                          refused.stderr)
+
+    def test_documented_command(self):
+        """docs/commands.md's example is a command this refine dispatches."""
+        page = (Path(__file__).resolve().parents[2] / 'docs/commands.md').read_text()
+        blocks = re.findall(r'^```sh\n(.*?)^```$', page, re.S | re.M)
+        self.assertEqual(len(blocks), 1, 'docs/commands.md has one sh block')
+        tools = self.root / 'hello-tools'
+        tools.mkdir()
+        tool = tools / 'refine-hello'
+        tool.write_text(blocks[0])
+        tool.chmod(0o755)
+        env = dict(os.environ, PATH=str(tools) + os.pathsep + os.environ['PATH'])
+
+        def run(*args):
+            return subprocess.run([self.refine, *args], cwd=self.root, env=env,
+                                  text=True, capture_output=True, timeout=60)
+
+        self.assertEqual(run('hello', 'Ada').stdout, 'hello, Ada\n')
+        self.assertEqual(run('hello').stdout, 'hello, world\n')
+        self.assertEqual(run('hello', 'a', 'b').returncode, 1)
+        self.assertEqual(run('help', 'hello').stdout, 'usage: refine hello [NAME]\n')
+        self.assertIn('\n  hello       Greet someone (' + str(tool) + ')\n', run('help').stdout)
+        self.assertEqual(run('hello', '--complete', '--', '').stdout.split(),
+                         ['world', 'landin'])
+        explained = run('explain', 'HELLO1')
+        self.assertEqual(explained.stdout,
+                         'HELLO1 is explained by refine-hello at ' + str(tool)
+                         + ', not by Landin\nHELLO1: hello was given more than one name.\n',
+                         explained.stderr)
+
     def test_bash_completion_delegates(self):
         """D1485: an external command completes its own words."""
         if not shutil.which('bash'):

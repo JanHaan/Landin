@@ -107,6 +107,12 @@ package Landin.Commands.External is
    --  else, or "" for any other word.
    function Forwarded_Prefix (Code : String) return String;
 
+   --  D1603: the command name refine leaves to a contributed tool,
+   --  which it has none of its own for, and the refusal when no
+   --  refine-build is on the search path.
+   Build_Name : constant String := "build";
+   function Build_Absent_Message return String;
+
    --  The refusal of a shipped command that is missing.
    function Missing_Message (Name : String; Where : Location) return String;
 

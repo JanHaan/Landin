@@ -2352,6 +2352,92 @@ package body Landin.Tests.Commands_Suite is
             "help NAME runs refine-NAME --help");
       end;
 
+      --  D1603: `build` is a contributed refine-build's, dispatched,
+      --  listed, helped, explained and completed as any contributed
+      --  command is; with none on the path it is refused saying so.
+      declare
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         Result : Landin.Driver.Outcome;
+      begin
+         Install (Host);
+         Tools.Add_Path_Program ("/usr/bin/refine-build");
+         Tools.Set_Result (0, Description ("build", Q & "RB" & Q, ""));
+         Result := Landin.Commands.Execute
+           (["build", "--release", "app"], Host, Tools, Meter,
+            Shipped => "probe");
+         Landin.Testing.Check
+           (Item, US.To_String (Result.Launch_Program)
+                = "/usr/bin/refine-build"
+              and then Natural (Result.Launch_Arguments.Length) = 2
+              and then Result.Launch_Arguments (1) = "--release"
+              and then Result.Launch_Arguments (2) = "app"
+              and then US.To_String (Result.Launch_Setting)
+                = "LANDIN_REFINE=/opt/landin/bin/refine",
+            "refine build runs a contributed refine-build: "
+            & US.To_String (Result.Report));
+         Result := Landin.Commands.Execute
+           (["help"], Host, Tools, Meter, Shipped => "");
+         Landin.Testing.Check
+           (Item, Contains (US.To_String (Result.Output),
+                            "  build       the build tool"
+                            & " (/usr/bin/refine-build)" & ASCII.LF),
+            "help lists a contributed refine-build: "
+            & US.To_String (Result.Output));
+         Result := Landin.Commands.Execute
+           (["help", "build"], Host, Tools, Meter, Shipped => "");
+         Landin.Testing.Check
+           (Item, US.To_String (Result.Launch_Program)
+                = "/usr/bin/refine-build"
+              and then Natural (Result.Launch_Arguments.Length) = 1
+              and then Result.Launch_Arguments (1) = "--help",
+            "help build runs refine-build --help");
+         Result := Landin.Commands.Execute
+           (["explain", "RB0003"], Host, Tools, Meter, Shipped => "");
+         Landin.Testing.Check
+           (Item, US.To_String (Result.Launch_Program)
+                = "/usr/bin/refine-build"
+              and then Natural (Result.Launch_Arguments.Length) = 2
+              and then Result.Launch_Arguments (1) = "explain"
+              and then Result.Launch_Arguments (2) = "RB0003",
+            "a code refine-build claims is forwarded to it: "
+            & US.To_String (Result.Report));
+         Result := Landin.Commands.Execute
+           (["build", "--complete", "--", ""], Host, Tools, Meter,
+            Shipped => "");
+         Landin.Testing.Check
+           (Item, US.To_String (Result.Launch_Program)
+                = "/usr/bin/refine-build",
+            "refine-build completes its own words");
+      end;
+      declare
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         Result : Landin.Driver.Outcome;
+      begin
+         Install (Host);
+         Result := Landin.Commands.Execute
+           (["build", "app"], Host, Tools, Meter, Shipped => "probe");
+         Landin.Testing.Check
+           (Item, Result.Status = Landin.Driver.Status_Misuse
+              and then US.Length (Result.Launch_Program) = 0
+              and then Contains (US.To_String (Result.Report),
+                                 "error[L0002]: refine has no build command"
+                                 & " of its own: refine build runs a"
+                                 & " contributed refine-build, and none is"
+                                 & " on PATH"),
+            "refine build without a refine-build says so: "
+            & US.To_String (Result.Report));
+         Result := Landin.Commands.Execute
+           (["help", "build"], Host, Tools, Meter, Shipped => "probe");
+         Landin.Testing.Check
+           (Item, Result.Status = Landin.Driver.Status_Misuse
+              and then Contains (US.To_String (Result.Report),
+                                 "error[L0002]: refine has no build"),
+            "help build without a refine-build says so: "
+            & US.To_String (Result.Report));
+      end;
+
       --  D1487: version describes the installation it runs from.
       declare
          Host : Landin.Testing.Fakes.Fake_Filesystem;
@@ -2388,6 +2474,17 @@ package body Landin.Tests.Commands_Suite is
              (Landin.Commands.Catalogue.Shell_Completion ("fish"),
               "--complete --"),
          "every shell's completion delegates to refine-NAME --complete");
+      Landin.Testing.Check
+        (Item, not Contains
+                 (Landin.Commands.Catalogue.Shell_Completion ("bash"),
+                  "|build")
+           and then Contains
+             (Landin.Commands.Catalogue.Shell_Completion ("bash"),
+              "|help) ;;")
+           and then not Contains
+             (Landin.Commands.Catalogue.Shell_Completion ("fish"),
+              " help build"),
+         "no completion script keeps build from a refine-build (D1603)");
    end Dispatcher;
 
    --  D1485, D1544: each split command answers its process surface

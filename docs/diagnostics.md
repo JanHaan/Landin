@@ -173,6 +173,11 @@ Linux target, and a target with no hosted system takes neither. `check`
 takes `--firmware-entry` and `--build-report` as `compile` does, and refuses
 an entry that names no firmware routine (D383).
 
+`refine` has no `build` command of its own: `refine build` runs a
+contributed `refine-build` on PATH. With none there, `refine build` and
+`refine help build` are refused here, saying so; install one, or compile a
+program with `refine compile` (D1603).
+
 ### L0003
 
 A source or supplied tool input is missing or cannot be read. Check the
