@@ -50,6 +50,7 @@ on:
       - 'docs/diagnostics.md'
       - 'docs/format.md'
       - 'docs/server.md'
+      - 'docs/commands.md'
       - 'docs/ir.md'
       - 'docs/targets.md'
       - 'compiler/ada/TOOLCHAIN.md'
