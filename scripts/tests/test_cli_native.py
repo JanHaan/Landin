@@ -457,10 +457,11 @@ class NativeCLI(unittest.TestCase):
         self.assertEqual(unclaimed.returncode, 2)
         self.assertIn('no refine-NAME command on PATH claims it', unclaimed.stderr)
         listed = run('help')
-        # Under the heading, after the split commands refine ships.
-        external = listed.stdout.split('\nExternal commands:\n', 1)[1]
+        #  The shipped commands come first under the heading, then the
+        #  contributed ones.
+        external = listed.stdout.partition('\nExternal commands:\n')[2]
         self.assertIn('\n  ltest       a test tool (' + str(tool) + ')\n',
-                      '\n' + external.split('\n\n', 1)[0] + '\n')
+                      '\n' + external.partition('\n\n')[0] + '\n')
         tool.write_text('#!/bin/sh\nprintf \'{"format":"landin-command-1",'
                         '"name":"ltest","summary":"s","codes":["L"]}\'\n')
         refused = run('ltest')

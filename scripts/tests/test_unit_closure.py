@@ -85,8 +85,12 @@ class SplitClosures(unittest.TestCase):
                      "Landin.Bindings.Policies", "Landin.Bindings.Texts",
                      "Landin.Platform.Publication", "Landin.Source.Names",
                      "Landin.Tokens", "Landin.Types"},
-        "site": {"Refine_Site", "Landin.Splits.Site"},
+        "site": {"Refine_Site", "Landin.Splits.Site", "Landin.Site_Tables"},
     }
+
+    #  A split that takes no part of Landin.Splits, pinned by a case of
+    #  its own.
+    APART = {"dap": "DapClosure"}
 
     def test_each_listed_split_has_its_pin(self):
         # A split command entered in the one list (D1483) is pinned here
@@ -95,7 +99,7 @@ class SplitClosures(unittest.TestCase):
                             .read_text(encoding="utf-8"))["commands"]
         for entry in listed:
             with self.subTest(split=entry["name"]):
-                self.assertIn(entry["name"], self.OWN)
+                self.assertIn(entry["name"], {*self.OWN, *self.APART})
 
     def test_each_split_links_its_own_units_and_the_surface(self):
         units = unit_closure.read_units()
@@ -106,6 +110,36 @@ class SplitClosures(unittest.TestCase):
                     {units[key].name
                      for key in unit_closure.closure(units, [main])},
                     self.SURFACE | own)
+
+
+class DapClosure(unittest.TestCase):
+    """`refine-dap` links no front end (D1423, D1523).
+
+    It reads source tables through Landin.Site_Tables, never
+    Landin.Source_Maps, which writes them from a compilation; finds the
+    library through Landin.Library; and frames its messages with the
+    language server's transport, whose parent is a pure specification.
+    A unit added here is a choice to make in review: one of the front
+    end, the driver or `Landin.Commands`, whose body withs the whole
+    compiler, would link all of it.  The generated Landin.Build_Identity,
+    which names the source digest `--describe` answers with, adds
+    Landin.Targets.Selection, Landin.Targets and Landin.Evidence, the
+    host's target facts; a build tree's objects show it.
+    """
+
+    def test_the_adapter_links_eighteen_units(self):
+        units = unit_closure.read_units()
+        members = {units[key].name
+                   for key in unit_closure.closure(units, ["Refine_Dap"])}
+        self.assertEqual(members, {
+            "Refine_Dap", "Landin", "Landin.Adapter", "Landin.Adapter.MI",
+            "Landin.Adapter.Sessions", "Landin.Diagnostics",
+            "Landin.Diagnostics.Catalogue", "Landin.Json", "Landin.Library",
+            "Landin.Paths", "Landin.Platform", "Landin.Platform.Native",
+            "Landin.Platform.Native.Byte_Strings",
+            "Landin.Platform.Native.Tools", "Landin.Server",
+            "Landin.Server.Transport", "Landin.Site_Tables",
+            "Landin.Source"})
 
 
 class ContextClauses(unittest.TestCase):

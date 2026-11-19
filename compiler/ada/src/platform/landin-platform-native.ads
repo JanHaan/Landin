@@ -187,4 +187,50 @@ package Landin.Platform.Native is
 
    overriding procedure Log (Host : in out Native_Channel; Line : String);
 
+   --  A debugger's session through the host C adapter
+   --  `landin_debugger.c`; the editor is standard input, as
+   --  Native_Channel's.
+   type Native_Debugger_Session is limited new Debugger_Session with private;
+
+   overriding procedure Start
+     (Host          : in out Native_Debugger_Session;
+      Arguments     : Path_List;
+      Settings      : Path_List;
+      Program_Pipes : Boolean;
+      Failure       : out Ada.Strings.Unbounded.Unbounded_String);
+
+   overriding function Variable
+     (Host : Native_Debugger_Session; Name : String) return String;
+
+   overriding procedure Wait
+     (Host   : in out Native_Debugger_Session;
+      Client : in out Channel'Class;
+      Limit  : Duration;
+      Ready  : out Ready_Streams);
+
+   overriding procedure Read
+     (Host : in out Native_Debugger_Session;
+      From : Session_Input;
+      Into : out String;
+      Last : out Natural);
+
+   overriding procedure Send
+     (Host : in out Native_Debugger_Session;
+      Item : String;
+      Sent : out Boolean);
+
+   overriding procedure Stop
+     (Host   : in out Native_Debugger_Session;
+      Grace  : Duration;
+      Status : out Integer);
+
+private
+
+   type Descriptor_Array is array (0 .. 3) of Integer;
+
+   type Native_Debugger_Session is limited new Debugger_Session with record
+      Child       : Integer := 0;
+      Descriptors : Descriptor_Array := [others => -1];
+   end record;
+
 end Landin.Platform.Native;

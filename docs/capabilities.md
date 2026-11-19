@@ -319,7 +319,8 @@ The README has [the commands in brief](../README.md#refine-in-brief);
 - `refine run program.ldn -- ARGUMENT ...` compiles into a new private
   directory under `TMPDIR` or `/tmp`, runs the program on this terminal with
   the arguments after `--` exactly, exits with its status, or with 128 and
-  the number of the signal that ended it and a line naming it. The program
+  the number of the signal that ended it and a line naming it, except for
+  a closed pipe, which ends it quietly as a shell would (D1528). The program
   shares refine's process group, and while it runs refine ignores SIGINT
   and SIGQUIT, so the terminal's Ctrl-C and Ctrl-\ reach the program and
   refine stays to clean up; an interrupt or quit refine's caller ignored
@@ -1077,6 +1078,16 @@ Add `--target=darwin-arm64` for native macOS output, then open
 - **Library paths.** A library file is recorded as `/landin-library/` and its
   module path, never where the library was installed, which a session maps
   to the directory `refine version` names.
+- **From an editor.** `refine dap` is a Debug Adapter Protocol server that
+  an editor starts as its debug adapter. It debugs Linux programs over
+  GDB/MI. For macOS and FreeBSD programs it starts and relays `lldb-dap`,
+  LLVM's own adapter. It launches a program or attaches to a debugger
+  stub. It shows the library's files from the installed library. With
+  `--panic-map`, it shows a stop in `panic_handler` as an exception at the
+  source line of its site (D1523-D1527). The gate scripts a session over
+  GDB on Linux x86-64, Linux arm64 and RV64 under QEMU, and over LLDB on
+  macOS and in both FreeBSD VMs. See
+  [debugging from an editor](targets.md#debugging-from-an-editor).
 - Debug provenance stays independent of DWARF for a possible future PDB
   emitter; PDB is not implemented.
 

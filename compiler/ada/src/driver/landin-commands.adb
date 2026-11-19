@@ -1515,10 +1515,14 @@ package body Landin.Commands is
          Result.Report := "refine: " & Why & LF;
       elsif Ran.Ended = Landin.Platform.Signaled then
          Result.Status := 128 + Ran.Signal;
-         Result.Report := US.To_Unbounded_String
-           ("refine: " & Program_Name (Program) & " was ended by "
-            & US.To_String (Ran.Signal_Name) & " (signal"
-            & Natural'Image (Ran.Signal) & ")" & LF);
+         --  D1528: a closed pipe ended it because its reader left, and
+         --  that is no failure to report, as D1047 ends refine itself.
+         if US.To_String (Ran.Signal_Name) /= "SIGPIPE" then
+            Result.Report := US.To_Unbounded_String
+              ("refine: " & Program_Name (Program) & " was ended by "
+               & US.To_String (Ran.Signal_Name) & " (signal"
+               & Natural'Image (Ran.Signal) & ")" & LF);
+         end if;
       else
          Result.Status := Natural (Ran.Exit_Code);
       end if;

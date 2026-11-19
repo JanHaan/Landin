@@ -10,7 +10,9 @@ import shlex
 import shutil
 import subprocess
 import sys
+import socket
 import tarfile
+import time
 from contextlib import contextmanager
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -22,6 +24,8 @@ import fixture_meta
 sys.path.insert(0, str(ROOT / 'compiler/tests/debugging'))
 import switch_frames  # noqa: E402
 import lldb_batch  # noqa: E402
+sys.path.insert(0, str(ROOT / 'compiler/tests/dap'))
+import session as dap_session  # noqa: E402
 
 PROFILES = [('none', 'off'), ('size', 'off'), ('size', 'auto'), ('speed', 'auto')]
 SPECIALIZED = [('none', 'all'), ('speed', 'all')]
@@ -533,6 +537,14 @@ class Lane:
             (self.bundle / (label + '.lldb')).write_text('\n'.join(commands) + '\n')
             results.append({'label': label, 'switch_instructions': count,
                             'executable_sha256': sha(executable)})
+        #  The DAP session (D1523): `refine dap` on this host, with LLDB's
+        #  adapter attached to lldb-server in the guest.  Its source table
+        #  stays here, beside the image, where the adapter reads it.
+        executable = self.bundle / 'dap'
+        self.command([self.args.refine.resolve(), 'compile', '--target=' + self.target,
+                      '--toolchain=' + str(self.driver), '--debug=full', '--panic-map',
+                      '--emit=exe', dap_session.SOURCE, '-o', executable], 'dap-build')
+        results.append({'label': 'dap', 'dap': True, 'executable_sha256': sha(executable)})
         return results
 
     def switch_session(self, guest, result):
@@ -552,7 +564,9 @@ class Lane:
         failures = []
         for result in results:
             try:
-                if 'switch_instructions' in result:
+                if result.get('dap'):
+                    self.dap_session(guest, result)
+                elif 'switch_instructions' in result:
                     self.switch_session(guest, result)
                 else:
                     self.source_session(guest, result)
@@ -560,11 +574,92 @@ class Lane:
                 result['status'] = 'failed'
                 result['failure'] = str(error)
                 failures.append(first_line(error))
-        print('%s: %d of %d LLDB sessions passed' % (self.target, len(results) - len(failures),
+        print('%s: %d of %d LLDB and DAP sessions passed' % (self.target, len(results) - len(failures),
                                                     len(results)), flush=True)
         if failures:
             raise OutcomeFailures('LLDB sessions', failures, len(results))
         return results
+
+    def dap_session(self, guest, result):
+        """compiler/tests/dap/session.py's session through `refine dap`.
+
+        lldb-server serves the program in the guest on a loopback port,
+        which an SSH forward brings to this host, where `refine dap`
+        starts LLDB's adapter and attaches it there (D1524).  The image
+        and the sources are at the same paths on both sides."""
+        if self.args.refine is None:
+            #  A prepared payload is run where no compiler is; the
+            #  gate's lane emits and runs in one job.
+            result['status'] = 'not run: the DAP session needs refine on this host'
+            return
+        adapter = self.args.lldb_dap
+        if shutil.which(adapter) is None and shutil.which('lldb-dap') is not None:
+            adapter = 'lldb-dap'
+        with socket.socket() as probe:
+            probe.bind(('127.0.0.1', 0))
+            local = probe.getsockname()[1]
+        remote = 47000 + local % 1000
+        #  LLDB ties the image the guest runs to the one it read here by
+        #  its path, so the guest runs a copy at this host's path, as the
+        #  sources are found at theirs.
+        executable = (self.bundle / 'dap').resolve()
+        guest.checked('set -e; test ! -e ' + shlex.quote(str(executable.parent)) + ' || test -d '
+                      + shlex.quote(str(executable.parent)) + '; mkdir -p '
+                      + shlex.quote(str(executable.parent)) + '; cp '
+                      + shlex.quote(str(self.remote_bundle / 'dap')) + ' '
+                      + shlex.quote(str(executable)))
+        log = open(self.output / 'dap-lldb-server.log', 'wb')
+        command = ('cd ' + shlex.quote(str(self.source_root)) + '; exec lldb-server gdbserver'
+                   ' 127.0.0.1:' + str(remote) + ' -- ' + shlex.quote(str(executable)))
+        if guest.sudo:
+            command = 'sudo -n /bin/sh -c ' + shlex.quote(command)
+        server = subprocess.Popen([*guest.ssh, command], stdout=log, stderr=subprocess.STDOUT)
+        tunnel = None
+        try:
+            deadline = time.monotonic() + 120
+            while time.monotonic() < deadline:
+                listening = guest.run('sockstat -4 -l -p ' + str(remote), timeout=60)
+                #  sockstat cuts a command's name short; the address is whole.
+                if b'127.0.0.1:%d' % remote in listening.stdout:
+                    break
+                require(server.poll() is None, 'lldb-server ended before it listened')
+                time.sleep(1)
+            else:
+                require(False, 'lldb-server did not listen within 120 seconds')
+            tunnel = subprocess.Popen(
+                [*guest.ssh[:-1], '-N', '-o', 'ExitOnForwardFailure=yes',
+                 '-L', '127.0.0.1:%d:127.0.0.1:%d' % (local, remote), guest.ssh[-1]],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            deadline = time.monotonic() + 60
+            while True:
+                #  A connection made here would be lldb-server's one, so
+                #  the forward is known ready when ssh has bound its port.
+                with socket.socket() as probe:
+                    try:
+                        probe.bind(('127.0.0.1', local))
+                    except OSError:
+                        break
+                require(tunnel.poll() is None and time.monotonic() < deadline,
+                        'the SSH forward to lldb-server did not open')
+                time.sleep(0.2)
+            checks = dap_session.run_session(
+                [str(self.args.refine.resolve()), 'dap'], self.bundle / 'dap',
+                dap_session.SOURCE, self.output, 'dap-' + self.target,
+                debugger_path=adapter,
+                remote='127.0.0.1:%d' % local, cwd=self.bundle)
+            result['checks'] = len(checks)
+        except AssertionError as error:
+            raise ValueError('dap: ' + repr(error)) from error
+        finally:
+            for process in (tunnel, server):
+                if process is not None and process.poll() is None:
+                    process.kill()
+                    process.wait()
+            log.close()
+            guest.run('pkill -x lldb-server; rm -f ' + shlex.quote(str(executable)) + '; true',
+                      timeout=60)
+        print(self.target + ': the DAP session through refine dap passed', flush=True)
+        result['status'] = 'passed'
 
     def source_session(self, guest, result):
         """The source session's stops, frames, locals and unwinding."""
@@ -673,7 +768,8 @@ def load_prepared(args):
         if args.kind == 'debugger':
             require({r['label'] for r in manifest['results']} ==
                     {kind + '-' + o + '-' + s for o, s in PROFILES for kind in ('debug', 'switch')}
-                    and len(manifest['results']) == 2 * len(PROFILES),
+                    | {'dap'}
+                    and len(manifest['results']) == 2 * len(PROFILES) + 1,
                     'prepared debugger profiles incomplete')
         else:
             expected = {(str(p.relative_to(ROOT / 'compiler/tests/fixtures')), o, s, level)
@@ -765,6 +861,8 @@ def main():
     parser.add_argument('--objdump', default='llvm-objdump-19')
     parser.add_argument('--nm', default='llvm-nm-19')
     parser.add_argument('--ar', default='llvm-ar-19')
+    parser.add_argument('--lldb-dap', default='lldb-dap-19',
+                        help="LLVM's DAP adapter, which `refine dap` attaches to the guest")
     parser.add_argument('--ssh-port', type=int, help='development VM already running')
     parser.add_argument('--runner-ssh', help='existing Linux-hosted VM SSH argv; uses guest sudo')
     parser.add_argument('--prepare-only', action='store_true', help='emit and inspect a transferable Linux payload')

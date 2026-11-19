@@ -1,0 +1,46 @@
+--  The program compiler/tests/dap/session.py debugs through refine dap.
+--  Each `-- @NAME` comment marks the line the session stops on, so the
+--  session finds its lines here rather than holding numbers of its own.
+import core/io
+import core/panic
+import hosted/blocking
+import platform/linux
+
+fixed if compiler.os == linux then
+    --  A static Linux executable has no C library: the process ends with
+    --  the kernel's exit_group, as C's `_exit` would end it.
+    stop: (status: i32) -> noreturn =
+        linux.exit_group(status)
+    end stop
+else
+    link(symbol: "_exit") extern(c) stop: (status: i32) -> noreturn
+end if
+
+point: type = struct
+    x: i32
+    y: i32
+end point
+
+public panic_handler: (kind: panic.panic_kind, site: u32) -> noreturn =
+    if kind <> panic.overflow then stop(1) end if  -- @handler
+    stop(42)
+end panic_handler
+
+add: (a: i32, b: i32) -> (sum: i32) =
+    total: i32 = a + b  -- @add
+    sum = total  -- @after-add
+end add
+
+crash: (value: u8) -> (result: u8) =
+    mut high: u8 = 250
+    high += value  -- @crash
+    result = high
+end crash
+
+public main: () -> (code: i32) =
+    host := blocking.new()
+    io.write(host, io.out(host), "started\n") else none
+    p: point = (x: 3, y: 4)
+    sum: i32 = add(p.x, p.y)  -- @call
+    code = sum + p.x + i32(crash(9))
+end main

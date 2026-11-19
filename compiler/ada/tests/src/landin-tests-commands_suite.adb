@@ -1624,6 +1624,19 @@ package body Landin.Tests.Commands_Suite is
            and then not Host.Exists ("/virtual/tmp/refine-run-2"),
          "a program a forwarded termination ended is reported, and its"
          & " directory removed: " & US.To_String (Result.Report));
+      --  D1528: a closed pipe is its reader leaving, and ends refine as
+      --  quietly as a shell's pipeline.
+      Tools.Set_Program_Result (0, Signal => 13, Signal_Name => "SIGPIPE");
+      Result := Landin.Commands.Execute
+        (["run", "--link=libc", "game.ldn"], Host, Tools, Meter,
+         Built_For => Linux_Host);
+      Landin.Commands.Launch (Result, Host, Tools);
+      Landin.Testing.Check
+        (Item, Result.Status = 141
+           and then US.To_String (Result.Report) = ""
+           and then not Host.Exists ("/virtual/tmp/refine-run-3"),
+         "a program a closed pipe ended ends refine quietly: "
+         & US.To_String (Result.Report));
    end Run_Reports_A_Signal;
 
    --  D526: the directory goes on every way out before the program runs.

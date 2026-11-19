@@ -35,6 +35,18 @@ package Landin.Library is
    --  the executable is or neither layout holds one.
    function Located (Host : Landin.Platform.Filesystem'Class) return String;
 
+   --  The library Located would find for the `refine` whose executables
+   --  are in Binaries.
+   function Located_From
+     (Host : Landin.Platform.Filesystem'Class; Binaries : String)
+      return String;
+
+   --  The library of the `refine` a split command was shipped beside: the
+   --  split is PREFIX/libexec/landin/refine-NAME, in an installation and
+   --  in a build tree alike, and `refine` is PREFIX/bin/refine (D1384).
+   function Located_For_Split (Host : Landin.Platform.Filesystem'Class)
+     return String;
+
    --  Where Located looked, as a refusal names it (D363): the prefix's
    --  `lib/landin` beside the executable and the checkout a build tree's
    --  executable sits in, or that the executable's directory is unknown.
