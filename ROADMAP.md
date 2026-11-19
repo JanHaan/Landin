@@ -981,7 +981,7 @@ through `refine` and through each split directly.
 
 ### R18.71 — Concurrent compiles into one directory
 
-Status: planned
+Status: active
 Depends on: R18.50
 
 Two `refine compile` runs that publish into one output directory at once,
