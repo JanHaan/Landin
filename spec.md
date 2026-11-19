@@ -12725,6 +12725,35 @@ each pass's storage in an array declared outside it, and
 holds it; the derived hosted program's runtime fixtures run its
 `copy_arguments`.
 
+### D1623 — A `for` binds its element afresh on every walk
+
+**The tour said** at [1150] that a `for` names each element of what it
+walks, and D1084 holds the walked source only for a call in the loop's
+body; D1370 made a declaration that runs again a new binding. Neither said
+what a finished `for`'s element views when an outer loop goes round again.
+The check followed the outer loop's back edge into the `for`'s body and
+read its element there as the binding asked about, so a list walked by
+`for below in vec.used(names)` and released after the `for` ended was
+L0315, "while `below` still views it", whenever an outer `loop` or
+`while` could run again. refine-build met it and moved each pass of its
+loop into a function of its own.
+
+**Chosen:** a `for`'s element and index are new bindings on every walk,
+as a declaration is on every pass under D1370. Once a walk has ended its
+element views nothing; a later walk reads only its own. Within the body
+D1084 is unchanged, and so is a view of the element kept in a binding
+declared outside the `for`, which holds what the element viewed.
+
+**The alternatives:** keeping the refusal, which makes every pass of an
+outer loop that walks and then releases a list a function of its own.
+Declined.
+
+**Pinned by** `runtime/for-finished-in-outer-loop`, under `loop` with its
+test first and last, `while`, a list declared outside the outer loop and a
+deferred release; and `negative/for-source-held-in-outer-loop`, where the
+release inside the body and one after it while a kept element views the
+list are still refused.
+
 ### D1371 — Disjoint fields of one binding are lent apart
 
 **The tour said** at [0830] that a view taken from a local holds the local
