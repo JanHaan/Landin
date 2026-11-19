@@ -279,9 +279,10 @@ class AddFixtureTest(unittest.TestCase):
             self.assertEqual(add_fixture.format_sources(
                 meta("runtime/borrows"), base, fake), [])
 
-    def run_main(self, arguments, fixtures):
+    def run_main(self, arguments, fixtures, programs=None):
         """main over a scratch tree holding FIXTURES, label to metadata
-        text: what it returned or raised, its output and the corpus."""
+        text, and PROGRAMS, label to its main.ldn where that is not the
+        default: what it returned or raised, its output and the corpus."""
         import contextlib
         import io
         import json
@@ -294,7 +295,8 @@ class AddFixtureTest(unittest.TestCase):
                 home.mkdir(parents=True)
                 (home / "fixture.meta").write_text(text)
                 if "program: main.ldn" in text:
-                    (home / "main.ldn").write_text("fn main()\n")
+                    (home / "main.ldn").write_text(
+                        (programs or {}).get(label, "fn main()\n"))
                 if "c-sources: peer.c" in text:
                     (home / "peer.c").write_text("int peer(void);\n")
             corpus = root / "corpus.json"
@@ -457,6 +459,38 @@ class AddFixtureTest(unittest.TestCase):
                                "status: 1\ncodes: L0202\n"
                                "constructs: 0570\n"})
         self.assertNotIn("not measured", out)
+
+    def test_a_negative_program_importing_the_library_is_refused(self):
+        #  The parser suite reads such a program without the library, and
+        #  refuses it with L0006; the directory form reads it with it.
+        import tempfile
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            (home / "main.ldn").write_text("-- a note\nimport core/mem\n")
+            plain = meta("negative/new", program="main.ldn", codes="L0202")
+            self.assertEqual(add_fixture.library_import(plain, home),
+                             "core/mem")
+            for unread in (
+                    meta("negative/new", program="main.ldn", codes="L0015"),
+                    meta("negative/new", program="main.ldn", codes="L0103"),
+                    meta("negative/new", codes="L0202", expect="e.txt",
+                         args="--root=../.. ../tests/fixtures/negative/new"),
+                    meta("runtime/new", program="main.ldn")):
+                with self.subTest(unread=dict(unread)):
+                    self.assertIsNone(add_fixture.library_import(unread, home))
+            (home / "main.ldn").write_text("x: u32 = 1\n")
+            self.assertIsNone(add_fixture.library_import(plain, home))
+        status, _, _, _ = self.run_main(
+            ["negative/imports"],
+            {"negative/imports":
+             "class: negative\nsummary: s\ntargets: linux-x86-64\n"
+             "program: main.ldn\nstatus: 1\ncodes: L0202\n"
+             "constructs: 0570\n"},
+            {"negative/imports": "import hosted/io\n"})
+        said = str(status)
+        self.assertIn("imports hosted/io", said)
+        self.assertIn("args: --root=../.. ../tests/fixtures/negative/imports",
+                      said)
 
     def test_expect_without_args_names_the_line_to_write(self):
         status, _, err, _ = self.run_main(
