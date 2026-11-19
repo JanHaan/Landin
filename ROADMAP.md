@@ -333,7 +333,7 @@ of a program's first launch failed two pairs on a single sample;
 
 ### R16.21 — RISC-V register allocation
 
-Status: planned
+Status: active
 Depends on: R16.10
 
 RV64 and RV32 keep every value in a stack home: R16.10 measured a report
