@@ -838,7 +838,7 @@ suites run. A further debugger is its own adapter backend.
 
 ### R18.70 — The existing splits
 
-Status: planned
+Status: active
 Depends on: R18.50
 
 `svd`, `bindings` and `site` become `refine-svd`, `refine-bindings` and
