@@ -429,8 +429,8 @@ twelve runtime fixtures whose images did not fit it run on Cortex-M0 at
 every profile. The seven Cortex-M board records were made again on the rig.
 The programs and corpus lanes, the unit suites and the fixtures pass, the
 build modes agree and the scaling bound holds. The candidate passed its
-[gate](https://github.com/JanHaan/Landin/actions/runs/44498481394) and
-[boards](https://github.com/JanHaan/Landin/actions/runs/44503738502). R16.27
+[gate](https://github.com/JanHaan/Landin/actions/runs/44578956148) and
+[boards](https://github.com/JanHaan/Landin/actions/runs/44584549572). R16.27
 takes what is left: SR-581, SR-582's CBZ, SR-583, SR-596, SR-869 and SR-231,
 each with today's figures. Findings fixed on the way: the devices lane's
 cached consumer read a register's address only from literal words; and
