@@ -384,7 +384,7 @@ emulation, 22% of RV64's instructions.
 
 ### R16.22 — Cortex-M register allocation
 
-Status: active
+Status: complete
 Depends on: R16.10
 
 Cortex-M keeps every value in a stack home and forms each home's address in
@@ -404,6 +404,41 @@ Exit evidence: the firmware set's size and instructions measured lower than
 their R16.10 baselines at every level, the cycles on the boards no slower,
 with unchanged behavior, ABI and debugger evidence and the board records
 made again.
+
+Done: Cortex-M reaches its homes from sp, a value's home a word written
+zero-extended (D1563); at the Thumb-2 levels it branches with one B and
+makes constants with MOVW and MOVT (D1564, `SR-584`); a call loads its
+scalar register arguments directly (D1565); a comparison only its branch
+reads sets that branch's flags (D1566); and at `size` and `speed` it holds
+slots and values in r4-r7, r3 and r1 where its first emission writes none of
+them over their intervals, over `Landin.Backend.Placement`'s usage, checking
+the second emission against the plan (D1567). A kept comparison at the
+Thumb-2 levels is an IT block (D1568, part of SR-582); code labels are
+assembler-local (D1569, `SR-586`), held by the firmware lane's
+`unused-import` case, which the starting compiler fails; a routine saves
+only the run of d8-d15 its blocks declare (D1570, `SR-577`); and a far
+Thumb-1 branch to a trap is a BL (D1571). The firmware set's `.text` falls
+to 0.71 of R16.10's at armv6-m `size` and `speed` and 0.57 at the Thumb-2
+levels, `none` falling too, and under QEMU speed-auto executes 0.28 to 0.88
+of its instructions, size-auto 0.29 to 0.95 and none 0.56 to 0.95. On the
+boards no configuration is slower: at speed-auto the RP2040 runs 0.27 to
+0.96 of R16.10's cycles, the RP2350's M33 0.29 to 0.89 and the STM32H753
+0.23 to 0.83. Prototype 5's counterpart links within the constrained
+reference's 32 KiB at `size`, 32,080 bytes, and `speed` (`SR-996`), and
+twelve runtime fixtures whose images did not fit it run on Cortex-M0 at
+every profile. The seven Cortex-M board records were made again on the rig.
+The programs and corpus lanes, the unit suites and the fixtures pass, the
+build modes agree and the scaling bound holds. The candidate passed its
+[gate](https://github.com/JanHaan/Landin/actions/runs/44498481394) and
+[boards](https://github.com/JanHaan/Landin/actions/runs/44503738502). R16.25
+takes what is left: SR-581, SR-582's CBZ, SR-583, SR-596, SR-869 and SR-231,
+each with today's figures. Findings fixed on the way: the devices lane's
+cached consumer read a register's address only from literal words; and
+`runtime/directory-memory`, which now fits the reference at every profile,
+overruns its 4 KiB stack at `none`, which the reference's own
+`profile_limit` row could not record, so D698 is amended to let it; the RV32
+lanes keep limits at `none` for ten of the twelve, whose RV32 code this item
+does not change.
 
 ### R16.23 — Xtensa selection
 
