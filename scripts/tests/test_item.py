@@ -312,6 +312,39 @@ class Promote(Clone):
                          shlex.join([sys.executable, "-c", "print('ran')",
                                      "--limit"]))
 
+    def test_a_rerun_of_the_same_commit_is_watched_afresh(self):
+        #  The watch is named by the run and its attempt: a finished watch
+        #  of attempt 1 does not answer for attempt 2 of the same commit.
+        head = self.commit("work")
+        git(self.worktree, "push", "-q", "origin", self.state["branch"])
+        listing = [{"databaseId": 5, "event": "push",
+                    "headBranch": self.state["branch"], "status": "completed",
+                    "conclusion": "failure", "displayTitle": "x",
+                    "attempt": 1}]
+        started = []
+
+        def run(arguments):
+            directory = item.item_directory(FIRST) / "runs" / arguments.name
+            directory.mkdir(parents=True)
+            (directory / "result.json").write_text('{"exit_status": 1}')
+            started.append((arguments.name, arguments.command[-2:]))
+            return 0
+
+        saved = item.runs_of, item.run
+        item.runs_of, item.run = (lambda commit: listing), run
+        try:
+            self.item("gate", FIRST, "--watch")
+            status, out = self.item("gate", FIRST, "--watch")
+            self.assertIn("already watched", out)
+            listing[0].update(attempt=2, status="in_progress", conclusion="")
+            status, out = self.item("gate", FIRST, "--watch")
+        finally:
+            item.runs_of, item.run = saved
+        self.assertEqual(status, 0, out)
+        prefix = "gate-branch-%s-run5-attempt" % head[:12]
+        self.assertEqual(started, [(prefix + "1", ["--run", "5"]),
+                                   (prefix + "2", ["--run", "5"])])
+
     def test_passed_runs_move_the_phase_on(self):
         head = self.commit("work")
         self.state["gates"].append(self.gate(head, "software"))

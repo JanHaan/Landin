@@ -469,7 +469,7 @@ def runs_of(commit):
     return gh("run", "list", "--workflow=gate.yml", "--commit", commit,
               "--limit", "20", "--json",
               "databaseId,event,headBranch,status,conclusion,displayTitle,"
-              "createdAt") or []
+              "createdAt,attempt") or []
 
 
 def kind_of(run_entry):
@@ -493,6 +493,7 @@ def record_gates(state, commit):
             state["gates"].append(entry)
         entry["status"] = found["status"]
         entry["conclusion"] = found.get("conclusion") or ""
+        entry["attempt"] = found.get("attempt") or 1
     return state
 
 
@@ -539,21 +540,48 @@ def gate(arguments):
     if not shown:
         print("no gate run for %s yet" % commit[:12])
     if arguments.watch:
-        event, branch = (("push", "main") if arguments.main
-                         else ("push", state["branch"]))
-        name = "gate-%s-%s" % ("main" if arguments.main else "branch",
-                               commit[:12])
-        directory = item_directory(item) / "runs" / name
-        if directory.exists():
-            print("already watched: python3 scripts/run_logged.py --wait %s"
-                  % directory)
-            return 0
-        arguments.name, arguments.limit = name, 7200
-        arguments.command = ["python3", str(ROOT / "scripts/gate_watch.py"),
-                             "--all", "--commit", commit, "--event", event,
-                             "--branch", branch]
-        return run(arguments)
+        return watch_gate(arguments, state, commit, shown)
     return 0
+
+
+def watch_gate(arguments, state, commit, shown):
+    """Follow COMMIT's newest gate run of the kind asked for.
+
+    The watch is named by that run and its attempt, so a rerun on the same
+    commit, a newer attempt or a new run, is watched afresh rather than
+    answered with the finished watch of the old one.  Until GitHub lists a
+    run the watch is named by the commit and waits for one.
+    """
+    item = arguments.item
+    event, branch = (("push", "main") if arguments.main
+                     else ("push", state["branch"]))
+    prefix = "gate-%s-%s" % ("main" if arguments.main else "branch",
+                             commit[:12])
+    runs = item_directory(item) / "runs"
+    for going in sorted(runs.glob(prefix + "*")):
+        if run_state(going) == "running":
+            print("already watched: python3 scripts/run_logged.py --wait %s"
+                  % going)
+            return 0
+    kind = "main" if arguments.main else "software"
+    newest = max((entry for entry in shown if entry["kind"] == kind),
+                 key=lambda entry: entry["run"], default=None)
+    if newest is None:
+        name = prefix
+        command = ["--commit", commit, "--event", event, "--branch", branch]
+    else:
+        name = "%s-run%s-attempt%s" % (prefix, newest["run"],
+                                       newest.get("attempt", 1))
+        command = ["--run", str(newest["run"])]
+    directory = runs / name
+    if directory.exists():
+        print("already watched: python3 scripts/run_logged.py --wait %s"
+              % directory)
+        return 0
+    arguments.name, arguments.limit = name, 7200
+    arguments.command = ["python3", str(ROOT / "scripts/gate_watch.py"),
+                         "--all", *command]
+    return run(arguments)
 
 
 def advance(state, commit, main=False):
