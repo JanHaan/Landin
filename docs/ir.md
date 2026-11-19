@@ -792,19 +792,29 @@ body folding is separate from scalar home reuse. Reports record frame,
 spill, save and register use, and source debugging reads the same placement
 plan for the source slots.
 
-The RISC-V backend, for RV64 and RV32, keeps source slots in frame homes at
-every optimization profile, with x8 holding the entry CFA and the saved
-caller frame and return address immediately below it. Without optimization
-every scalar IR value also has a home of its own; size and speed reuse
-nonoverlapping scalar homes as arm64 does, a value's home freed once the
-operation that reads it last has run, which takes 36 per cent off the
-runtime corpus's frame bytes at both. It keeps no value in a register past
-the operation that uses it. The explicit LP64D and ilp32 planner assigns C
-carriers without putting register banks or stack positions into the IR. The
-emitter asks the target its XLEN and serves RV32 at 32 (D671): an
-eight-byte value is a register pair only while one operation looks inside
-it, so the IR does not depend on the machine's width, and RV32 takes
-neither RV64's layout nor its ABI. Instruction helpers select baseline and
+The RISC-V backend, for RV64 and RV32, keeps x8 holding the entry CFA and
+the saved caller frame and return address immediately below it. Without
+optimization every slot and scalar IR value has a frame home of its own.
+Size and speed place slots and values in registers with arm64's placement,
+over the same usage of the routine (D1403, D1503), but RISC-V's selection
+names nearly every integer register as scratch somewhere, so what a
+register may hold is measured rather than described: the routine is
+emitted once with every value in a home while the registers each position
+writes are recorded, a call writing every one the convention does not
+preserve; a location then takes one of x10-x17, x9, x18, x19 or x22 only
+where that record writes none of them over its interval, a parameter only
+the argument register it arrives in. The routine is emitted again with
+that plan and its writes checked against it, and keeps its first emission
+if any meets a held register. Held operands are read in place, and a
+result is computed into its own register where selection writes it last.
+What no register holds reuses nonoverlapping homes, a value's home freed
+once the operation that reads it last has run. The explicit LP64D and
+ilp32 planner assigns C carriers without putting register banks or stack
+positions into the IR. The emitter asks the target its XLEN and serves
+RV32 at 32 (D671): an eight-byte value is a register pair, x10-x11 to
+x16-x17, x18-x19 or x9-x22 where it is held, so the IR does not depend on
+the machine's width, and RV32 takes neither RV64's layout nor its ABI.
+Instruction helpers select baseline and
 address-generation operations from independent Zba and XTheadBa sets.
 
 The Xtensa backend writes the RISC-V backend's form of each operation over

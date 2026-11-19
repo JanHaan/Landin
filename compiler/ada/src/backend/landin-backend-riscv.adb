@@ -1,3 +1,5 @@
+with Ada.Containers.Generic_Sort;
+with Ada.Containers.Ordered_Maps;
 with Ada.Containers.Vectors;
 with Ada.Containers.Hashed_Sets;
 with Ada.Finalization;
@@ -11,6 +13,7 @@ with Landin.Packed;
 with Landin.Memory;
 with Landin.Targets.Packed;
 with Landin.Backend.Firmware;
+with Landin.Backend.Debug_Locations;
 with Landin.Backend.Dwarf;
 with Ada.Strings.Fixed;
 with Landin.Targets.Capabilities;
@@ -21,6 +24,8 @@ with Landin.Backend.Entry_Point;
 with Landin.Backend.Site_Counts;
 with Landin.Backend.Trap_Reports;
 with Landin.Backend.Work_Arrays;
+with Landin.Backend.Placement;
+with Landin.IR.Liveness;
 with Landin.Types;
 
 package body Landin.Backend.RiscV is
@@ -197,18 +202,173 @@ package body Landin.Backend.RiscV is
       return Count;
    end Save_Count;
 
+   --  A set of the integer registers x0-x31, the Nth bit x(N).
+   type Register_Mask is mod 2 ** 32;
+   function Bit (Number : Natural) return Register_Mask
+     is (2 ** Number);
+
+   function Held_Count (Held : Register_Mask) return Natural;
+   function Held_Count (Held : Register_Mask) return Natural is
+      Count : Natural := 0;
+   begin
+      for Number in 0 .. 31 loop
+         if (Held and Bit (Number)) /= 0 then
+            Count := Count + 1;
+         end if;
+      end loop;
+      return Count;
+   end Held_Count;
+
+   --  D1503: the integer registers a routine's text writes at each
+   --  position of its layout order (Landin.Backend.Placement), position
+   --  zero being the entry before its first value.  A call writes every
+   --  register the calling convention does not preserve.
+   type Write_Masks is array (Natural range <>) of Register_Mask;
+   type Write_Masks_Access is access Write_Masks;
+   procedure Free_Masks is new Ada.Unchecked_Deallocation
+     (Write_Masks, Write_Masks_Access);
+
+   --  Registers x1, x5-x7, x10-x17 and x28-x31, which a call may change.
+   Caller_Saved : constant Register_Mask :=
+     Bit (1) or Bit (5) or Bit (6) or Bit (7) or Bit (10) or Bit (11)
+     or Bit (12) or Bit (13) or Bit (14) or Bit (15) or Bit (16)
+     or Bit (17) or Bit (28) or Bit (29) or Bit (30) or Bit (31);
+
+   --  D1503: the registers a slot or value may be held in, in the order
+   --  they are offered: a7 down to a0, which cost no save and leave the
+   --  parameters that arrive in the lowest longest where they arrive,
+   --  then x9, x18, x19 and x22, saved by every routine (D678 prunes an
+   --  unnamed one at XLEN 32).  Selection's other registers carry its
+   --  comparisons (x20, x21, x23-x25), far jumps (x26), RV32's high words
+   --  (x27) and its working values (x5-x7, x28-x31), and are never held.
+   type Register_List is array (Positive range <>) of Natural;
+   Offered : constant Register_List :=
+     [17, 16, 15, 14, 13, 12, 11, 10, 9, 18, 19, 22];
+   subtype Argument_Register is Natural range 10 .. 17;
+
+   --  At XLEN 32 an eight-byte location takes a pair, its low word in a
+   --  register Partner gives a high one: a0-a1 to a6-a7, x18-x19 and
+   --  x9-x22.  Zero for a register that is no pair's low word.
+   function Partner (Number : Natural) return Natural
+     is (case Number is
+           when 10 | 12 | 14 | 16 | 18 => Number + 1,
+           when 9 => 22,
+           when others => 0);
+
+   --  D1503: the integer registers one line of a routine's text writes.
+   --  A label or directive writes none; an instruction writes its first
+   --  operand, unless it is a store, a branch, a jump or a fence, which
+   --  have none, and a call, jalr, jal or ecall changes every register
+   --  the convention does not preserve as well.  Operands are spelled xN
+   --  or by their ABI names.
+   function Written_By (Line : String) return Register_Mask;
+
+   function Written_By (Line : String) return Register_Mask is
+      HT : constant Character := Character'Val (9);
+      First : Positive := Line'First;
+      Space : Natural;
+
+      function Number_Of (Name : String) return Integer;
+      function Number_Of (Name : String) return Integer is
+         Names : constant array (0 .. 31) of String (1 .. 4) :=
+           ["zero", "ra  ", "sp  ", "gp  ", "tp  ", "t0  ", "t1  ", "t2  ",
+            "s0  ", "s1  ", "a0  ", "a1  ", "a2  ", "a3  ", "a4  ", "a5  ",
+            "a6  ", "a7  ", "s2  ", "s3  ", "s4  ", "s5  ", "s6  ", "s7  ",
+            "s8  ", "s9  ", "s10 ", "s11 ", "t3  ", "t4  ", "t5  ", "t6  "];
+      begin
+         if Name'Length in 2 .. 3 and then Name (Name'First) = 'x'
+           and then (for all C of Name (Name'First + 1 .. Name'Last)
+                     => C in '0' .. '9')
+         then
+            return Integer'Value (Name (Name'First + 1 .. Name'Last));
+         elsif Name = "fp" then
+            return 8;
+         end if;
+         for Number in Names'Range loop
+            if Ada.Strings.Fixed.Trim (Names (Number), Ada.Strings.Right)
+              = Name
+            then
+               return Number;
+            end if;
+         end loop;
+         return -1;
+      end Number_Of;
+   begin
+      if Line'Length < 2 or else Line (First) /= HT then
+         return 0;
+      end if;
+      First := First + 1;
+      if Line (First) = '.' then
+         return 0;
+      end if;
+      Space := Ada.Strings.Fixed.Index (Line (First .. Line'Last), " ");
+      declare
+         Mnemonic : constant String :=
+           (if Space = 0 then Line (First .. Line'Last)
+            else Line (First .. Space - 1));
+         Rest : constant String :=
+           (if Space = 0 then "" else Line (Space + 1 .. Line'Last));
+         Comma : constant Natural := Ada.Strings.Fixed.Index (Rest, ",");
+         Target : constant Integer := Number_Of
+           (Ada.Strings.Fixed.Trim
+              ((if Comma = 0 then Rest else Rest (Rest'First .. Comma - 1)),
+               Ada.Strings.Both));
+         Calls : constant Boolean :=
+           Mnemonic in "call" | "jalr" | "jal" | "ecall" | "tail";
+      begin
+         if Mnemonic in "sb" | "sh" | "sw" | "sd" | "fsw" | "fsd" | "j"
+           | "jr" | "ret" | "beq" | "bne" | "blt" | "bge" | "bltu" | "bgeu"
+           | "beqz" | "bnez" | "bltz" | "bgez" | "blez" | "bgtz" | "bgt"
+           | "ble" | "bgtu" | "bleu" | "fence" | "fence.i" | "unimp"
+           | "ebreak" | "nop" | "wfi" | "csrw" | "csrs" | "csrc" | "csrwi"
+           | "csrsi" | "csrci"
+           or else (Calls and then Mnemonic /= "jalr" and then Mnemonic
+                      /= "jal")
+         then
+            return (if Calls then Caller_Saved else 0);
+         end if;
+         return (if Calls then Caller_Saved else 0)
+           or (if Target in 1 .. 31 then Bit (Target) else 0);
+      end;
+   end Written_By;
+
+   --  A value held in a register holds it from position Live_From
+   --  through Live_Through.
    type Value_Location is record
       Home : Natural := 0;
       Register : Natural := 0;
+      High : Natural := 0;
       Size : Held_Size := Landin.Targets.Byte_8;
       Address_Required : Boolean := False;
+      Live_From, Live_Through : Natural := 0;
    end record;
    package Location_Vectors is new Ada.Containers.Vectors
      (Positive, Value_Location);
+   --  A slot held in a register only over its live interval, in layout
+   --  order: from the value From through the value Through, or from the
+   --  entry when From is No_Value.  Both stay No_Value for a slot whose
+   --  register holds it everywhere.
+   --  High is the high word's register of a pair (Partner).
+   type Slot_Location is record
+      Register : Natural := 0;
+      High : Natural := 0;
+      From, Through : Landin.IR.Value_Id := Landin.IR.No_Value;
+      Live_From, Live_Through : Natural := 0;
+   end record;
+   package Slot_Vectors is new Ada.Containers.Vectors
+     (Positive, Slot_Location);
+   package Mask_Vectors is new Ada.Containers.Vectors
+     (Natural, Register_Mask);
+   --  Held is every register a location holds; Writes, for a plan an
+   --  emission kept, what its text writes at each position besides a
+   --  location's own register.
    type Allocation_Plan is record
       Values : Location_Vectors.Vector;
+      Slots : Slot_Vectors.Vector;
       Homes : Natural := 0;
       Saves : Saved_Set := [others => False];
+      Held : Register_Mask := 0;
+      Writes : Mask_Vectors.Vector;
    end record;
 
    function Allocate
@@ -227,6 +387,9 @@ package body Landin.Backend.RiscV is
       Result.Values := Location_Vectors.To_Vector
         (Value_Location'(others => <>),
          Ada.Containers.Count_Type (Value_Count));
+      Result.Slots := Slot_Vectors.To_Vector
+        (Slot_Location'(others => <>),
+         Ada.Containers.Count_Type (Landin.IR.Slot_Count (Of_Unit, Item)));
       Result.Saves := Declared (Of_Unit, Item, Facts);
       --  D678: firmware's stack is small, so RV32 reuses a dead value's
       --  home at every objective, as Cortex-M0 does.
@@ -360,6 +523,622 @@ package body Landin.Backend.RiscV is
       return Result;
    end Allocate;
 
+   --  The slots placed in one register for their whole interval, by the
+   --  position each interval opens at.
+   package Reservations is new Ada.Containers.Ordered_Maps
+     (Key_Type => Natural, Element_Type => Positive);
+
+   --  D1503: size and speed hold slots and values in the registers
+   --  Offered names wherever the routine's text, emitted with every value
+   --  in its home, writes none of them: Writes is what that text writes at
+   --  each position.  The placement is arm64's (D1404) over the shared
+   --  usage (Landin.Backend.Placement): each eligible slot used twice over
+   --  its interval, the heaviest first, then in one scan each slot stored
+   --  and read within one block over its span and each value from its
+   --  definition through its last reader, sharing a slot's register where
+   --  the value is that slot's content.  A location holds a register only
+   --  where nothing else writes it, from the first position it is live at
+   --  through the last, both included.  At XLEN 32 an eight-byte value or
+   --  slot keeps its home, and x9, x18, x19 and x22 are offered only to a
+   --  routine whose scalar traffic pays for their saves.
+   function Allocate_Registers
+     (Of_Unit : Landin.IR.Unit; Item : Landin.IR.Item_Id;
+      Facts : Landin.Targets.Target_Facts;
+      Options : Landin.Optimization.Options;
+      Writes : Write_Masks) return Allocation_Plan;
+
+   function Allocate_Registers
+     (Of_Unit : Landin.IR.Unit; Item : Landin.IR.Item_Id;
+      Facts : Landin.Targets.Target_Facts;
+      Options : Landin.Optimization.Options;
+      Writes : Write_Masks) return Allocation_Plan
+   is
+      Value_Count : constant Natural := Landin.IR.Value_Count (Of_Unit, Item);
+      Slot_Count : constant Natural := Landin.IR.Slot_Count (Of_Unit, Item);
+      subtype Counts is Landin.Backend.Placement.Counts;
+      package Count_Buffers renames Landin.Backend.Placement.Count_Buffers;
+      Pairs : constant Boolean := XLEN (Facts) = 32;
+      Speed : constant Boolean :=
+        Options.Optimize = Landin.Optimization.Speed;
+      Use_Of : Landin.Backend.Placement.Usage
+        (Value_Count, Slot_Count, Value_Count + 1);
+      Result : Allocation_Plan;
+   begin
+      Landin.Backend.Placement.Measure (Of_Unit, Item, Speed, Use_Of);
+      if Use_Of.Has_Assembly or else Writes'First /= 0
+        or else Writes'Last /= Value_Count
+      then
+         return Allocate (Of_Unit, Item, Facts, Options);
+      end if;
+      Result.Values := Location_Vectors.To_Vector
+        (Value_Location'(others => <>),
+         Ada.Containers.Count_Type (Value_Count));
+      Result.Slots := Slot_Vectors.To_Vector
+        (Slot_Location'(others => <>),
+         Ada.Containers.Count_Type (Slot_Count));
+      Result.Saves := Declared (Of_Unit, Item, Facts);
+      declare
+         type Prefix_Table is array (Offered'Range) of
+           Count_Buffers.Buffer (Value_Count + 2);
+         --  For each offered register, how many positions before each
+         --  position write it: Prefix (I).Data (P + 1) counts positions
+         --  zero through P - 1.
+         Prefix : Prefix_Table;
+         Next_Release_Data, Next_Free_Data, Opening_Data :
+           Count_Buffers.Buffer (Value_Count);
+         Release_Data : Count_Buffers.Buffer (Value_Count + 1);
+         Interval_Data : Count_Buffers.Buffer (Slot_Count);
+         Sequence : Counts renames Use_Of.Sequence.Data.all;
+         Lasts : Counts renames Use_Of.Lasts.Data.all;
+         Written_After : Counts renames Use_Of.Written_After.Data.all;
+         Uses : Counts renames Use_Of.Uses.Data.all;
+         Weights : Counts renames Use_Of.Weights.Data.all;
+         Parameter_Of : Counts renames Use_Of.Parameter_Of.Data.all;
+         First_Use : Counts renames Use_Of.First_Use.Data.all;
+         Last_Use : Counts renames Use_Of.Last_Use.Data.all;
+         Across_Blocks : Home_Mask renames Use_Of.Across_Blocks.Data.all;
+         Eligible : Home_Mask renames Use_Of.Eligible.Data.all;
+         Spans : Landin.IR.Liveness.Interval_Vectors.Vector
+           renames Use_Of.Spans;
+         Releases : Counts renames Release_Data.Data.all;
+         Next_Release : Counts renames Next_Release_Data.Data.all;
+         Next_Free : Counts renames Next_Free_Data.Data.all;
+         --  The slots placed in a register, by weight and then as a mark:
+         --  1 for one placed over its interval, 2 for one given a span in
+         --  a single block by the scan; and the slot, if any, whose store
+         --  at a position opens such a span.
+         Interval_Slots : Counts renames Interval_Data.Data.all;
+         Opening : Counts renames Opening_Data.Data.all;
+         Free_Homes : array (Held_Size) of Natural := [others => 0];
+         Busy_Until : array (0 .. 31) of Natural := [others => 0];
+         Placed : array (0 .. 31) of Reservations.Map;
+         Upcoming : array (0 .. 31) of Reservations.Cursor :=
+           [others => Reservations.No_Element];
+         Saving : constant Boolean := not Pairs or else Use_Of.Traffic >= 12;
+
+         function Wide (Kind : Landin.Types.Type_Kind) return Boolean is
+           (Pairs and then Size_Of (Kind, Facts) = Landin.Targets.Byte_8);
+
+         --  Whether the text writes register Number at some position from
+         --  First through Last.
+         function Written (Number, First, Last : Natural) return Boolean;
+         function Written (Number, First, Last : Natural) return Boolean is
+         begin
+            for Index in Offered'Range loop
+               if Offered (Index) = Number then
+                  return Prefix (Index).Data (Last + 2)
+                    > Prefix (Index).Data (First + 1);
+               end if;
+            end loop;
+            return True;
+         end Written;
+
+         --  Whether a location from First through Last may hold Number.
+         function Fits_One (Number, First, Last : Natural) return Boolean is
+           (not Written (Number, First, Last)
+            and then (Number in Argument_Register or else Saving));
+
+         --  The same of a pair at Number when Wide.
+         function Fits
+           (Number, First, Last : Natural; Wide : Boolean := False)
+            return Boolean
+           is (Fits_One (Number, First, Last)
+               and then (not Wide
+                         or else (Partner (Number) /= 0
+                                  and then Fits_One
+                                    (Partner (Number), First, Last))));
+
+         function Slot_Wide (Index : Positive) return Boolean is
+           (Wide (Landin.IR.Type_Of
+                    (Of_Unit, Item, Landin.IR.Slot_Id (Index))));
+
+         --  The entry stores each parameter where it is held while later
+         --  ones still wait in x10-x17, so a parameter may hold only the
+         --  argument register it arrives in, at XLEN 64 the Nth in
+         --  x(9 + N), and at XLEN 32, whose pairs move that, none.  Any
+         --  other slot is first written after the entry has read them all.
+         function Arrives (Index : Positive; Number : Natural)
+           return Boolean
+           is (Parameter_Of (Index) = 0
+               or else
+                 (Number not in Argument_Register
+                  and then (Partner (Number) = 0
+                            or else Partner (Number) not in Argument_Register
+                            or else not Slot_Wide (Index)))
+               or else (not Pairs and then Number = 9 + Parameter_Of (Index)));
+
+         --  The last position a slot placed in a register holds it.
+         function Holds_Through (Slot : Positive) return Natural is
+           (if Interval_Slots (Slot) = 2 then Last_Use (Slot)
+            else Spans (Slot).Last);
+
+         procedure Place_Intervals;
+         procedure Open (Position : Natural);
+         function Clear_One (Number, Position, Last : Natural)
+           return Boolean;
+         function Clear
+           (Number, Position, Last : Natural; Wide : Boolean := False)
+            return Boolean;
+         function Read_In_Place (Value : Positive) return Natural;
+         function Released_By (Value : Positive; Position : Natural)
+            return Natural;
+         function Stored_Into (Value : Positive; Position : Natural)
+            return Natural;
+         procedure Open_Span (Index : Positive; Position : Natural);
+
+         procedure Place_Intervals is
+            Count : Natural := 0;
+
+            function Before (Left, Right : Positive) return Boolean is
+              (Weights (Interval_Slots (Left))
+                 > Weights (Interval_Slots (Right))
+               or else
+                 (Weights (Interval_Slots (Left))
+                    = Weights (Interval_Slots (Right))
+                  and then Interval_Slots (Left) < Interval_Slots (Right)));
+
+            procedure Swap (Left, Right : Positive);
+            procedure Swap (Left, Right : Positive) is
+               Held : constant Natural := Interval_Slots (Left);
+            begin
+               Interval_Slots (Left) := Interval_Slots (Right);
+               Interval_Slots (Right) := Held;
+            end Swap;
+
+            procedure Sort is new Ada.Containers.Generic_Sort
+              (Positive, Before, Swap);
+
+            procedure Place (Position : Positive);
+            procedure Place (Position : Positive) is
+               Index : constant Positive := Interval_Slots (Position);
+               Span : constant Landin.IR.Liveness.Interval := Spans (Index);
+               Slot : Slot_Location renames Result.Slots (Index);
+               Pair : constant Boolean := Slot_Wide (Index);
+
+               --  Whether no interval placed in Number meets Span.
+               function Open_In (Number : Natural) return Boolean;
+               function Open_In (Number : Natural) return Boolean is
+                  Below : constant Reservations.Cursor :=
+                    Placed (Number).Floor (Span.Last);
+               begin
+                  return not Reservations.Has_Element (Below)
+                    or else Spans (Reservations.Element (Below)).Last
+                      < Span.First;
+               end Open_In;
+            begin
+               for Number of Offered loop
+                  exit when Slot.Register /= 0;
+                  if Fits (Number, Span.First, Span.Last, Pair)
+                    and then Arrives (Index, Number)
+                    and then Open_In (Number)
+                    and then (not Pair or else Open_In (Partner (Number)))
+                  then
+                     Placed (Number).Insert (Span.First, Index);
+                     Slot.Register := Number;
+                     Result.Held := Result.Held or Bit (Number);
+                     if Pair then
+                        Placed (Partner (Number)).Insert (Span.First, Index);
+                        Slot.High := Partner (Number);
+                        Result.Held := Result.Held or Bit (Slot.High);
+                     end if;
+                     Slot.Live_From := Span.First;
+                     Slot.Live_Through := Span.Last;
+                  end if;
+               end loop;
+               if Slot.Register /= 0
+                 and then (Span.First > 0 or else Span.Last < Value_Count)
+               then
+                  Slot.From :=
+                    (if Span.First = 0 then Landin.IR.No_Value
+                     else Landin.IR.Value_Id (Sequence (Span.First)));
+                  Slot.Through := Landin.IR.Value_Id (Sequence (Span.Last));
+               end if;
+            end Place;
+         begin
+            for Index in 1 .. Slot_Count loop
+               if Eligible (Index) and then Uses (Index) >= 2
+                 and then not Landin.IR.Liveness.Is_Empty (Spans (Index))
+               then
+                  Count := Count + 1;
+                  Interval_Slots (Count) := Index;
+               end if;
+            end loop;
+            Sort (1, Count);
+            for Position in 1 .. Count loop
+               Place (Position);
+            end loop;
+            Interval_Slots := [others => 0];
+            for Number of Offered loop
+               for Cursor in Placed (Number).Iterate loop
+                  Interval_Slots (Reservations.Element (Cursor)) := 1;
+               end loop;
+               Upcoming (Number) := Placed (Number).First;
+            end loop;
+         end Place_Intervals;
+
+         --  The placed intervals opening at Position take their registers
+         --  through their last position.
+         procedure Open (Position : Natural) is
+         begin
+            for Number of Offered loop
+               if Reservations.Has_Element (Upcoming (Number))
+                 and then Reservations.Key (Upcoming (Number)) = Position
+               then
+                  Busy_Until (Number) := Spans
+                    (Reservations.Element (Upcoming (Number))).Last;
+                  Reservations.Next (Upcoming (Number));
+               end if;
+            end loop;
+         end Open;
+
+         --  Whether a value from Position through Last may take register
+         --  Number: nothing holds it now, the next slot interval placed in
+         --  it opens after Last, and nothing writes it in between.
+         function Clear_One (Number, Position, Last : Natural)
+           return Boolean
+           is (Busy_Until (Number) < Position
+               and then
+                 (not Reservations.Has_Element (Upcoming (Number))
+                  or else Last < Reservations.Key (Upcoming (Number)))
+               and then Fits_One (Number, Position, Last));
+
+         function Clear
+           (Number, Position, Last : Natural; Wide : Boolean := False)
+            return Boolean
+           is (Clear_One (Number, Position, Last)
+               and then (not Wide
+                         or else (Partner (Number) /= 0
+                                  and then Clear_One
+                                    (Partner (Number), Position, Last))));
+
+         --  The register of the slot a load reads, when the loaded value
+         --  dies before the slot is next stored and while the slot still
+         --  holds that register: the value may be that register.
+         function Read_In_Place (Value : Positive) return Natural is
+         begin
+            if Landin.IR.Op_Of (Of_Unit, Item, Landin.IR.Value_Id (Value))
+              /= Landin.IR.Load
+            then
+               return 0;
+            end if;
+            declare
+               Slot : constant Positive := Positive (Landin.IR.Slot_Of
+                 (Of_Unit, Item, Landin.IR.Value_Id (Value)));
+            begin
+               if Interval_Slots (Slot) /= 0
+                 and then Lasts (Value) <= Written_After (Value)
+                 and then Lasts (Value) <= Holds_Through (Slot)
+               then
+                  return Result.Slots (Slot).Register;
+               end if;
+            end;
+            return 0;
+         end Read_In_Place;
+
+         --  The register of the slot a load at Position reads for the last
+         --  time, which the loaded value may go on holding while no other
+         --  interval placed there opens.
+         function Released_By (Value : Positive; Position : Natural)
+            return Natural is
+         begin
+            if Landin.IR.Op_Of (Of_Unit, Item, Landin.IR.Value_Id (Value))
+              /= Landin.IR.Load
+            then
+               return 0;
+            end if;
+            declare
+               Slot : constant Positive := Positive (Landin.IR.Slot_Of
+                 (Of_Unit, Item, Landin.IR.Value_Id (Value)));
+               Number : constant Natural := Result.Slots (Slot).Register;
+            begin
+               if Interval_Slots (Slot) /= 0
+                 and then Holds_Through (Slot) = Position
+                 and then
+                   (for all Held of Register_List'
+                      [Number, Result.Slots (Slot).High] =>
+                      Held = 0
+                      or else
+                        (Busy_Until (Held) <= Position
+                         and then
+                           (not Reservations.Has_Element (Upcoming (Held))
+                            or else Lasts (Value)
+                              < Reservations.Key (Upcoming (Held)))))
+               then
+                  return Number;
+               end if;
+            end;
+            return 0;
+         end Released_By;
+
+         --  The register of the slot whose placed interval opens at the
+         --  store that last uses a value, which the value may hold from
+         --  Position on, so that the store moves nothing.
+         function Stored_Into (Value : Positive; Position : Natural)
+            return Natural
+         is
+            User : constant Landin.IR.Value_Id :=
+              Landin.IR.Value_Id (Sequence (Lasts (Value)));
+         begin
+            if Landin.IR.Op_Of (Of_Unit, Item, User) /= Landin.IR.Store then
+               return 0;
+            end if;
+            declare
+               Slot : constant Positive :=
+                 Positive (Landin.IR.Slot_Of (Of_Unit, Item, User));
+               Number : constant Natural := Result.Slots (Slot).Register;
+            begin
+               if Interval_Slots (Slot) /= 0
+                 and then Spans (Slot).First = Lasts (Value)
+                 and then
+                   (for all Held of Register_List'
+                      [Number, Result.Slots (Slot).High] =>
+                      Held = 0
+                      or else
+                        (Busy_Until (Held) < Position
+                         and then Reservations.Has_Element (Upcoming (Held))
+                         and then Reservations.Key (Upcoming (Held))
+                           = Lasts (Value)
+                         and then Reservations.Element (Upcoming (Held))
+                           = Slot))
+               then
+                  return Number;
+               end if;
+            end;
+            return 0;
+         end Stored_Into;
+
+         --  The span the store at Position that opens a slot's gives it,
+         --  through the slot's last use: the stored value's own register
+         --  when the value dies there or the slot is never read, so the
+         --  store moves nothing; else the first clear one.
+         procedure Open_Span (Index : Positive; Position : Natural) is
+            Slot : Slot_Location renames Result.Slots (Index);
+            Last : constant Natural := Last_Use (Index);
+            Pair : constant Boolean := Slot_Wide (Index);
+            Stored : constant Natural := Result.Values (Positive
+              (Landin.IR.Nth_Operand
+                 (Of_Unit, Item, Landin.IR.Value_Id (Sequence (Position)),
+                  1))).Register;
+
+            procedure Take (Number : Natural);
+            procedure Take (Number : Natural) is
+            begin
+               if Slot.Register = 0
+                 and then Fits (Number, Position, Last, Pair)
+               then
+                  Slot.Register := Number;
+                  Slot.Live_From := Position;
+                  Slot.Live_Through := Last;
+                  Busy_Until (Number) :=
+                    Natural'Max (Busy_Until (Number), Last);
+                  Result.Held := Result.Held or Bit (Number);
+                  if Pair then
+                     Slot.High := Partner (Number);
+                     Busy_Until (Slot.High) :=
+                       Natural'Max (Busy_Until (Slot.High), Last);
+                     Result.Held := Result.Held or Bit (Slot.High);
+                  end if;
+               end if;
+            end Take;
+
+            function Free_After (Number : Natural) return Boolean is
+              ((Busy_Until (Number) = Position or else Last = Position)
+               and then
+                 (not Reservations.Has_Element (Upcoming (Number))
+                  or else Last < Reservations.Key (Upcoming (Number))));
+         begin
+            if Stored /= 0 and then Free_After (Stored)
+              and then (not Pair or else Free_After (Partner (Stored)))
+            then
+               Take (Stored);
+            end if;
+            for Number of Offered loop
+               if Clear (Number, Position, Last, Pair) then
+                  Take (Number);
+               end if;
+            end loop;
+            if Slot.Register /= 0 then
+               Interval_Slots (Index) := 2;
+               Slot.From := Landin.IR.Value_Id (Sequence (Position));
+               Slot.Through := Landin.IR.Value_Id (Sequence (Last));
+            end if;
+         end Open_Span;
+      begin
+         for Index in Offered'Range loop
+            for Position in 0 .. Value_Count loop
+               Prefix (Index).Data (Position + 2) :=
+                 Prefix (Index).Data (Position + 1)
+                 + (if (Writes (Position) and Bit (Offered (Index))) /= 0
+                    then 1 else 0);
+            end loop;
+         end loop;
+         for Index in 1 .. Value_Count loop
+            Result.Values (Index).Address_Required :=
+              Use_Of.Address_Required.Data (Index);
+         end loop;
+         Place_Intervals;
+         --  A slot loaded and stored in one block only, which stores it
+         --  before reading it, and not placed over its interval, is dead
+         --  before that store and after its last use there.  Like a value
+         --  it needs a register only in between, which the scan gives it
+         --  at the store when it can.  Size leaves a source variable in
+         --  its frame cell instead, for debuggers.
+         for Index in 1 .. Slot_Count loop
+            if Eligible (Index) and then Interval_Slots (Index) = 0
+              and then not Across_Blocks (Index)
+              and then Parameter_Of (Index) = 0
+              and then
+                (Speed
+                 or else Landin.IR.Declares
+                   (Of_Unit, Item, Landin.IR.Slot_Id (Index))
+                   = Landin.IR.No_Declaration)
+              and then First_Use (Index) /= 0
+              and then Landin.IR.Op_Of
+                (Of_Unit, Item,
+                 Landin.IR.Value_Id (Sequence (First_Use (Index))))
+                = Landin.IR.Store
+            then
+               Opening (First_Use (Index)) := Index;
+            end if;
+         end loop;
+         Open (0);
+         for Position in 1 .. Value_Count loop
+            declare
+               Index : constant Positive := Sequence (Position);
+               Kind : constant Landin.Types.Type_Kind := Landin.IR.Result_Of
+                 (Of_Unit, Item, Landin.IR.Value_Id (Index));
+               Released : Natural := Releases (Position);
+            begin
+               while Released /= 0 loop
+                  declare
+                     Old : Value_Location renames Result.Values (Released);
+                  begin
+                     Next_Free (Old.Home) := Free_Homes (Old.Size);
+                     Free_Homes (Old.Size) := Old.Home;
+                     Released := Next_Release (Released);
+                  end;
+               end loop;
+               Open (Position);
+               if Opening (Position) /= 0 then
+                  Open_Span (Opening (Position), Position);
+               end if;
+               if Kind in Landin.Types.Scalar_Name then
+                  declare
+                     Place : Value_Location renames Result.Values (Index);
+                     Last : constant Natural := Lasts (Index);
+
+                     --  Place takes register Number from Position through
+                     --  Last, if it has none yet and Number fits there.
+                     Pair : constant Boolean := Wide (Kind);
+
+                     procedure Share (Number : Natural);
+                     procedure Share (Number : Natural) is
+                     begin
+                        if Place.Register = 0 and then Number /= 0
+                          and then Fits (Number, Position + 1, Last, Pair)
+                        then
+                           Place.Register := Number;
+                           Place.Live_From := Position;
+                           Place.Live_Through := Last;
+                           Busy_Until (Number) :=
+                             Natural'Max (Busy_Until (Number), Last);
+                           Result.Held := Result.Held or Bit (Number);
+                           if Pair then
+                              Place.High := Partner (Number);
+                              Busy_Until (Place.High) :=
+                                Natural'Max (Busy_Until (Place.High), Last);
+                              Result.Held := Result.Held or Bit (Place.High);
+                           end if;
+                        end if;
+                     end Share;
+                  begin
+                     Place.Size := Size_Of (Kind, Facts);
+                     if not Place.Address_Required
+                       and then Last > Position
+                     then
+                        Share (Read_In_Place (Index));
+                        Share (Released_By (Index, Position));
+                        Share (Stored_Into (Index, Position));
+                        for Number of Offered loop
+                           exit when Place.Register /= 0;
+                           if Clear (Number, Position + 1, Last, Pair)
+                             and then Busy_Until (Number) < Position
+                             and then
+                               (not Pair
+                                or else Busy_Until (Partner (Number))
+                                  < Position)
+                           then
+                              Share (Number);
+                           end if;
+                        end loop;
+                     end if;
+                     if Place.Register = 0 then
+                        if Free_Homes (Place.Size) /= 0 then
+                           Place.Home := Free_Homes (Place.Size);
+                           Free_Homes (Place.Size) := Next_Free (Place.Home);
+                        else
+                           Result.Homes := Result.Homes + 1;
+                           Place.Home := Result.Homes;
+                        end if;
+                        Next_Release (Index) := Releases (Last + 1);
+                        Releases (Last + 1) := Index;
+                     end if;
+                  end;
+               end if;
+            end;
+         end loop;
+      end;
+      return Result;
+   end Allocate_Registers;
+
+   --  Whether no write Writes records meets a register Plan holds over a
+   --  position it holds it at.  A value's own operation may write its
+   --  register as it computes it there, since selection writes a result
+   --  after it has read every operand.
+   function Holds (Plan : Allocation_Plan; Writes : Write_Masks)
+     return Boolean;
+
+   function Holds (Plan : Allocation_Plan; Writes : Write_Masks)
+     return Boolean
+   is
+      package Count_Buffers renames Landin.Backend.Placement.Count_Buffers;
+      type Prefix_Table is array (0 .. 31) of
+        Count_Buffers.Buffer (Writes'Length + 1);
+      --  For each register Plan holds, how many positions before each
+      --  write it: Prefix (R).Data (P + 1) counts positions zero through
+      --  P - 1, so that each location's interval is asked in one step.
+      Prefix : Prefix_Table;
+
+      function Clear (Register, First, Last : Natural) return Boolean is
+        (Register = 0 or else Last < First
+         or else Prefix (Register).Data (Last + 2)
+           = Prefix (Register).Data (First + 1));
+   begin
+      if Writes'First /= 0 then
+         return False;
+      end if;
+      for Register in Prefix'Range loop
+         if (Plan.Held and Bit (Register)) /= 0 then
+            for Position in Writes'Range loop
+               Prefix (Register).Data (Position + 2) :=
+                 Prefix (Register).Data (Position + 1)
+                 + (if (Writes (Position) and Bit (Register)) /= 0
+                    then 1 else 0);
+            end loop;
+         end if;
+      end loop;
+      return (for all Place of Plan.Values =>
+                Clear (Place.Register, Place.Live_From + 1,
+                       Place.Live_Through)
+                and then Clear (Place.High, Place.Live_From + 1,
+                                Place.Live_Through))
+        and then (for all Place of Plan.Slots =>
+                    Clear (Place.Register, Place.Live_From,
+                           Place.Live_Through)
+                    and then Clear (Place.High, Place.Live_From,
+                                    Place.Live_Through));
+   end Holds;
+
    function Frame_For
      (Of_Unit : Landin.IR.Unit; Item : Landin.IR.Item_Id;
       Facts : Landin.Targets.Target_Facts;
@@ -405,6 +1184,10 @@ package body Landin.Backend.RiscV is
            (1 .. Saves) := [others => (Word, Landin.Targets.Byte_Alignment
                                                 (Word))];
       begin
+         --  A slot held in a register has no frame cell.
+         for Index in 1 .. Natural (Plan.Slots.Length) loop
+            Slots_Data.Data (Index) := Plan.Slots (Index).Register = 0;
+         end loop;
          for Index in Values'Range loop
             declare
                Place : Value_Location renames Plan.Values (Index);
@@ -444,59 +1227,143 @@ package body Landin.Backend.RiscV is
       return Frame_For (Of_Unit, Item, Facts, Options, Plan, Maximum);
    end Routine_Frame;
 
-   function Debug_Plan
-     (Of_Unit : Landin.IR.Unit; Item : Landin.IR.Item_Id;
-      Facts : Landin.Targets.Target_Facts;
-      Options : Landin.Optimization.Options) return Frame;
-
-   function Debug_Plan
-     (Of_Unit : Landin.IR.Unit; Item : Landin.IR.Item_Id;
-      Facts : Landin.Targets.Target_Facts;
-      Options : Landin.Optimization.Options) return Frame
-   is
-   begin
-      return Routine_Frame (Of_Unit, Item, Facts, Options, 16#7fff_ffff#);
-   end Debug_Plan;
-
    function Debug_Frame
      (Of_Unit : Landin.IR.Unit; Item : Landin.IR.Item_Id;
-      Facts : Landin.Targets.Target_Facts; Plan : Frame;
+      Facts : Landin.Targets.Target_Facts; Plan : Allocation_Plan;
       Options : Landin.Optimization.Options) return Frame;
 
    function Debug_Frame
      (Of_Unit : Landin.IR.Unit; Item : Landin.IR.Item_Id;
-      Facts : Landin.Targets.Target_Facts; Plan : Frame;
+      Facts : Landin.Targets.Target_Facts; Plan : Allocation_Plan;
       Options : Landin.Optimization.Options) return Frame
    is
-      pragma Unreferenced (Of_Unit, Item, Facts, Options);
    begin
-      return Plan;
+      return Frame_For (Of_Unit, Item, Facts, Options, Plan, 16#7fff_ffff#);
    end Debug_Frame;
 
+   --  A slot in a register is that register, or the address held there
+   --  for an indirect binding; DWARF numbers x0-x31 as 0-31 (D1503).
    function Debug_Slot
-     (Plan : Frame; Layout : Frame; Slot : Landin.IR.Slot_Id;
+     (Plan : Allocation_Plan; Layout : Frame; Slot : Landin.IR.Slot_Id;
       Indirect, Address_Only : Boolean) return String;
 
    function Debug_Slot
-     (Plan : Frame; Layout : Frame; Slot : Landin.IR.Slot_Id;
+     (Plan : Allocation_Plan; Layout : Frame; Slot : Landin.IR.Slot_Id;
       Indirect, Address_Only : Boolean) return String
    is
-      pragma Unreferenced (Plan, Address_Only);
       HT : constant Character := Character'Val (9);
       LF : constant Character := Character'Val (10);
+      Register : constant Natural := Plan.Slots (Positive (Slot)).Register;
    begin
+      if Register /= 0 then
+         if Indirect or else not Address_Only then
+            return HT & ".byte " & Trimmed (Natural'Image
+              ((if Indirect then 16#70# else 16#50#) + Register)) & LF
+              & (if Indirect then HT & ".sleb128 0" & LF else "");
+         end if;
+         return "";
+      end if;
       return HT & ".byte 0x91" & LF & HT & ".sleb128 -"
         & Trimmed (Landin.Targets.Byte_Count'Image
             (Slot_Offset (Layout, Slot) + 16)) & LF
         & (if Indirect then HT & ".byte 0x06" & LF else "");
    end Debug_Slot;
 
+   --  A slot the plan holds in a register only over an interval of the
+   --  routine, in layout order, is described there alone: the register
+   --  belongs to other locations before and after.  An interval opening
+   --  at a store excludes that store's own instruction, which precedes
+   --  the write; one open from the entry includes everything before its
+   --  last position.  As arm64's (D1404), the register still holds the
+   --  slot's value after that position, through the rest of its block,
+   --  until a value writes it: that value is the Overwriter, and the
+   --  encoder describes the slot at its first address too.  What writes
+   --  it is the emission's record (D1503), a value held there, or a store
+   --  to another slot held there.  The next block may be entered from
+   --  elsewhere, where the register is already another location's.
+   procedure Narrow
+     (Of_Unit : Landin.IR.Unit; Item : Landin.IR.Item_Id;
+      Plan : Allocation_Plan; Slot : Landin.IR.Slot_Id;
+      Live : in out Landin.Backend.Debug_Locations.Flags.Vector;
+      Overwriter : in out Landin.IR.Value_Id);
+
+   procedure Narrow
+     (Of_Unit : Landin.IR.Unit; Item : Landin.IR.Item_Id;
+      Plan : Allocation_Plan; Slot : Landin.IR.Slot_Id;
+      Live : in out Landin.Backend.Debug_Locations.Flags.Vector;
+      Overwriter : in out Landin.IR.Value_Id)
+   is
+      Place : constant Slot_Location := Plan.Slots (Positive (Slot));
+      Opened : Boolean := Place.From = Landin.IR.No_Value;
+      Closed : Boolean := False;
+      --  Whether the interval has closed in this block and nothing has
+      --  written the register since.
+      Holding : Boolean := False;
+      Tick : Natural := 0;
+
+      function Meets (Number : Natural) return Boolean is
+        (Number /= 0
+         and then (Number = Place.Register or else Number = Place.High));
+
+      function Writes (Value : Landin.IR.Value_Id) return Boolean is
+        ((Tick <= Plan.Writes.Last_Index
+          and then (Plan.Writes (Tick)
+                    and (Bit (Place.Register)
+                         or (if Place.High /= 0 then Bit (Place.High)
+                             else 0))) /= 0)
+         or else Meets (Plan.Values (Positive (Value)).Register)
+         or else Meets (Plan.Values (Positive (Value)).High)
+         or else (Landin.IR.Op_Of (Of_Unit, Item, Value) = Landin.IR.Store
+                  and then
+                    (Meets (Plan.Slots (Positive (Landin.IR.Slot_Of
+                       (Of_Unit, Item, Value))).Register)
+                     or else Meets (Plan.Slots (Positive (Landin.IR.Slot_Of
+                       (Of_Unit, Item, Value))).High))));
+   begin
+      if Place.From = Landin.IR.No_Value
+        and then Place.Through = Landin.IR.No_Value
+      then
+         return;
+      end if;
+      for Block in 1 .. Landin.IR.Block_Count (Of_Unit, Item) loop
+         Holding := False;
+         for Position in 1 .. Landin.IR.Length
+           (Of_Unit, Item, Landin.IR.Block_Id (Block))
+         loop
+            declare
+               Value : constant Landin.IR.Value_Id := Landin.IR.Nth_Value
+                 (Of_Unit, Item, Landin.IR.Block_Id (Block), Position);
+            begin
+               Tick := Tick + 1;
+               if Opened and then not Closed then
+                  Closed := Value = Place.Through;
+                  Holding := Closed;
+               elsif Holding and then not Writes (Value) then
+                  null;
+               else
+                  if Holding and then Live (Positive (Value)) then
+                     Overwriter := Value;
+                  end if;
+                  Holding := False;
+                  Live (Positive (Value)) := False;
+                  if Value = Place.From then
+                     Opened := True;
+                     Closed := Place.From = Place.Through;
+                     Holding := Closed;
+                  end if;
+               end if;
+            end;
+         end loop;
+      end loop;
+   end Narrow;
+
+   type Debug_Plan_Access is access all Allocation_Plan;
    type Debug_Frame_Access is access all Frame;
    --  The shared encoder uses RV64's DWARF frame-register number.
    function ELF_Debug_Sections is new Landin.Backend.Dwarf.Sections
-     (Frame, Debug_Frame_Access, Debug_Frame_Access,
-      Debug_Plan, Debug_Frame, Debug_Slot, 8, False,
-      Single_LEB_Operand => True);
+     (Allocation_Plan, Debug_Plan_Access, Debug_Frame_Access,
+      Allocate, Debug_Frame, Debug_Slot, 8, False,
+      Single_LEB_Operand => True, Narrow => Narrow);
 
    function Frame_Is_Addressable
      (Of_Unit : Landin.IR.Unit;
@@ -634,13 +1501,20 @@ package body Landin.Backend.RiscV is
       --  program until its stack is spent.
       type Frame_Array is array (Positive range <>) of Debug_Frame_Access;
       type Frame_Array_Access is access Frame_Array;
+      type Plan_Array is array (Positive range <>) of Debug_Plan_Access;
+      type Plan_Array_Access is access Plan_Array;
       procedure Free_Frame is new Ada.Unchecked_Deallocation
         (Frame, Debug_Frame_Access);
       procedure Free_Frames is new Ada.Unchecked_Deallocation
         (Frame_Array, Frame_Array_Access);
+      procedure Free_Plan is new Ada.Unchecked_Deallocation
+        (Allocation_Plan, Debug_Plan_Access);
+      procedure Free_Plans is new Ada.Unchecked_Deallocation
+        (Plan_Array, Plan_Array_Access);
       type Retained_Frames (Last : Natural) is
         new Ada.Finalization.Limited_Controlled with record
          Frames : Frame_Array_Access;
+         Plans : Plan_Array_Access;
       end record;
       overriding procedure Initialize (Owned : in out Retained_Frames);
       overriding procedure Finalize (Owned : in out Retained_Frames);
@@ -650,6 +1524,10 @@ package body Landin.Backend.RiscV is
          --  In a loop, so that no aggregate the table's size is built in
          --  this frame on its way to the heap.
          for Held of Owned.Frames.all loop
+            Held := null;
+         end loop;
+         Owned.Plans := new Plan_Array (1 .. Owned.Last);
+         for Held of Owned.Plans.all loop
             Held := null;
          end loop;
       end Initialize;
@@ -664,10 +1542,21 @@ package body Landin.Backend.RiscV is
             end if;
          end loop;
          Free_Frames (Owned.Frames);
+         if Owned.Plans = null then
+            return;
+         end if;
+         for Index in Owned.Plans'Range loop
+            if Owned.Plans (Index) /= null then
+               Free_Plan (Owned.Plans (Index));
+            end if;
+         end loop;
+         Free_Plans (Owned.Plans);
       end Finalize;
       Saved : Retained_Frames (Landin.IR.Item_Count (Of_Unit));
       function Cached_Frame (Item : Landin.IR.Item_Id)
         return Debug_Frame_Access is (Saved.Frames (Positive (Item)));
+      function Cached_Plan (Item : Landin.IR.Item_Id)
+        return Debug_Plan_Access is (Saved.Plans (Positive (Item)));
 
       --  D671: the machine's width, whether an eight-byte value is a
       --  register pair, and the word a pointer, a saved register and a
@@ -745,10 +1634,27 @@ package body Landin.Backend.RiscV is
       --  The line Put wrote last, for Frame_Memory's reload test.
       Last_Line : Unbounded.Unbounded_String;
 
+      --  D1503: while Recording names masks, Put adds what each line
+      --  writes to the mask of position Record_At, unless Record_At is
+      --  negative, outside every position, or the line is Intended, a
+      --  write of a held location's own register.
+      Recording : Write_Masks_Access;
+      Record_At : Integer := -1;
+      Intended : Boolean := False;
+      --  The statistics of the routine emitted last, which the caller
+      --  appends to the report once it keeps that emission.
+      Pending : Landin.Build_Reports.Routine_Statistics;
+
       procedure Put (Line : String) is
       begin
          Unbounded.Append (Output, Line & LF);
          Last_Line := Unbounded.To_Unbounded_String (Line);
+         if Recording /= null and then Record_At >= 0
+           and then not Intended
+         then
+            Recording (Record_At) :=
+              Recording (Record_At) or Written_By (Line);
+         end if;
       end Put;
 
       --  A platform directive, which on some object formats is nothing.
@@ -1845,7 +2751,7 @@ package body Landin.Backend.RiscV is
               (Counted, Unbounded.Slice
                  (Output, Routine_Start + 1, Unbounded.Length (Output)));
             Site_Counts.Fill (Counted, Filled);
-            Landin.Build_Reports.Append (Report, Filled);
+            Pending := Filled;
          end Append_Statistics;
 
          --  D678: at XLEN 32 a callee-saved register the routine's text
@@ -2166,7 +3072,8 @@ package body Landin.Backend.RiscV is
            (Value : Landin.IR.Value_Id; Register : String := "x5");
          procedure Store_Value
            (Value : Landin.IR.Value_Id; Register : String := "x5";
-            Atom_Validated : Boolean := False);
+            Atom_Validated : Boolean := False;
+            Extended : Boolean := False);
          procedure Load_Slot
            (Slot : Landin.IR.Slot_Id; Register : String := "x5");
          procedure Store_Slot
@@ -2181,17 +3088,28 @@ package body Landin.Backend.RiscV is
            (Value : Landin.IR.Value_Id; Register : String := "x5") is
          begin
             if Plan.Values (Positive (Value)).Register /= 0 then
-               Emit ("mv " & Register & ", x" & Trimmed (Natural'Image
-                 (Plan.Values (Positive (Value)).Register)));
+               if Register /= "x" & Image
+                 (Plan.Values (Positive (Value)).Register)
+               then
+                  Emit ("mv " & Register & ", x" & Image
+                    (Plan.Values (Positive (Value)).Register));
+                  if Plan.Values (Positive (Value)).High /= 0 then
+                     Emit ("mv " & High (Register) & ", x" & Image
+                       (Plan.Values (Positive (Value)).High));
+                  end if;
+               end if;
             else
                Frame_Memory (False, Size_Of_Value (Value), Register,
                              Value_Offset (Layout, Value));
             end if;
          end Load_Value;
 
+         --  Extended says that Register already holds the value
+         --  zero-extended, as a load or a held location leaves it.
          procedure Store_Value
            (Value : Landin.IR.Value_Id; Register : String := "x5";
-            Atom_Validated : Boolean := False)
+            Atom_Validated : Boolean := False;
+            Extended : Boolean := False)
          is
             Atoms : constant Landin.IR.Atom_Set_Id :=
               Landin.IR.Atom_Set_Of (Of_Unit, Item, Value);
@@ -2237,11 +3155,22 @@ package body Landin.Backend.RiscV is
                   Bits : constant Natural := 8 * Natural
                     (Landin.Targets.Bytes (Size_Of_Value (Value)));
                begin
-                  if Bits >= Natural (Width) then
-                     Emit ("mv " & Destination & ", " & Register);
+                  Intended := True;
+                  if Plan.Values (Positive (Value)).High /= 0 then
+                     if Destination /= Register then
+                        Emit ("mv " & Destination & ", " & Register);
+                        Emit ("mv x" & Image
+                          (Plan.Values (Positive (Value)).High) & ", "
+                          & High (Register));
+                     end if;
+                  elsif Bits >= Natural (Width) or else Extended then
+                     if Destination /= Register then
+                        Emit ("mv " & Destination & ", " & Register);
+                     end if;
                   else
                      Extract (Destination, Register, 0, Bits);
                   end if;
+                  Intended := False;
                end;
             else
                Frame_Memory (True, Size_Of_Value (Value), Register,
@@ -2249,20 +3178,55 @@ package body Landin.Backend.RiscV is
             end if;
          end Store_Value;
 
+         --  D1503: a slot held in a register is moved to and from it; a
+         --  narrower scalar is kept zero-extended there, as a load from
+         --  its cell would leave it.
          procedure Load_Slot
-           (Slot : Landin.IR.Slot_Id; Register : String := "x5") is
+           (Slot : Landin.IR.Slot_Id; Register : String := "x5")
+         is
+            Held : constant Natural := Plan.Slots (Positive (Slot)).Register;
          begin
+            if Held /= 0 then
+               if Register /= "x" & Image (Held) then
+                  Emit ("mv " & Register & ", x" & Image (Held));
+                  if Plan.Slots (Positive (Slot)).High /= 0 then
+                     Emit ("mv " & High (Register) & ", x"
+                       & Image (Plan.Slots (Positive (Slot)).High));
+                  end if;
+               end if;
+               return;
+            end if;
             Frame_Memory (False, Size_Of
               (Landin.IR.Type_Of (Of_Unit, Item, Slot), Facts),
               Register, Slot_Offset (Layout, Slot));
          end Load_Slot;
 
          procedure Store_Slot
-           (Slot : Landin.IR.Slot_Id; Register : String := "x5") is
+           (Slot : Landin.IR.Slot_Id; Register : String := "x5")
+         is
+            Held : constant Natural := Plan.Slots (Positive (Slot)).Register;
+            Size : constant Held_Size :=
+              Size_Of (Landin.IR.Type_Of (Of_Unit, Item, Slot), Facts);
+            Bits : constant Natural :=
+              8 * Natural (Landin.Targets.Bytes (Size));
          begin
-            Frame_Memory (True, Size_Of
-              (Landin.IR.Type_Of (Of_Unit, Item, Slot), Facts),
-              Register, Slot_Offset (Layout, Slot));
+            if Held /= 0 then
+               if Register /= "x" & Image (Held) then
+                  Intended := True;
+                  if Plan.Slots (Positive (Slot)).High /= 0 then
+                     Emit ("mv x" & Image (Held) & ", " & Register);
+                     Emit ("mv x" & Image (Plan.Slots (Positive (Slot)).High)
+                       & ", " & High (Register));
+                  elsif Bits >= Natural (Width) then
+                     Emit ("mv x" & Image (Held) & ", " & Register);
+                  else
+                     Extract ("x" & Image (Held), Register, 0, Bits);
+                  end if;
+                  Intended := False;
+               end if;
+               return;
+            end if;
+            Frame_Memory (True, Size, Register, Slot_Offset (Layout, Slot));
          end Store_Slot;
 
          procedure Extend (Register : String; Scalar : Landin.Types.Type_Kind)
@@ -2289,6 +3253,67 @@ package body Landin.Backend.RiscV is
                Branch ("ne", Trap);
             end if;
          end Check_Fit;
+
+         --  D1503: the register an operation reads a value from: the
+         --  value's own when it is held, else Default after loading it
+         --  there.  Extended as Scalar asks, which a held value, kept
+         --  zero-extended, needs only for a narrow signed scalar; that one
+         --  is copied to Default first.  A use writes nothing through it.
+         function Operand_In
+           (Value : Landin.IR.Value_Id; Default : String;
+            Scalar : Landin.Types.Type_Kind := Landin.Types.U64)
+            return String;
+
+         function Operand_In
+           (Value : Landin.IR.Value_Id; Default : String;
+            Scalar : Landin.Types.Type_Kind := Landin.Types.U64)
+            return String
+         is
+            Held : constant Natural := Plan.Values (Positive (Value)).Register;
+         begin
+            if Held /= 0
+              and then Plan.Values (Positive (Value)).High = 0
+              and then not
+                (Scalar in Landin.Types.I8 | Landin.Types.I16
+                   | Landin.Types.I32
+                 and then Landin.Types.Width (Scalar, Facts) < Width)
+            then
+               return "x" & Image (Held);
+            end if;
+            Load_Value (Value, Default);
+            Extend (Default, Scalar);
+            return Default;
+         end Operand_In;
+
+         --  The register an operation writes Value's result to: its own
+         --  when held, else Default.  Store_Value (Value, Result_In ...)
+         --  then completes it.
+         function Result_In
+           (Value : Landin.IR.Value_Id; Default : String := "x5")
+            return String
+           is (if Plan.Values (Positive (Value)).Register /= 0
+                 and then Plan.Values (Positive (Value)).High = 0
+                 and then not Landin.IR.Validates_Atoms (Of_Unit, Item, Value)
+               then "x" & Image (Plan.Values (Positive (Value)).Register)
+               else Default);
+
+         --  A constant's pattern, which is zero-extended to its register.
+         procedure Constant_Value
+           (Value : Landin.IR.Value_Id; Number : Pattern);
+         procedure Constant_Value
+           (Value : Landin.IR.Value_Id; Number : Pattern)
+         is
+            Into : constant String := Result_In (Value);
+         begin
+            if Into /= "x5" then
+               Intended := True;
+               Immediate (Into, Number);
+               Intended := False;
+            else
+               Immediate ("x5", Number);
+               Store_Value (Value);
+            end if;
+         end Constant_Value;
 
          --  D673: the language convention's carrier of each argument of a
          --  call or parameter of a routine.  In order, each takes the next
@@ -2358,12 +3383,20 @@ package body Landin.Backend.RiscV is
          procedure Load_Pair
            (Value : Landin.IR.Value_Id; Low, High_Word : String)
          is
-            Offset : constant Landin.Targets.Byte_Count :=
-              Value_Offset (Layout, Value);
+            Place : Value_Location renames Plan.Values (Positive (Value));
          begin
-            Frame_Memory
-              (False, Landin.Targets.Byte_4, High_Word, Offset - 4);
-            Frame_Memory (False, Landin.Targets.Byte_4, Low, Offset);
+            if Place.Register /= 0 then
+               if Low = "x" & Image (Place.High) then
+                  raise Compiler_Defect with "a pair moved over itself";
+               end if;
+               Emit ("mv " & Low & ", x" & Image (Place.Register));
+               Emit ("mv " & High_Word & ", x" & Image (Place.High));
+               return;
+            end if;
+            Frame_Memory (False, Landin.Targets.Byte_4, High_Word,
+                          Value_Offset (Layout, Value) - 4);
+            Frame_Memory (False, Landin.Targets.Byte_4, Low,
+                          Value_Offset (Layout, Value));
          end Load_Pair;
 
          --  The declared registers' homes, in register order.
@@ -2385,8 +3418,12 @@ package body Landin.Backend.RiscV is
 
          procedure Restore_Saves;
 
+         --  D1503: the restores follow every read of the exit that runs
+         --  them, after which nothing is live, so they are not recorded.
          procedure Restore_Saves is
+            Recorded_At : constant Integer := Record_At;
          begin
+            Record_At := -1;
             for Number in Saves'Range loop
                Scratch_From := Unbounded.Length (Output);
                if Saves (Number) and then Pairs
@@ -2415,6 +3452,7 @@ package body Landin.Backend.RiscV is
                     (Scratch_From, Unbounded.Length (Output)));
                end if;
             end loop;
+            Record_At := Recorded_At;
          end Restore_Saves;
 
          procedure Epilogue is
@@ -3430,17 +4468,27 @@ package body Landin.Backend.RiscV is
 
             procedure FP_Load (Which : Positive; Register : String) is
             begin
-               Load_Value (Operand (Which));
                Emit ((if Kind (Operand (Which)) = Landin.Types.F32
                       then "fmv.w.x " else "fmv.d.x ")
-                 & "f" & Register & ", x5");
+                 & "f" & Register & ", " & Operand_In (Operand (Which), "x5"));
             end FP_Load;
 
+            --  An f64 result is its register's every bit; an f32 one,
+            --  which fmv.x.w sign-extends, is zero-extended by Store_Value.
             procedure FP_Save is
+               Into : constant String := Result_In (Value);
             begin
-               Emit ((if Kind (Value) = Landin.Types.F32
-                      then "fmv.x.w " else "fmv.x.d ") & "x5, f16");
-               Store_Value (Value);
+               if Kind (Value) /= Landin.Types.F32 and then Into /= "x5"
+                 and then not Pairs
+               then
+                  Intended := True;
+                  Emit ("fmv.x.d " & Into & ", f16");
+                  Intended := False;
+               else
+                  Emit ((if Kind (Value) = Landin.Types.F32
+                         then "fmv.x.w " else "fmv.x.d ") & "x5, f16");
+                  Store_Value (Value);
+               end if;
             end FP_Save;
 
             procedure Index_Address
@@ -4303,17 +5351,14 @@ package body Landin.Backend.RiscV is
                      then
                         Number := Mask (0 - Number, Bits);
                      end if;
-                     Immediate ("x5", Number);
-                     Store_Value (Value);
+                     Constant_Value (Value, Number);
                   end;
                when Landin.IR.Truth =>
-                  Immediate ("x5", (if Landin.IR.Truth_Of
+                  Constant_Value (Value, (if Landin.IR.Truth_Of
                     (Of_Unit, Item, Value) then 1 else 0));
-                  Store_Value (Value);
                when Landin.IR.Atom =>
-                  Immediate ("x5", Pattern (Atom_Code
+                  Constant_Value (Value, Pattern (Atom_Code
                     (Atoms_Ranked, Landin.IR.Atom_Of (Of_Unit, Item, Value))));
-                  Store_Value (Value);
                when Landin.IR.Measurement_Kind =>
                   declare
                      Bytes : Landin.Targets.Byte_Count;
@@ -4347,11 +5392,56 @@ package body Landin.Backend.RiscV is
                      end if;
                   end;
                when Landin.IR.Load =>
-                  Load_Slot (Landin.IR.Slot_Of (Of_Unit, Item, Value));
-                  Store_Value (Value);
+                  --  D1503: a value read in place is its slot's register
+                  --  and moves nothing.
+                  declare
+                     Held : constant Natural := Plan.Slots
+                       (Positive (Landin.IR.Slot_Of (Of_Unit, Item, Value)))
+                         .Register;
+                  begin
+                     if Held = 0
+                       or else Landin.IR.Validates_Atoms
+                         (Of_Unit, Item, Value)
+                     then
+                        Load_Slot (Landin.IR.Slot_Of (Of_Unit, Item, Value));
+                        Store_Value (Value, Extended => True);
+                     elsif Held = Plan.Values (Positive (Value)).Register then
+                        null;
+                     elsif Plan.Slots (Positive (Landin.IR.Slot_Of
+                             (Of_Unit, Item, Value))).High /= 0
+                     then
+                        Load_Slot (Landin.IR.Slot_Of (Of_Unit, Item, Value));
+                        Store_Value (Value);
+                     else
+                        Store_Value (Value, "x" & Image (Held),
+                                     Extended => True);
+                     end if;
+                  end;
                when Landin.IR.Store =>
-                  Load_Value (Operand (1));
-                  Store_Slot (Landin.IR.Slot_Of (Of_Unit, Item, Value));
+                  --  A value stored into the slot it shares a register
+                  --  with moves nothing.
+                  declare
+                     Held : constant Natural := Plan.Slots
+                       (Positive (Landin.IR.Slot_Of (Of_Unit, Item, Value)))
+                         .Register;
+                     Source : constant Natural :=
+                       Plan.Values (Positive (Operand (1))).Register;
+                  begin
+                     if Held = 0 or else Source = 0 then
+                        Load_Value (Operand (1));
+                        Store_Slot (Landin.IR.Slot_Of (Of_Unit, Item, Value));
+                     elsif Held /= Source then
+                        Intended := True;
+                        Emit ("mv x" & Image (Held) & ", x" & Image (Source));
+                        if Plan.Values (Positive (Operand (1))).High /= 0 then
+                           Emit ("mv x" & Image (Plan.Slots (Positive
+                             (Landin.IR.Slot_Of (Of_Unit, Item, Value))).High)
+                             & ", x" & Image
+                               (Plan.Values (Positive (Operand (1))).High));
+                        end if;
+                        Intended := False;
+                     end if;
+                  end;
                when Landin.IR.Memory_Access =>
                   declare
                      use all type Landin.Memory.Operation;
@@ -5005,21 +6095,43 @@ package body Landin.Backend.RiscV is
                         Bits : constant Natural := Natural
                           (Landin.Types.Width (Kind (Value), Facts));
                         Done : constant String := Fresh;
+                        --  D1503: the operations that read their operands
+                        --  as they are and write their result last read
+                        --  held operands in place and write a held result
+                        --  directly.
+                        In_Place : constant Boolean := Op in
+                          Landin.IR.Add | Landin.IR.Wrapping_Add
+                          | Landin.IR.Subtract | Landin.IR.Wrapping_Subtract
+                          | Landin.IR.Multiply | Landin.IR.Wrapping_Multiply
+                          | Landin.IR.Bitwise_And | Landin.IR.Bitwise_Or
+                          | Landin.IR.Bitwise_Xor;
+                        Left : constant String :=
+                          (if In_Place
+                           then Operand_In (Operand (1), "x5", Kind (Value))
+                           else "x5");
+                        Right : constant String :=
+                          (if In_Place
+                           then Operand_In (Operand (2), "x6", Kind (Value))
+                           else "x6");
+                        Into : constant String :=
+                          (if In_Place then Result_In (Value) else "x5");
                      begin
-                        Load_Value (Operand (1));
-                        Load_Value (Operand (2), "x6");
-                        Extend ("x5", Kind (Value));
-                        Extend ("x6", Kind (Value));
+                        if not In_Place then
+                           Load_Value (Operand (1));
+                           Load_Value (Operand (2), "x6");
+                           Extend ("x5", Kind (Value));
+                           Extend ("x6", Kind (Value));
+                        end if;
                         case Op is
                            when Landin.IR.Add | Landin.IR.Wrapping_Add =>
-                              Add_Sub ("x5", "x5", "x6", Subtract => False);
+                              Add_Sub (Into, Left, Right, Subtract => False);
                               if Checked then
                                  Branch ((if Signed then "vs" else "cs"),
                                    Trap);
                               end if;
                            when Landin.IR.Subtract |
                              Landin.IR.Wrapping_Subtract =>
-                              Add_Sub ("x5", "x5", "x6", Subtract => True);
+                              Add_Sub (Into, Left, Right, Subtract => True);
                               if Checked then
                                  Branch ((if Signed then "vs" else "cc"),
                                    Trap);
@@ -5028,12 +6140,13 @@ package body Landin.Backend.RiscV is
                              Landin.IR.Wrapping_Multiply =>
                               if Checked then
                                  Emit ((if Signed then "mulh " else "mulhu ")
-                                   & "x7, x5, x6");
+                                   & "x7, " & Left & ", " & Right);
                               end if;
-                              Emit ("mul x5, x5, x6");
+                              Emit ("mul " & Into & ", " & Left & ", "
+                                    & Right);
                               if Checked then
                                  if Signed then
-                                    Emit ("srai x28, x5, "
+                                    Emit ("srai x28, " & Into & ", "
                                           & Image (Natural (Width) - 1));
                                     Compare ("x7", "x28");
                                     Branch ("ne", Trap);
@@ -5062,10 +6175,14 @@ package body Landin.Backend.RiscV is
                                  Emit ("mv x5, x7");
                               end if;
                            when Landin.IR.Bitwise_And =>
-                              Emit ("and x5, x5, x6");
-                           when Landin.IR.Bitwise_Or => Emit ("or x5, x5, x6");
+                              Emit ("and " & Into & ", " & Left & ", "
+                                    & Right);
+                           when Landin.IR.Bitwise_Or =>
+                              Emit ("or " & Into & ", " & Left & ", "
+                                    & Right);
                            when Landin.IR.Bitwise_Xor =>
-                              Emit ("xor x5, x5, x6");
+                              Emit ("xor " & Into & ", " & Left & ", "
+                                    & Right);
                            when Landin.IR.Shift_Left | Landin.IR.Shift_Right =>
                               if Signed then
                                  Extract ("x18", "x6",
@@ -5086,9 +6203,9 @@ package body Landin.Backend.RiscV is
                              "invalid integer operation";
                         end case;
                         if Checked then
-                           Check_Fit ("x5", Kind (Value));
+                           Check_Fit (Into, Kind (Value));
                         end if;
-                        Store_Value (Value);
+                        Store_Value (Value, Into);
                      end;
                   end if;
                when Landin.IR.Equal_To | Landin.IR.Not_Equal_To
@@ -5124,14 +6241,21 @@ package body Landin.Backend.RiscV is
                         FP_Load (2, "17");
                         Compare_Float (FP (Scalar), "f16", "f17");
                      else
-                        Load_Value (Operand (1));
-                        Load_Value (Operand (2), "x6");
-                        Extend ("x5", Scalar);
-                        Extend ("x6", Scalar);
-                        Compare ("x5", "x6");
+                        declare
+                           Left : constant String :=
+                             Operand_In (Operand (1), "x5", Scalar);
+                           Right : constant String :=
+                             Operand_In (Operand (2), "x6", Scalar);
+                        begin
+                           Compare (Left, Right);
+                        end;
                      end if;
-                     Predicate ("x5", Condition);
-                     Store_Value (Value);
+                     declare
+                        Into : constant String := Result_In (Value);
+                     begin
+                        Predicate (Into, Condition);
+                        Store_Value (Value, Into, Extended => True);
+                     end;
                   end;
                when Landin.IR.Choose =>
                   --  D338.  The base ISA has no conditional move: a choice
@@ -5425,9 +6549,9 @@ package body Landin.Backend.RiscV is
                   Emit ("j " & Label (Item, Landin.IR.Target_Of (Of_Unit,
                     Item, Value)));
                when Landin.IR.Branch =>
-                  Load_Value (Operand (1));
-                  Emit ("bnez x5, " & Label (Item, Landin.IR.Target_Of
-                    (Of_Unit, Item, Value)));
+                  Emit ("bnez " & Operand_In (Operand (1), "x5") & ", "
+                    & Label (Item,
+                             Landin.IR.Target_Of (Of_Unit, Item, Value)));
                   Emit ("j " & Label (Item, Landin.IR.Alternative_Of (Of_Unit,
                     Item, Value)));
                when Landin.IR.Leave =>
@@ -5472,7 +6596,11 @@ package body Landin.Backend.RiscV is
             end case;
          end Instruction;
 
+         --  D1503: the position of the value emitted last.
+         Tick : Natural := 0;
       begin
+         --  The entry is position zero.
+         Record_At := 0;
          --  One terminal keeps its inline teardown; more than one pays for
          --  branches to a single restore sequence.
          for Index in 1 .. Landin.IR.Value_Count (Of_Unit, Item) loop
@@ -5555,6 +6683,7 @@ package body Landin.Backend.RiscV is
             Platform_Directive (ELF_Spelling.Size_To_Here (Symbol (Item)));
             Append_Statistics
               ((Item => Item, Naked => True, others => <>));
+            Record_At := -1;
             return;
          end if;
          --  D672: the frame record is the caller's x8 and the return
@@ -5815,6 +6944,8 @@ package body Landin.Backend.RiscV is
               Landin.IR.Block_Id (Block)) loop
                Current_Value := Landin.IR.Nth_Value (Of_Unit, Item,
                  Landin.IR.Block_Id (Block), Position);
+               Tick := Tick + 1;
+               Record_At := Tick;
                if Debug /= null then
                   Put (Dwarf.Label_Name (Local_Prefix, "value", Item,
                     Natural (Current_Value)) & ":");
@@ -5828,6 +6959,9 @@ package body Landin.Backend.RiscV is
                end if;
             end loop;
          end loop;
+         --  What follows the last value, the shared exit and the traps,
+         --  runs where no location is live.
+         Record_At := -1;
          if Terminal_Count > 1 then
             Put (Shared_Exit & ":");
             Epilogue;
@@ -5899,13 +7033,11 @@ package body Landin.Backend.RiscV is
          Platform_Directive (ELF_Spelling.Size_To_Here (Symbol (Item)));
          Settle_Jumps;
          Prune_Saves;
-         --  No value or slot is held in a register: every one has its
-         --  home, and the saved registers are selection's fixed scratch.
          Append_Statistics
            ((Item => Item, Frame_Bytes => Extent (Layout),
              Spill_Bytes => Spill_Bytes (Layout),
              Save_Bytes => Save_Bytes (Layout),
-             Register_Count => 0,
+             Register_Count => Held_Count (Plan.Held),
              Spill_Count => Plan.Homes,
              Stack_Bytes => 16 + Extent (Layout) + Deepest_Area,
              Calls_Panic => not Edges.Is_Empty
@@ -7361,21 +8493,86 @@ package body Landin.Backend.RiscV is
                else
                   Emit (Item_Section (Item, "text", "routine"));
                end if;
+               --  D1503: at size and speed a routine is emitted first with
+               --  every value in its home, recording what its text writes
+               --  at each position; then with the slots and values
+               --  Allocate_Registers places where nothing writes their
+               --  registers.  The second emission's writes are checked
+               --  against its plan, and a routine whose check fails keeps
+               --  its first.
                declare
-                  Plan : constant Allocation_Plan :=
+                  Homes : constant Allocation_Plan :=
                     Allocate (Of_Unit, Item, Facts, Options);
+                  Chosen : Allocation_Plan := Homes;
+                  Start : constant Natural := Unbounded.Length (Output);
+                  Start_Serial : constant Natural := Serial;
+                  Start_Line : constant Unbounded.Unbounded_String :=
+                    Last_Line;
+                  Count : constant Natural :=
+                    Landin.IR.Value_Count (Of_Unit, Item);
+
+                  procedure Restore;
+                  procedure Restore is
+                  begin
+                     Unbounded.Delete
+                       (Output, Start + 1, Unbounded.Length (Output));
+                     Serial := Start_Serial;
+                     Last_Line := Start_Line;
+                  end Restore;
                begin
-                  if Debug = null or else Pairs then
-                     Emit_Routine
-                       (Item, Plan, Frame_For
-                          (Of_Unit, Item, Facts, Options, Plan,
-                           16#7fff_ffff#));
-                  else
+                  if Options.Optimize /= Landin.Optimization.None
+                    and then Landin.IR.Signature_Machine
+                      (Of_Unit, Landin.IR.Signature_Of (Of_Unit, Item))
+                        /= Landin.Machine.Naked_Routine
+                    and then
+                      (for all Value in 1 .. Count =>
+                         Landin.IR.Op_Of
+                           (Of_Unit, Item, Landin.IR.Value_Id (Value))
+                           /= Landin.IR.Assembly)
+                  then
+                     Recording := new Write_Masks'(0 .. Count => 0);
+                  end if;
+                  Emit_Routine
+                    (Item, Homes, Frame_For
+                       (Of_Unit, Item, Facts, Options, Homes,
+                        16#7fff_ffff#));
+                  if Recording /= null then
+                     declare
+                        Placed : constant Allocation_Plan :=
+                          Allocate_Registers
+                            (Of_Unit, Item, Facts, Options, Recording.all);
+                     begin
+                        if Placed.Held /= 0 then
+                           Restore;
+                           Recording.all := [others => 0];
+                           Emit_Routine
+                             (Item, Placed, Frame_For
+                                (Of_Unit, Item, Facts, Options, Placed,
+                                 16#7fff_ffff#));
+                           if Holds (Placed, Recording.all) then
+                              Chosen := Placed;
+                              for Mask of Recording.all loop
+                                 Chosen.Writes.Append (Mask);
+                              end loop;
+                           else
+                              Free_Masks (Recording);
+                              Restore;
+                              Emit_Routine
+                                (Item, Homes, Frame_For
+                                   (Of_Unit, Item, Facts, Options, Homes,
+                                    16#7fff_ffff#));
+                           end if;
+                        end if;
+                     end;
+                     Free_Masks (Recording);
+                  end if;
+                  Landin.Build_Reports.Append (Report, Pending);
+                  if Debug /= null and then not Pairs then
+                     Saved.Plans (Index) := new Allocation_Plan'(Chosen);
                      Saved.Frames (Index) := new Frame'
                        (Frame_For
-                          (Of_Unit, Item, Facts, Options, Plan,
+                          (Of_Unit, Item, Facts, Options, Chosen,
                            16#7fff_ffff#));
-                     Emit_Routine (Item, Plan, Saved.Frames (Index).all);
                   end if;
                end;
             end if;
@@ -7703,7 +8900,7 @@ package body Landin.Backend.RiscV is
          Unbounded.Append (Output,
            ELF_Debug_Sections
              (Of_Unit, Meanings, Names, Facts, Options, Debug.all,
-              Local_Prefix, Symbol'Access, Cached_Frame'Access,
+              Local_Prefix, Symbol'Access, Cached_Plan'Access,
               Cached_Frame'Access));
       end if;
       Emit (ELF_Spelling.No_Executable_Stack);

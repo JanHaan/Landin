@@ -2342,7 +2342,17 @@
     "runtime/directory-memory": {
       "mode": "execute",
       "profile_limit": "selected-image",
-      "reason": "The memory world's directories with every oracle need about 43 KiB of flash at size/auto, of which the fixture's own main is 17 KiB: the Cortex-M0 backend gives every IR slot, each call's snapshot and aggregate temporary among them, a frame home of its own with no reuse and keeps no value in a register, so main's frame is 2.7 KiB and most of its code moves values between homes. That is register allocation and slot reuse, not the library. Each profile still attempts execution; runtime/directory-memory-firmware lists a directory over core/io.memory within the image and requires execution; this image limit is not runtime evidence."
+      "reason": "The memory world's directories with every oracle need about 43 KiB of flash at size/auto, of which the fixture's own main is 17 KiB: the Cortex-M0 backend gives every IR slot, each call's snapshot and aggregate temporary among them, a frame home of its own with no reuse and keeps no value in a register, so main's frame is 2.7 KiB and most of its code moves values between homes. That is register allocation and slot reuse, not the library. Each profile still attempts execution; runtime/directory-memory-firmware lists a directory over core/io.memory within the image and requires execution; this image limit is not runtime evidence.",
+      "lanes": {
+        "esp32c3": {
+          "mode": "limit",
+          "reason": "D698: since D1503 holds RV32's values in registers its images fit this lane's 32 KiB at size and speed, and at size/off and size/auto its stack then overruns the 4 KiB reservation, in memory_under called from memory_component, with 4112 and 4128 bytes in use when the guard was written; speed/auto peaks at 4008 bytes, and none/off still overflows the 32 KiB by about 27 KiB. main's 2.5 KiB frame of aggregate temporaries is most of the stack."
+        },
+        "sifive-e": {
+          "mode": "limit",
+          "reason": "D698: since D1503 holds RV32's values in registers its images fit this lane's 32 KiB at size and speed, and at size/off and size/auto its stack then overruns the 4 KiB reservation, in memory_under called from memory_component, with 4112 and 4128 bytes in use when the guard was written; speed/auto peaks at 4008 bytes, and none/off still overflows the 32 KiB by about 27 KiB. main's 2.5 KiB frame of aggregate temporaries is most of the stack."
+        }
+      }
     },
     "runtime/directory-memory-firmware": {
       "mode": "execute"

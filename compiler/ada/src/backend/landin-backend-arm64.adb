@@ -8,7 +8,6 @@ with Ada.Unchecked_Deallocation;
 with Landin.Provenance;
 with Landin.Layouts;
 with Landin.Machine;
-with Landin.IR.Control_Flow;
 with Landin.IR.Liveness;
 with Landin.IR.Shape_Measurement;
 with Landin.Packed;
@@ -26,6 +25,7 @@ with Landin.Backend.Entry_Point;
 with Landin.Backend.Site_Counts;
 with Landin.Backend.Trap_Reports;
 with Landin.Backend.Work_Arrays;
+with Landin.Backend.Placement;
 with Landin.Types;
 
 package body Landin.Backend.Arm64 is
@@ -343,54 +343,45 @@ package body Landin.Backend.Arm64 is
          return Result;
       end if;
       declare
-         type Counts is array (Positive range <>) of Natural;
-         package Count_Buffers is new Landin.Backend.Work_Arrays
-           (Natural, Counts, 0);
-         package Mask_Buffers is new Landin.Backend.Work_Arrays
-           (Boolean, Home_Mask, False);
-         Start_Data, Last_Data, Sequence_Data, Next_Release_Data,
-           Next_Free_Data, Written_Data, Opening_Data :
-             Count_Buffers.Buffer (Value_Count);
-         Release_Data, Call_Data : Count_Buffers.Buffer (Value_Count + 1);
-         Use_Data, Weight_Data, Interval_Data, Parameter_Data,
-           First_Use_Data, Last_Use_Data, First_Block_Data :
-             Count_Buffers.Buffer (Slot_Count);
-         Eligible_Data, Across_Data : Mask_Buffers.Buffer (Slot_Count);
-         Starts : Counts renames Start_Data.Data.all;
-         Lasts : Counts renames Last_Data.Data.all;
-         Sequence : Counts renames Sequence_Data.Data.all;
+         subtype Counts is Landin.Backend.Placement.Counts;
+         package Count_Buffers renames Landin.Backend.Placement.Count_Buffers;
+         Facts_Of : Landin.Backend.Placement.Usage
+           (Value_Count, Slot_Count, Value_Count + 1);
+         Next_Release_Data, Next_Free_Data, Opening_Data :
+           Count_Buffers.Buffer (Value_Count);
+         Release_Data : Count_Buffers.Buffer (Value_Count + 1);
+         Interval_Data : Count_Buffers.Buffer (Slot_Count);
+         Lasts : Counts renames Facts_Of.Lasts.Data.all;
+         Sequence : Counts renames Facts_Of.Sequence.Data.all;
          Releases : Counts renames Release_Data.Data.all;
          Next_Release : Counts renames Next_Release_Data.Data.all;
          Next_Free : Counts renames Next_Free_Data.Data.all;
          --  For each load, the position of the next store to its slot in
          --  the same block, if any.
-         Written_After : Counts renames Written_Data.Data.all;
-         Uses : Counts renames Use_Data.Data.all;
-         Weights : Counts renames Weight_Data.Data.all;
+         Written_After : Counts renames Facts_Of.Written_After.Data.all;
+         Uses : Counts renames Facts_Of.Uses.Data.all;
+         Weights : Counts renames Facts_Of.Weights.Data.all;
          --  The slots placed in a register, by weight and then as a mark:
          --  1 for one placed over its interval, 2 for one given a span in
          --  a single block by the scan.
          Interval_Slots : Counts renames Interval_Data.Data.all;
-         Eligible : Home_Mask renames Eligible_Data.Data.all;
+         Eligible : Home_Mask renames Facts_Of.Eligible.Data.all;
          --  Each slot's first and last load or store, by position, the
          --  block of its first, and whether another block has one too;
          --  and the slot, if any, whose store at a position opens a span
          --  of its own.
-         First_Use : Counts renames First_Use_Data.Data.all;
-         Last_Use : Counts renames Last_Use_Data.Data.all;
-         First_Block : Counts renames First_Block_Data.Data.all;
-         Across_Blocks : Home_Mask renames Across_Data.Data.all;
+         First_Use : Counts renames Facts_Of.First_Use.Data.all;
+         Last_Use : Counts renames Facts_Of.Last_Use.Data.all;
+         Across_Blocks : Home_Mask renames Facts_Of.Across_Blocks.Data.all;
          Opening : Counts renames Opening_Data.Data.all;
          --  How many calls and assembly blocks lie before each position.
-         Calls_Before : Counts renames Call_Data.Data.all;
+         Calls_Before : Counts renames Facts_Of.Calls_Before.Data.all;
          --  Each parameter slot's place among the parameters, else 0.
-         Parameter_Of : Counts renames Parameter_Data.Data.all;
+         Parameter_Of : Counts renames Facts_Of.Parameter_Of.Data.all;
          Free_Homes : array (Held_Size) of Natural := [others => 0];
          Busy_Until : array (Register_Number) of Natural := [others => 0];
          Declared_Set : constant Saved_Set := Result.Saves;
-         Tick : Natural := 0;
-         Traffic : Natural := 0;
-         Has_Assembly : Boolean := False;
+         Has_Assembly : Boolean renames Facts_Of.Has_Assembly;
          --  Whether a callee-saved register pays for its save: below this
          --  much scalar traffic a routine leaves them alone.
          Saving : Boolean := False;
@@ -399,17 +390,8 @@ package body Landin.Backend.Arm64 is
          --  size counts each once, as x86-64's size does.
          Speed : constant Boolean :=
            Options.Optimize = Landin.Optimization.Speed;
-         C_Entry : constant Boolean :=
-           Landin.IR.Signature_Of (Of_Unit, Item) /= Landin.IR.No_Signature
-           and then Landin.IR.Signature_Uses_C_ABI
-             (Of_Unit, Landin.IR.Signature_Of (Of_Unit, Item));
-         Graph : constant Landin.IR.Control_Flow.Graph :=
-           Landin.IR.Control_Flow.Make (Of_Unit, Item);
-         Depth : constant Landin.IR.Liveness.Count_Vectors.Vector :=
-           (if Speed then Landin.IR.Liveness.Loop_Depths (Graph)
-            else Landin.IR.Liveness.Count_Vectors.Empty_Vector);
-         Spans : Landin.IR.Liveness.Interval_Vectors.Vector :=
-           Landin.IR.Liveness.Slot_Intervals (Of_Unit, Item, Graph);
+         Spans : Landin.IR.Liveness.Interval_Vectors.Vector
+           renames Facts_Of.Spans;
          --  Registers x0-x7, x19-x24, d8-d15 and d18-d31 may hold slots,
          --  each over a run of disjoint intervals, and the next interval
          --  each has still to open.
@@ -418,10 +400,6 @@ package body Landin.Backend.Arm64 is
          Upcoming : array (Register_Number) of Reservations.Cursor :=
            [others => Reservations.No_Element];
 
-         procedure Reach
-           (Place : Landin.IR.Storage; Value : Landin.IR.Value_Id);
-         procedure Count_Use
-           (Of_Slot : Landin.IR.Slot_Id; Value : Landin.IR.Value_Id);
          procedure Place_Intervals;
          procedure Open (Position : Natural);
          function Clear (Number, Position, Last : Natural) return Boolean;
@@ -441,47 +419,6 @@ package body Landin.Backend.Arm64 is
          function Holds_Through (Slot : Positive) return Natural is
            (if Interval_Slots (Slot) = 2 then Last_Use (Slot)
             else Spans (Slot).Last);
-
-         --  An operation reaching storage needs a frame slot's cell, and
-         --  reads only the address an address slot holds.
-         procedure Reach
-           (Place : Landin.IR.Storage; Value : Landin.IR.Value_Id) is
-         begin
-            case Place.Kind is
-               when Landin.IR.Frame_Slot =>
-                  Eligible (Positive (Place.Slot)) := False;
-               when Landin.IR.Runtime_Address =>
-                  Count_Use (Place.Address, Value);
-               when Landin.IR.Module_Datum => null;
-            end case;
-         end Reach;
-
-         --  One load or store of a slot, or read of the address it holds,
-         --  weighted eight times for each loop around it, up to four.
-         procedure Count_Use
-           (Of_Slot : Landin.IR.Slot_Id; Value : Landin.IR.Value_Id)
-         is
-            Slot : constant Positive := Positive (Of_Slot);
-            At_Position : constant Positive := Starts (Positive (Value));
-            Block : constant Positive :=
-              Positive (Landin.IR.Block_Of (Of_Unit, Item, Value));
-            Step : constant Natural :=
-              (if Speed then 8 ** Natural'Min (Depth (Block), 4) else 1);
-         begin
-            if First_Use (Slot) = 0 or else At_Position < First_Use (Slot) then
-               First_Use (Slot) := At_Position;
-            end if;
-            Last_Use (Slot) := Natural'Max (Last_Use (Slot), At_Position);
-            if First_Block (Slot) = 0 then
-               First_Block (Slot) := Block;
-            elsif First_Block (Slot) /= Block then
-               Across_Blocks (Slot) := True;
-            end if;
-            Uses (Slot) := Uses (Slot) + 1;
-            Weights (Slot) :=
-              (if Weights (Slot) > Natural'Last - Step
-               then Natural'Last else Weights (Slot) + Step);
-         end Count_Use;
 
          --  Each eligible slot read or written twice may hold a register
          --  over its whole interval: the heaviest slot first, ties to the
@@ -832,266 +769,13 @@ package body Landin.Backend.Arm64 is
             end if;
          end Open_Span;
       begin
-         for Block_Index in 1 .. Landin.IR.Block_Count (Of_Unit, Item) loop
-            declare
-               Block : constant Landin.IR.Block_Id :=
-                 Landin.IR.Block_Id (Block_Index);
-            begin
-               for Position in 1 .. Landin.IR.Length
-                 (Of_Unit, Item, Block)
-               loop
-                  declare
-                     Index : constant Positive := Positive
-                       (Landin.IR.Nth_Value
-                          (Of_Unit, Item, Block, Position));
-                  begin
-                     Tick := Tick + 1;
-                     Sequence (Tick) := Index;
-                     Starts (Index) := Tick;
-                     Lasts (Index) := Tick;
-                     Calls_Before (Tick + 1) := Calls_Before (Tick)
-                       + (if Landin.IR.Op_Of
-                               (Of_Unit, Item, Landin.IR.Value_Id (Index))
-                             in Landin.IR.Call | Landin.IR.Indirect_Call
-                              | Landin.IR.Assembly
-                            or else Is_Switch
-                              (Of_Unit, Item, Landin.IR.Value_Id (Index))
-                          then 1 else 0);
-                  end;
-               end loop;
-            end;
-         end loop;
-         for Index in 1 .. Landin.IR.Parameter_Count (Of_Unit, Item) loop
-            Parameter_Of (Positive
-              (Landin.IR.Nth_Parameter (Of_Unit, Item, Index))) := Index;
-         end loop;
-         --  A scalar slot may be held in a register.  A C entry's
-         --  parameters and result slot are reached by address, as is every
-         --  slot a frame storage operand names.  A Landin routine's result
-         --  slot is read by nothing but the leave's own operand.
-         for Index in 1 .. Slot_Count loop
-            declare
-               Slot : constant Landin.IR.Slot_Id :=
-                 Landin.IR.Slot_Id (Index);
-            begin
-               Eligible (Index) :=
-                 not Landin.IR.Is_Aggregate (Of_Unit, Item, Slot)
-                 and then not Landin.IR.Is_Array (Of_Unit, Item, Slot);
-            end;
-         end loop;
-         if C_Entry then
-            for Index in 1 .. Landin.IR.Parameter_Count (Of_Unit, Item)
-            loop
-               Eligible (Positive
-                 (Landin.IR.Nth_Parameter (Of_Unit, Item, Index))) :=
-                   False;
-            end loop;
-            if Landin.IR.Result_Slot (Of_Unit, Item) /= Landin.IR.No_Slot
-            then
-               Eligible (Positive
-                 (Landin.IR.Result_Slot (Of_Unit, Item))) := False;
-            end if;
-         end if;
-         for Index in 1 .. Landin.IR.Source_Alias_Count (Of_Unit, Item)
-         loop
-            declare
-               Place : constant Landin.IR.Storage :=
-                 Landin.IR.Nth_Source_Alias (Of_Unit, Item, Index).Place;
-            begin
-               --  An alias is described through its storage throughout.
-               case Place.Kind is
-                  when Landin.IR.Frame_Slot =>
-                     Eligible (Positive (Place.Slot)) := False;
-                  when Landin.IR.Runtime_Address =>
-                     Eligible (Positive (Place.Address)) := False;
-                  when Landin.IR.Module_Datum => null;
-               end case;
-            end;
-         end loop;
+         Landin.Backend.Placement.Measure (Of_Unit, Item, Speed, Facts_Of);
          for Index in 1 .. Value_Count loop
-            declare
-               Value : constant Landin.IR.Value_Id := Landin.IR.Value_Id
-                 (Index);
-               Op : constant Landin.IR.Opcode := Landin.IR.Op_Of
-                 (Of_Unit, Item, Value);
-               --  Assembly reads its inputs, and C transport its scalar
-               --  arguments and result, through their frame homes.  A
-               --  native call moves each from wherever it is.
-               Addressed : constant Boolean :=
-                 Op = Landin.IR.Assembly
-                 or else
-                   (Op in Landin.IR.Call | Landin.IR.Indirect_Call
-                    and then Landin.IR.Signature_Uses_C_ABI
-                      (Of_Unit,
-                       (if Op = Landin.IR.Indirect_Call
-                        then Landin.IR.Call_Signature (Of_Unit, Item, Value)
-                        else Landin.IR.Signature_Of
-                          (Of_Unit,
-                           Landin.IR.Callee_Of (Of_Unit, Item, Value)))));
-            begin
-               if Landin.IR.Result_Of (Of_Unit, Item, Value) in
-                 Landin.Types.Scalar_Name
-               then
-                  Traffic := Traffic + 1;
-               end if;
-               for Position in 1 .. Landin.IR.Operand_Count
-                 (Of_Unit, Item, Value)
-               loop
-                  declare
-                     Operand : constant Positive := Positive
-                       (Landin.IR.Nth_Operand
-                          (Of_Unit, Item, Value, Position));
-                  begin
-                     Lasts (Operand) := Natural'Max
-                       (Lasts (Operand), Starts (Index));
-                     Traffic := Traffic + 1;
-                     if Addressed then
-                        Result.Values (Operand).Address_Required := True;
-                     end if;
-                  end;
-               end loop;
-               if Op = Landin.IR.Evidence_Self then
-                  declare
-                     Projection : constant Landin.IR.Value_Id :=
-                       Landin.IR.Nth_Operand (Of_Unit, Item, Value, 1);
-                     Receiver : constant Positive := Positive
-                       (Landin.IR.Nth_Operand
-                          (Of_Unit, Item, Projection, 1));
-                  begin
-                     Lasts (Receiver) := Natural'Max
-                       (Lasts (Receiver), Starts (Index));
-                  end;
-               end if;
-               if Addressed then
-                  Result.Values (Index).Address_Required := True;
-               elsif Op = Landin.IR.Leave
-                 and then Landin.IR.Signature_Of (Of_Unit, Item)
-                   /= Landin.IR.No_Signature
-                 and then Landin.IR.Signature_Uses_C_ABI
-                   (Of_Unit, Landin.IR.Signature_Of (Of_Unit, Item))
-               then
-                  for Position in 1 .. Landin.IR.Operand_Count
-                    (Of_Unit, Item, Value)
-                  loop
-                     Result.Values (Positive (Landin.IR.Nth_Operand
-                       (Of_Unit, Item, Value, Position)))
-                         .Address_Required := True;
-                  end loop;
-               end if;
-               case Op is
-                  when Landin.IR.Load | Landin.IR.Store =>
-                     Count_Use
-                       (Landin.IR.Slot_Of (Of_Unit, Item, Value), Value);
-                  when Landin.IR.Load_Field | Landin.IR.Store_Field
-                     | Landin.IR.Load_Element
-                     | Landin.IR.Store_Element =>
-                     if Landin.IR.Reaches_A_Slot (Of_Unit, Item, Value)
-                     then
-                        Reach
-                          ((if Landin.IR.Is_Address
-                              (Of_Unit, Item,
-                               Landin.IR.Slot_Of (Of_Unit, Item, Value))
-                            then (Kind => Landin.IR.Runtime_Address,
-                                  Address => Landin.IR.Slot_Of
-                                    (Of_Unit, Item, Value))
-                            else (Kind => Landin.IR.Frame_Slot,
-                                  Slot => Landin.IR.Slot_Of
-                                    (Of_Unit, Item, Value))),
-                           Value);
-                     end if;
-                  when Landin.IR.Copy_Array | Landin.IR.Copy_Variant =>
-                     Reach (Landin.IR.Source_Of (Of_Unit, Item, Value),
-                            Value);
-                     Reach (Landin.IR.Destination_Of
-                              (Of_Unit, Item, Value), Value);
-                  when Landin.IR.Load_Variant_Tag
-                     | Landin.IR.Load_Variant_Field =>
-                     Reach (Landin.IR.Source_Of (Of_Unit, Item, Value),
-                            Value);
-                  when Landin.IR.Storage_Address
-                     | Landin.IR.Place_Address
-                     | Landin.IR.Clear_Array | Landin.IR.Fill_Array
-                     | Landin.IR.Select_Variant
-                     | Landin.IR.Store_Variant_Field =>
-                     Reach (Landin.IR.Destination_Of
-                              (Of_Unit, Item, Value), Value);
-                  when Landin.IR.Call | Landin.IR.Indirect_Call =>
-                     if Landin.IR.Failure_Slot_Of (Of_Unit, Item, Value)
-                       /= Landin.IR.No_Slot
-                     then
-                        Eligible (Positive (Landin.IR.Failure_Slot_Of
-                          (Of_Unit, Item, Value))) := False;
-                     end if;
-                  when Landin.IR.Assembly =>
-                     --  Assembly text may name any register.
-                     Has_Assembly := True;
-                  when others => null;
-               end case;
-            end;
+            Result.Values (Index).Address_Required :=
+              Facts_Of.Address_Required.Data (Index);
          end loop;
-         Saving := Traffic >= 12;
+         Saving := Facts_Of.Traffic >= 12;
          if not Has_Assembly then
-            declare
-               Stamp_Data, Next_Data : Count_Buffers.Buffer (Slot_Count);
-               Stamp : Counts renames Stamp_Data.Data.all;
-               Next_Store : Counts renames Next_Data.Data.all;
-            begin
-               for Position in reverse 1 .. Value_Count loop
-                  declare
-                     Value : constant Landin.IR.Value_Id :=
-                       Landin.IR.Value_Id (Sequence (Position));
-                     Block : constant Positive := Positive
-                       (Landin.IR.Block_Of (Of_Unit, Item, Value));
-                     Op : constant Landin.IR.Opcode :=
-                       Landin.IR.Op_Of (Of_Unit, Item, Value);
-                  begin
-                     if Op in Landin.IR.Load | Landin.IR.Store then
-                        declare
-                           Slot : constant Positive := Positive
-                             (Landin.IR.Slot_Of (Of_Unit, Item, Value));
-                        begin
-                           if Op = Landin.IR.Store then
-                              Stamp (Slot) := Block;
-                              Next_Store (Slot) := Position;
-                           else
-                              Written_After (Positive (Value)) :=
-                                (if Stamp (Slot) = Block
-                                 then Next_Store (Slot) else Natural'Last);
-                           end if;
-                        end;
-                     end if;
-                  end;
-               end loop;
-            end;
-            --  A parameter is written at entry too, and a Landin routine's
-            --  result slot read at its leave.
-            for Index in 1 .. Slot_Count loop
-               if Parameter_Of (Index) /= 0 then
-                  Uses (Index) := Uses (Index) + 1;
-               end if;
-            end loop;
-            if not C_Entry
-              and then Landin.IR.Result_Slot (Of_Unit, Item)
-                /= Landin.IR.No_Slot
-            then
-               Uses (Positive (Landin.IR.Result_Slot (Of_Unit, Item))) :=
-                 Uses (Positive (Landin.IR.Result_Slot (Of_Unit, Item))) + 1;
-            end if;
-            --  Size holds a source variable it gives a register there
-            --  throughout, as it holds one in its frame cell, so that a
-            --  debugger finds it anywhere in the routine, as x86-64's size
-            --  does.
-            if not Speed then
-               for Index in 1 .. Slot_Count loop
-                  if not Landin.IR.Liveness.Is_Empty (Spans (Index))
-                    and then Landin.IR.Declares
-                      (Of_Unit, Item, Landin.IR.Slot_Id (Index))
-                      /= Landin.IR.No_Declaration
-                  then
-                     Spans (Index) := (0, Value_Count);
-                  end if;
-               end loop;
-            end if;
             Place_Intervals;
             --  A slot loaded and stored in one block only, which stores it
             --  before reading it, and not placed over its interval, is
