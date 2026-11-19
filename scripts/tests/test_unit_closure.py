@@ -4,6 +4,7 @@ from pathlib import Path
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts"))
@@ -67,6 +68,55 @@ class ContextClauses(unittest.TestCase):
                          {"a", "b", "c"})
         self.assertEqual(unit_closure.closure(units, ["A"], cut=["B"]),
                          {"a"})
+
+    def parent_and_child(self):
+        """P's body withs Q; P.C withs R; S withs P.C."""
+        self.write("p.ads", "package P is\nend P;\n")
+        self.write("p.adb", "with Q;\npackage body P is\nend P;\n")
+        self.write("p-c.ads", "with R;\npackage P.C is\nend P.C;\n")
+        self.write("s.ads", "with P.C;\npackage S is\nend S;\n")
+        for name in "qr":
+            self.write(name + ".ads",
+                       f"package {name.upper()} is\nend {name.upper()};\n")
+        return unit_closure.read_units(self.sources)
+
+    def test_a_child_links_its_parents_body_withs(self):
+        # D1423: the spec and body of a unit are one, so a child, through
+        # its parent, links what the parent's body withs.
+        units = self.parent_and_child()
+        self.assertEqual(units["p"].withs, {"q"})
+        self.assertEqual(unit_closure.closure(units, ["P.C"]),
+                         {"p.c", "p", "q", "r"})
+
+    def test_a_cut_parent_of_a_kept_unit_is_refused(self):
+        units = self.parent_and_child()
+        for roots in (["P.C"], ["S"]):
+            with self.subTest(roots=roots), self.assertRaisesRegex(
+                    unit_closure.CutError,
+                    r"--cut P: the closure keeps its child P\.C, .*"
+                    r"brings P back: \d+ units"):
+                unit_closure.closure(units, roots, cut=["P"])
+        # A cut that no kept unit is a child of is honoured.
+        self.assertEqual(unit_closure.closure(units, ["P.C"], cut=["Q"]),
+                         {"p.c", "p", "r"})
+
+    def test_the_command_line_says_why_and_fails(self):
+        self.parent_and_child()
+        import contextlib
+        import io
+        said = io.StringIO()
+        with mock.patch.object(unit_closure.measure, "__defaults__",
+                               ((), None, (self.sources,))), \
+                contextlib.redirect_stderr(said), \
+                self.assertRaises(SystemExit) as stopped:
+            unit_closure.main(["--cut", "P", "S"])
+        self.assertEqual(stopped.exception.code, 2)
+        self.assertIn("a real link brings P back", said.getvalue())
+
+    def test_an_unknown_cut_is_named(self):
+        units = self.parent_and_child()
+        with self.assertRaisesRegex(KeyError, "no unit x"):
+            unit_closure.closure(units, ["S"], cut=["X"])
 
     def test_an_unknown_root_is_named(self):
         units = unit_closure.read_units(self.sources)
