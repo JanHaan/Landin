@@ -384,7 +384,7 @@ emulation, 22% of RV64's instructions.
 
 ### R16.22 — Cortex-M register allocation
 
-Status: planned
+Status: active
 Depends on: R16.10
 
 Cortex-M keeps every value in a stack home and forms each home's address in
