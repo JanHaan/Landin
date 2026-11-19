@@ -1331,7 +1331,7 @@ supported syntax.
 
 ### R22.61 — A finished `for` no longer holds its source
 
-Status: planned
+Status: active
 Depends on: none
 
 SR-1405, a checker defect met writing refine-build (its friction entry 3)
