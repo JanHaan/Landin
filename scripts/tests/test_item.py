@@ -354,6 +354,26 @@ class Promote(Clone):
         self.assertEqual(started, [(prefix + "1", ["--run", "5"]),
                                    (prefix + "2", ["--run", "5"])])
 
+    def test_run_in_another_directory_is_kept_and_reported(self):
+        elsewhere = self.top / "stream"
+        elsewhere.mkdir()
+        status, out = self.item("run", FIRST, "where", "--limit", "60",
+                                "--cwd", str(elsewhere), "--",
+                                sys.executable, "-c",
+                                "import os; print(os.getcwd())")
+        self.assertEqual(status, 0, out)
+        directory = item.item_directory(FIRST) / "runs" / "where"
+        subprocess.run([sys.executable,
+                        str(item.ROOT / "scripts/run_logged.py"),
+                        "--wait", str(directory), "--timeout", "60"],
+                       check=True, stdout=subprocess.DEVNULL)
+        self.assertIn(str(elsewhere.resolve()),
+                      (directory / "command.log").read_text())
+        self.assertEqual(item.load(FIRST)["runs"][0]["cwd"],
+                         str(elsewhere.resolve()))
+        status, out = self.item("resume", FIRST)
+        self.assertIn("in %s" % elsewhere.resolve(), out)
+
     def test_passed_runs_move_the_phase_on(self):
         head = self.commit("work")
         self.state["gates"].append(self.gate(head, "software"))

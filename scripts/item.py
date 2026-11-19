@@ -4,7 +4,7 @@
     python3 scripts/item.py start ITEM          # worktree, branch, brief, identities
     python3 scripts/item.py resume [ITEM]       # where a reopened session stands
     python3 scripts/item.py note ITEM TEXT      # one line in the item's journal
-    python3 scripts/item.py run ITEM NAME --limit S -- COMMAND ...
+    python3 scripts/item.py run ITEM NAME --limit S [--cwd DIR] -- COMMAND ...
     python3 scripts/item.py gate ITEM [--watch] # the gate runs of the branch head
     python3 scripts/item.py boards ITEM [--watch]  # dispatch scope=boards
     python3 scripts/item.py promote ITEM        # check the evidence, push to main
@@ -449,6 +449,10 @@ def run(arguments):
     command = arguments.command
     if not command:
         raise Refused("name the command after --")
+    where = Path(getattr(arguments, "cwd", None) or state["worktree"])
+    if not where.is_dir():
+        raise Refused("--cwd %s is not a directory" % where)
+    where = where.resolve()
     directory = item_directory(item) / "runs" / arguments.name
     if directory.exists():
         raise Refused("%s exists: name the run anew, or `run_logged.py --wait"
@@ -457,11 +461,13 @@ def run(arguments):
     subprocess.run([sys.executable, str(ROOT / "scripts/run_logged.py"),
                     "--output", str(directory), "--detach", "--limit",
                     str(arguments.limit), "--", *command],
-                   cwd=state["worktree"], check=True)
+                   cwd=where, check=True)
     state["runs"].append({"name": arguments.name, "directory": str(directory),
-                          "command": shlex.join(command), "started": stamp()})
+                          "command": shlex.join(command), "cwd": str(where),
+                          "started": stamp()})
     save(state)
-    journal(item, "run %s started: %s" % (arguments.name, shlex.join(command)))
+    journal(item, "run %s started in %s: %s" % (arguments.name, where,
+                                                 shlex.join(command)))
     print("wait: python3 scripts/run_logged.py --wait %s" % directory)
     return 0
 
@@ -831,9 +837,10 @@ def describe(state, full=False):
     minutes = (time.time() - last_activity(state)) / 60
     out.append("  last activity %d min ago" % minutes)
     for entry in state["runs"]:
-        out.append("  run %s: %s (%s)" % (entry["name"],
-                                          run_state(entry["directory"]),
-                                          entry["directory"]))
+        out.append("  run %s: %s (%s)%s" % (
+            entry["name"], run_state(entry["directory"]), entry["directory"],
+            "" if entry.get("cwd", str(worktree)) == str(worktree)
+            else ", in " + entry["cwd"]))
     for entry in state["gates"]:
         out.append("  gate run %s %s on %s: %s %s" % (
             entry["run"], entry["kind"], entry["commit"][:12],
@@ -1000,8 +1007,10 @@ def report(arguments):
             entry["run"], entry["kind"], entry["commit"][:12],
             entry.get("conclusion") or entry.get("status", "")))
     for entry in state["runs"]:
-        lines.append("  %s: %s, %s (log %s)" % (
-            entry["name"], entry["command"], run_state(entry["directory"]),
+        lines.append("  %s: %s%s, %s (log %s)" % (
+            entry["name"], entry["command"],
+            "" if entry.get("cwd", state["worktree"]) == state["worktree"]
+            else " in " + entry["cwd"], run_state(entry["directory"]),
             Path(entry["directory"]) / "command.log"))
     lines += ["  TODO what each shows; FILTERED or HOST-ONLY where it is.",
               "", "NOT DONE:", "  TODO, or nothing.", "", "STATE:",
@@ -1076,6 +1085,9 @@ def main(argv=None):
     sub.add_argument("name")
     sub.add_argument("--limit", type=int, required=True,
                      help="seconds after which the run is ended")
+    sub.add_argument("--cwd", metavar="DIR", help="the directory the command"
+                     " runs in, such as a stream's worktree (the item's"
+                     " worktree)")
     sub.set_defaults(handler=run)
 
     sub = commands.add_parser("gate", help="record and show the gate runs of"

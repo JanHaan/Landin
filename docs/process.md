@@ -110,7 +110,7 @@ puts the steps in order:
 |---|---|---|
 | start | `item.py start ITEM` | refuses a complete item or one with an incomplete dependency; makes `../Landin-ITEM` and its branch from `origin/main`; reserves blocks of decision, row and question numbers no other running item of the clone holds, which `register_next.py` then gives out first; marks the item active, moves a pointer naming it, commits that as `Gate: explanatory`; writes `brief.md` |
 | after a reopen | `item.py resume [ITEM]` | the worktree, every recorded run as running, finished or lost, the gate runs, the journal's last lines and the next step |
-| along the way | `item.py note ITEM TEXT`, `item.py run ITEM NAME --limit S -- COMMAND` | a dated journal line; a detached `run_logged.py` run kept in the state |
+| along the way | `item.py note ITEM TEXT`, `item.py run ITEM NAME --limit S [--cwd DIR] -- COMMAND` | a dated journal line; a detached `run_logged.py` run kept in the state, in the item's worktree or DIR |
 | gate | `item.py gate ITEM [--main] [--watch]` | records the pushed head's runs, or main's after promotion, and follows them with `gate_watch.py --all` in a detached run |
 | boards | `item.py boards ITEM [--watch]` | dispatches `scope=boards` on the pushed head, records the run and with `--watch` follows it in a detached run |
 | promotion | `item.py promote ITEM [--dry-run] [--partial]` | pushes the head to main only as the [promotion rule](#physical-boards-and-promotion) allows: a passed push gate on it with its whole job listing, boards on its tree or before only explanatory commits, main its ancestor, the item complete; refuses an item that says `Promotion: maintainer` |

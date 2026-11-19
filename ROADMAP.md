@@ -847,7 +847,7 @@ language, D1383 and D1385 amended, on the maintainer's answer of
 2026-11-18, and Q-19 is answered. Pinned by the commands suite's `the
 dispatcher` on the fake host and `scripts/tests/test_cli_native.py`'s
 contributed tool on PATH. Found on the way: `item.py run` runs only in the
-item's worktree (SR-1353), and `unit_closure.py --cut` reports closures no
+item's worktree (`SR-1353`), and `unit_closure.py --cut` reports closures no
 link can have (SR-1354, scheduled on R18.70).
 
 ### R18.60 — `refine dap`
