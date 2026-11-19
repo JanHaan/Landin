@@ -1,6 +1,6 @@
 {
   "status": "passed",
-  "image_sha256": "b5ebab4adc0f398e235d576e2e72451761bf81f87756bbc27adb2390a99701a6",
+  "image_sha256": "0618fa4c4caffa5c4f685108346d459da38b10dab79dca224ccf7f9dbda40dff",
   "image_name": "board.elf",
   "flash_readback": "matches",
   "verdicts": {
@@ -28,7 +28,7 @@
       "held_by_fifo": 32,
       "restarts": 3,
       "dma_completions": 2,
-      "timer_events": 1569,
+      "timer_events": 1555,
       "echoed": 11202,
       "sent": 11572
     },
@@ -43,23 +43,48 @@
     "usb_events": 1,
     "trans_count": 1094
   },
-  "uart_sha256": "d5a59adbae69e63dbe01001e7668e80a8753a6361a59918a6cad639483eae219",
+  "uart_sha256": "b9bc98d84a64a14367726f3b0cb4c89039928e956670f658ff449e46a3cc53c3",
   "mode": "boot",
   "fixed_restore": {
     "status": "passed",
-    "sha256": "dc4a18c992235303e77223963b86dc94a969479c38b23dbcb27632a13b028e27",
+    "sha256": "50892c1671c73f66da9c68332b681ed73659c1f3b024be8e9a2d98d7dd709556",
     "marker": {
       "symbol": "_landin_fixed_ready",
       "address": 536870912,
       "value": 1279678513,
-      "elf_sha256": "dc4a18c992235303e77223963b86dc94a969479c38b23dbcb27632a13b028e27"
+      "elf_sha256": "50892c1671c73f66da9c68332b681ed73659c1f3b024be8e9a2d98d7dd709556"
     }
   },
-  "seconds": 45.162,
+  "seconds": 79.986,
   "kernel_usb": {
-    "since": 1794564827.0038238,
-    "until": 1794564872.148414,
-    "lines": [],
+    "since": 1795075608.7989767,
+    "until": 1795075688.7653189,
+    "lines": [
+      {
+        "time": 1795075622.435129,
+        "text": "rigpi kernel: usb 1-1.2.3.4.4: USB disconnect, device number 92"
+      },
+      {
+        "time": 1795075625.052676,
+        "text": "rigpi kernel: usb 1-1.2.3.4.4: new full-speed USB device number 114 using xhci_hcd"
+      },
+      {
+        "time": 1795075625.156687,
+        "text": "rigpi kernel: usb 1-1.2.3.4.4: ch341-uart converter now attached to ttyUSB4"
+      },
+      {
+        "time": 1795075641.963251,
+        "text": "rigpi kernel: usb 1-1.2.3.4.4: USB disconnect, device number 114"
+      },
+      {
+        "time": 1795075644.648855,
+        "text": "rigpi kernel: usb 1-1.2.3.4.4: new full-speed USB device number 115 using xhci_hcd"
+      },
+      {
+        "time": 1795075644.752691,
+        "text": "rigpi kernel: usb 1-1.2.3.4.4: ch341-uart converter now attached to ttyUSB4"
+      }
+    ],
     "status": "captured"
   },
   "sent_sha256": "42d30ba70ef5520bca6b4ea8f3fa35323f4099963fccd9c112148a17b4b25365",
@@ -75,7 +100,7 @@
       "h": "00002bc2",
       "c": "00000003",
       "d": "00000002",
-      "m": "00000621",
+      "m": "00000613",
       "u": "00000001",
       "p": "0000001e",
       "n": "00000446",
