@@ -125,8 +125,8 @@ package body Landin.Adapter.MI is
                end loop;
                Seen.Append (Name);
                J.Name (Out_Of, (if Count = 0 then Name
-                                else Name & "#" & Count'Image
-                                  (2 .. Count'Image'Last)));
+                                else Name & "#" & Natural'Image (Count + 1)
+                                  (2 .. Natural'Image (Count + 1)'Last)));
                Expect ('=');
                Value;
             end;

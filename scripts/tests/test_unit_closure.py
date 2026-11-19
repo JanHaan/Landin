@@ -33,6 +33,36 @@ class LibraryClosure(unittest.TestCase):
                          {"Landin", "Landin.Paths"})
 
 
+class DapClosure(unittest.TestCase):
+    """R18.60: `refine-dap` links no front end (D1423, D1523).
+
+    It reads source tables through Landin.Site_Tables, never
+    Landin.Source_Maps, which writes them from a compilation; finds the
+    library through Landin.Library; and frames its messages with the
+    language server's transport, whose parent is a pure specification.
+    A unit added here is a choice to make in review: one of the front
+    end, the driver or `Landin.Commands`, whose body withs the whole
+    compiler, would link all of it.  The generated Landin.Build_Identity,
+    which names the source digest `--describe` answers with, adds
+    Landin.Targets.Selection, Landin.Targets and Landin.Evidence, the
+    host's target facts; a build tree's objects show it.
+    """
+
+    def test_the_adapter_links_eighteen_units(self):
+        units = unit_closure.read_units()
+        members = {units[key].name
+                   for key in unit_closure.closure(units, ["Refine_Dap"])}
+        self.assertEqual(members, {
+            "Refine_Dap", "Landin", "Landin.Adapter", "Landin.Adapter.MI",
+            "Landin.Adapter.Sessions", "Landin.Diagnostics",
+            "Landin.Diagnostics.Catalogue", "Landin.Json", "Landin.Library",
+            "Landin.Paths", "Landin.Platform", "Landin.Platform.Native",
+            "Landin.Platform.Native.Byte_Strings",
+            "Landin.Platform.Native.Tools", "Landin.Server",
+            "Landin.Server.Transport", "Landin.Site_Tables",
+            "Landin.Source"})
+
+
 class ContextClauses(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory(prefix="landin-units-")
