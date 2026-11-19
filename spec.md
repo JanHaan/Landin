@@ -20332,6 +20332,40 @@ lock with a longer limit, which a held lock outlasts.
 **Pinned by** `compiler/tests/test_compile_publication.py`'s
 `host-foreign-entries`; no control runs as a second user.
 
+### D1583 — A running build's workspace lock is waited for while that build is alive
+
+**D1049 said** that the inspector's shared lock is asked for without
+waiting, for two seconds, and that a lock still held then refuses the
+output. Builds of different outputs into one directory, as `make -j` and
+the harness's runtime fixtures start them, inspect each other's live
+workspaces, and a running build held its workspace's lock across the fsync
+of the workspace directory, which a loaded host's journal can stretch past
+two seconds. One build then refused the other's output with L0005 in words
+that read as a stale lock: gate run 44424959169's first attempt, and
+`scripts/measure.py`'s concurrent builds, which were moved into a directory
+each until this was decided.
+
+**Chosen:** a build holds the lock only around the rename that publishes a
+destination record and around the removal of its workspace, and syncs the
+directory after releasing it. An inspector that has waited two seconds asks
+whether a destination record of that workspace carries the write lease its
+producer keeps while it runs, the same query D907's inspection makes; while
+one does, it waits on for up to a minute, cancellable, and a lock held past
+that is refused as the running build's. A workspace with no live producer
+is refused after two seconds as D1049 says, in words that say no running
+build holds it.
+
+**The alternatives:** a longer bound for every lock, which D1049 rejected
+because a held lock outlasts it; no bound while the producer is alive,
+which a stopped build would turn into a hang; and an inspection without the
+lock that retries when a record appears during its scan, which re-opens the
+race the lock was added to close.
+
+**Pinned by** `compiler/tests/test_compile_publication.py`'s
+`host-concurrent-compiles`, a live producer's lock held for four seconds
+and twelve compiles into one directory started together three times, and
+its `host-foreign-entries`, a lock with no producer still refused.
+
 ### D1050 — A tool runs in a directory of its own beside the stage
 
 **D907 said** that tool output uses the pinned staging directory, and the

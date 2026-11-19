@@ -239,9 +239,12 @@ would be replaced must be readable, since its bytes are what a failed build
 puts back. A relative output needs a working directory that still exists.
 
 An entry of the output directory named `.refine-publication-...` is
-inspected only when it is a directory of the invoking user's. One that
-cannot be opened, or whose lock another process holds, is refused in those
-words: make it readable or wait, inspect it, and remove it.
+inspected only when it is a directory of the invoking user's. Builds of
+different outputs may share a directory and run at once: each waits while
+another running build holds its workspace's lock, for up to a minute
+(D1583). A workspace that cannot be opened, or whose lock is held by a
+process that is not a running build, is refused in those words: make it
+readable or wait, inspect it, and remove it.
 
 A preparation the host refuses for a resource, such as the file-size limit
 or a full disk, says so and removes the publication workspace it made when

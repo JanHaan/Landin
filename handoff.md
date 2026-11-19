@@ -266,7 +266,7 @@ names. The register is one file a row under `roadmap/register/`, and roadmap
 identities are cited in `ROADMAP.md` and the files under `roadmap/` and
 nowhere else.
 
-**Current roadmap work: R18.71 — Concurrent compiles into one directory.**
+**Next roadmap item: R18.72 — A contributed `refine build` (planned).**
 
 ## Versions
 

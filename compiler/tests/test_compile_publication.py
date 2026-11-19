@@ -400,13 +400,68 @@ def host_controls(refine, root, env, source, driver):
         return dict(exit_status=result.returncode, left=workspaces(work),
                     stderr=result.stderr.decode(errors='replace'))
 
+    def concurrent_compiles(work):
+        # Builds of different outputs into one directory at once, as make -j
+        # starts them, each inspect the others' workspaces.  A running
+        # build's lock, held longer than an idle one is waited for, as a
+        # loaded host's journal makes a rename or a removal take, is waited
+        # for while its destination record shows the build alive; and a
+        # dozen compiles started together, round after round, all publish.
+        live = work / '.refine-publication-live'
+        for part in ('', 'stage', 'recovery', 'work'):
+            (live / part).mkdir(exist_ok=True)
+        record = live / 'destination-1'
+        record.write_text('LANDIN-PUBLICATION-1\n7\nother.s\nlogical=other.s\n'
+                          'END-LANDIN-PUBLICATION-1\n')
+        lease = os.open(record, os.O_RDWR)
+        lock = os.open(live, os.O_RDONLY)
+        try:
+            fcntl.lockf(lease, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            fcntl.flock(lock, fcntl.LOCK_EX)
+            waiting = subprocess.Popen(
+                [str(refine), 'compile', str(source), '--emit', 'asm', '-o',
+                 'waited.s'], cwd=work, env=env, stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE)
+            try:
+                waiting.wait(timeout=4)
+                early = True
+            except subprocess.TimeoutExpired:
+                early = False
+            fcntl.flock(lock, fcntl.LOCK_UN)
+            _, waited_stderr = waiting.communicate(timeout=60)
+        finally:
+            os.close(lock)
+            os.close(lease)
+        shutil.rmtree(live)
+        held = (not early and waiting.returncode == 0
+                and (work / 'waited.s').is_file())
+        refused = []
+        for round_number in range(3):
+            builds = [(index, subprocess.Popen(
+                [str(refine), 'compile', str(source), '--keep-asm', '-o',
+                 'program-%d-%d' % (round_number, index)],
+                cwd=work, env=env, stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE)) for index in range(12)]
+            for index, build in builds:
+                _, stderr = build.communicate(timeout=120)
+                name = 'program-%d-%d' % (round_number, index)
+                if (build.returncode != 0 or not (work / name).is_file()
+                        or not (work / (name + '.s')).is_file()):
+                    refused.append(dict(output=name, status=build.returncode,
+                                        stderr=stderr.decode(errors='replace')))
+        if held and not refused and not workspaces(work):
+            return None
+        return dict(early=early, waited_status=waiting.returncode,
+                    waited=waited_stderr.decode(errors='replace'),
+                    refused=refused, left=workspaces(work))
+
     return [('host-' + control.__name__.replace('_', '-'), control)
             for control in (output_modes, unchanged_output_mode,
                             foreign_entries, refusal_reasons, descriptor_limit,
                             descriptor_limit_link, replaced_capture,
                             closed_pipe_run, nul_in_path, tool_litter,
                             directory_for_a_file, removed_working_directory,
-                            file_size_signal)]
+                            file_size_signal, concurrent_compiles)]
 
 
 def main():

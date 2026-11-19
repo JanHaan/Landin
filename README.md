@@ -338,7 +338,7 @@ run records and what the gate checks for each target.
   manager, self-hosting, a browser target, dates and times in the library
   and every release decision stay outside it.
 
-**Current roadmap work: R18.71 — Concurrent compiles into one directory.**
+**Next roadmap item: R18.72 — A contributed `refine build` (planned).**
 
 ## Questions, bugs and ideas
 

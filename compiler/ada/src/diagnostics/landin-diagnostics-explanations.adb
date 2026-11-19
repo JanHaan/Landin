@@ -156,9 +156,13 @@ package body Landin.Diagnostics.Explanations is
                & LF
                & "An entry of the output directory named `.refine-publicat"
                & "ion-...` is inspected only when it is a directory of the"
-               & " invoking user's. One that cannot be opened, or whose lo"
-               & "ck another process holds, is refused in those words: mak"
-               & "e it readable or wait, inspect it, and remove it."
+               & " invoking user's. Builds of different outputs may share "
+               & "a directory and run at once: each waits while another ru"
+               & "nning build holds its workspace's lock, for up to a minu"
+               & "te (D1583). A workspace that cannot be opened, or whose "
+               & "lock is held by a process that is not a running build, i"
+               & "s refused in those words: make it readable or wait, insp"
+               & "ect it, and remove it."
                & LF
                & LF
                & "A preparation the host refuses for a resource, such as t"
