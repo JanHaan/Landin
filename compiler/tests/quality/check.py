@@ -258,15 +258,14 @@ def check_hosted_measurements(measurements: dict[str, dict]) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--refine", type=Path, required=True)
+    sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'scripts'))
+    import lane_refine  # the --refine every lane takes
+    lane_refine.argument(parser)
     parser.add_argument("--toolchain", type=Path, required=True,
                         help="checksum-pinned Linux GNAT installation")
     parser.add_argument("--output", type=Path, required=True,
                         help="directory for retained measurement evidence")
     args = parser.parse_args()
-    sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'scripts'))
-    import refine_revision
-    refine_revision.warn(args.refine)  # is it this checkout's?
     require(platform.system() == "Linux" and platform.machine() == "x86_64",
             "object quality requires Linux x86-64; no skip is a pass")
     refine = args.refine.resolve(strict=True)

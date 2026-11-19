@@ -609,7 +609,8 @@ def add_commands(commands) -> None:
     one.add_argument("--json", help="write every run's result here")
     one.set_defaults(run=run_count)
     noise = commands.add_parser("noise", help="count every workload repeatedly")
-    noise.add_argument("--refine", type=Path, required=True)
+    import lane_refine  # the --refine every lane takes
+    lane_refine.argument(noise)
     noise.add_argument("--output", required=True)
     noise.add_argument("--runs", type=int, default=5)
     noise.add_argument("--profile", default="speed-auto", help="OPTIMIZE-SPECIALIZE")
@@ -660,9 +661,6 @@ def parse(parser_, argv=None):
 
 def main(argv=None) -> int:
     args = parse(parser(), argv)
-    if getattr(args, "refine", None):
-        import refine_revision
-        refine_revision.warn(args.refine)  # is it this checkout's?
     try:
         return args.run(args)
     except Failure as error:

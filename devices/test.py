@@ -19,7 +19,10 @@ vendor's own C headers, which refine never reads.
     python3 devices/test.py --refine PATH --require-inputs
     python3 devices/test.py --refine PATH --offline   # the cache alone
 
-Without --refine, $LANDIN_REFINE names the compiler.  The regeneration
+Without --refine, $LANDIN_REFINE names the compiler.  It is `refine`, which
+runs `refine svd`, or the split command `refine-svd` itself, which the
+cases then run directly; the consumer cases, which compile, use the refine
+installed beside it (scripts/lane_refine.py).  The regeneration
 tests are skipped, and say so, when there is none, unless --require-inputs
 is given, which the gate gives.  With --offline no input is fetched: a
 case whose input the cache lacks fails, naming the input and where the
@@ -46,6 +49,7 @@ ROOT = HERE.parent
 sys.path.insert(0, str(ROOT / 'scripts'))
 sys.path.insert(0, str(HERE))
 import fetch_inputs  # noqa: E402
+import lane_refine  # noqa: E402
 
 POLICIES = HERE / 'policies'
 GENERATED = HERE / 'generated'
@@ -367,9 +371,20 @@ def requires_refine(case):
     return guarded
 
 
+def svd_command():
+    """`refine svd`, or `refine-svd` when that is the binary named."""
+    return lane_refine.command(REFINE, 'svd')
+
+
+def compiler():
+    """The refine that compiles: the one named, or the refine installed
+    beside a `refine-svd`."""
+    return str(lane_refine.dispatcher(REFINE))
+
+
 def run_svd(policy_path, svd, out, expect=0):
     result = subprocess.run(
-        [str(REFINE), 'svd', '--policy=' + str(policy_path),
+        [*svd_command(), '--policy=' + str(policy_path),
          '--out-dir=' + str(out), str(svd)],
         capture_output=True, text=True, timeout=120)
     if result.returncode != expect:
@@ -442,9 +457,16 @@ class PublicationSafety(unittest.TestCase):
             'policies': {'GPIO.CTRL': {'read': 'normal', 'write': 'normal',
                                       'reserved': 'zero'}}}))
         out.mkdir()
-        command = [str(REFINE), 'svd', '--policy=' + str(policy),
+        command = [*svd_command(), '--policy=' + str(policy),
                    '--out-dir=' + str(out), str(svd)]
         return svd, policy, out, command
+
+    #  Where make_tree's command holds its --policy and its --out-dir.
+    def policy_at(self):
+        return len(svd_command())
+
+    def out_at(self):
+        return len(svd_command()) + 1
 
     def refused(self, command):
         process = subprocess.run(command, capture_output=True, text=True)
@@ -467,17 +489,19 @@ class PublicationSafety(unittest.TestCase):
                     source = out / 'toy/correspondence.json'
                     source.parent.mkdir(parents=True)
                     shutil.move(policy, source)
-                    command[2] = '--policy=' + str(source)
+                    command[self.policy_at()] = '--policy=' + str(source)
                 elif kind in ('response', 'nested-response'):
                     source = out / 'toy/correspondence.json'
                     source.parent.mkdir(parents=True)
-                    source.write_text(shlex.join(command[1:]) + '\n')
+                    #  The words after the command's name: `refine svd @FILE`
+                    #  and `refine-svd @FILE` each read their own (D1484).
+                    source.write_text(shlex.join(command[self.policy_at():]) + '\n')
                     if kind == 'nested-response':
                         outer = root / 'outer.rsp'
                         outer.write_text('@' + shlex.quote(str(source)) + '\n')
-                        command = [str(REFINE), '@' + str(outer)]
+                        command = [*svd_command(), '@' + str(outer)]
                     else:
-                        command = [str(REFINE), '@' + str(source)]
+                        command = [*svd_command(), '@' + str(source)]
                 else:
                     initial = subprocess.run(command, capture_output=True, text=True)
                     self.assertEqual(initial.returncode, 0, initial.stderr)
@@ -489,11 +513,11 @@ class PublicationSafety(unittest.TestCase):
                     manifest.write_text(json.dumps(entries))
                 control = root / 'control'
                 control.mkdir()
-                accepted_command = ([str(REFINE), 'svd', '--policy=' + str(policy),
+                accepted_command = ([*svd_command(), '--policy=' + str(policy),
                                      '--out-dir=' + str(control), str(svd)]
                                     if kind in ('response', 'nested-response')
                                     else list(command))
-                accepted_command[3] = '--out-dir=' + str(control)
+                accepted_command[self.out_at()] = '--out-dir=' + str(control)
                 accepted = subprocess.run(accepted_command, capture_output=True, text=True)
                 self.assertEqual(accepted.returncode, 0, accepted.stderr)
                 original = source.read_bytes()
@@ -515,7 +539,7 @@ class PublicationSafety(unittest.TestCase):
                 sentinel.write_text('foreign bytes\n')
                 if kind in ('root', 'root-trailing'):
                     if kind == 'root-trailing':
-                        command[3] = '--out-dir=' + str(out) + '///'
+                        command[self.out_at()] = '--out-dir=' + str(out) + '///'
                     out.rmdir()
                     out.symlink_to(outside, target_is_directory=True)
                     link = out
@@ -1388,7 +1412,7 @@ class Stm32h753Oracles(unittest.TestCase):
             self.skipTest('no Cortex-M driver: pass --toolchain')
         with tempfile.TemporaryDirectory() as root:
             elf = Path(root) / 'consumer.elf'
-            command = [str(REFINE), 'compile', '--root=' + str(HERE),
+            command = [compiler(), 'compile', '--root=' + str(HERE),
                        '--root=' + str(GENERATED),
                        '--target=cortex-m0', '--level=armv7e-m',
                        '--firmware-entry=start', str(HERE / 'consumers/stm32h753'),
@@ -1456,7 +1480,7 @@ class Stm32h753Oracles(unittest.TestCase):
             self.skipTest('no Cortex-M driver: pass --toolchain')
         with tempfile.TemporaryDirectory() as root:
             elf = Path(root) / 'consumer.elf'
-            command = [str(REFINE), 'compile', '--root=' + str(HERE),
+            command = [compiler(), 'compile', '--root=' + str(HERE),
                        '--root=' + str(GENERATED),
                        '--target=cortex-m0', '--level=armv7e-m',
                        '--firmware-entry=start', str(HERE / 'consumers/stm32h753_cached'),
@@ -2864,8 +2888,7 @@ def main():
     global OFFLINE, REFINE, REQUIRE, TOOLCHAIN
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument('--refine', type=Path,
-                        default=os.environ.get('LANDIN_REFINE'))
+    lane_refine.argument(parser, environment=True, required=False)
     parser.add_argument('--toolchain', type=Path,
                         help='the Cortex-M C driver the consumer links with')
     parser.add_argument('--require-inputs', action='store_true',
@@ -2873,9 +2896,6 @@ def main():
     parser.add_argument('--offline', action='store_true',
                         help='use the input cache alone; fetch nothing')
     args, rest = parser.parse_known_args()
-    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
-    import refine_revision
-    refine_revision.warn(args.refine)  # is it this checkout's?
     REFINE = Path(args.refine).resolve() if args.refine else None
     REQUIRE = args.require_inputs
     OFFLINE = args.offline

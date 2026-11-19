@@ -261,12 +261,11 @@ class NativeReportIdentity(unittest.TestCase):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--refine", type=Path, required=True)
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'scripts'))
+    import lane_refine  # the --refine every lane takes
+    lane_refine.argument(parser)
     parser.add_argument("--directory", type=Path)
     args, tests = parser.parse_known_args()
-    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'scripts'))
-    import refine_revision
-    refine_revision.warn(args.refine)  # is it this checkout's?
     REFINE = args.refine.resolve(strict=True)
     DIRECTORY = args.directory
     unittest.main(argv=[__file__, *tests])

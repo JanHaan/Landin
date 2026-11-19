@@ -569,7 +569,9 @@ def main():
                ' --program runs a source file or module directory of your own at the'
                ' corpus\'s profiles, or the --profiles named, and prints what it returned'
                ' or where it trapped; no oracle is held.')
-    parser.add_argument('--refine', required=True, type=Path)
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'scripts'))
+    import lane_refine  # the --refine every lane takes
+    lane_refine.argument(parser)
     parser.add_argument('--qemu', type=Path,
                         help='the QEMU a run without --tools uses, its tools from PATH')
     parser.add_argument('--tools', type=Path,
@@ -598,9 +600,6 @@ def main():
     parser.add_argument('--root', action='append', default=[],
                         help='a module root for --program, passed to refine')
     args = parser.parse_args()
-    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'scripts'))
-    import refine_revision
-    refine_revision.warn(args.refine)  # is it this checkout's?
     if args.program and (args.all or args.fixture):
         parser.error('--program runs programs of your own; --fixture and --all select'
                      ' corpus rows')

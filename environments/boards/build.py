@@ -225,15 +225,14 @@ def build_all(boards, modes, refine, output, records='strict'):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument('--refine', type=Path, required=True)
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'scripts'))
+    import lane_refine  # the --refine every lane takes
+    lane_refine.argument(parser)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--board', choices=BOARDS, action='append', help='repeat to select boards; default all of them')
     parser.add_argument('--mode', choices=('boot', 'ram', 'both'), default='boot')
     parser.add_argument('--records', choices=('strict', 'report'), default='strict')
     args = parser.parse_args(argv)
-    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'scripts'))
-    import refine_revision
-    refine_revision.warn(args.refine)  # is it this checkout's?
     try:
         return build_all(args.board or BOARDS, ('boot', 'ram') if args.mode == 'both' else (args.mode,),
                          args.refine, args.output, args.records)

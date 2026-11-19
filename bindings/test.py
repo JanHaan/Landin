@@ -6,6 +6,11 @@
     python3 bindings/test.py --refine PATH --offline
     python3 bindings/test.py --refine PATH --write
 
+PATH is `refine`, which runs `refine bindings`, or the split command
+`refine-bindings` itself, which the cases then run directly; the cases
+that check what was generated use the refine installed beside it
+(scripts/lane_refine.py).
+
 Every case runs the refine named, and the external Clang that $CLANG names,
 on headers and policies written here; the cases that only a fake host
 reaches are the compiler's own, in its bindings suite.  Without $CLANG it is
@@ -44,6 +49,7 @@ from typing import Any
 HERE = pathlib.Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "scripts"))
 import fetch_inputs  # noqa: E402
+import lane_refine  # noqa: E402
 #  The compiler under test: --refine PATH, or $LANDIN_REFINE.
 REFINE = os.environ.get("LANDIN_REFINE")
 #  Whether --offline was given: the cases then use the input cache alone.
@@ -199,7 +205,7 @@ def regenerate(name: str, work: pathlib.Path, clang: pathlib.Path,
         (work / "includes").mkdir()
         (work / "includes" / "stdlib.h").write_text(STDLIB_H, encoding="utf-8")
         command = [
-            refine(), "bindings", "--clang", str(clang),
+            *bindings(), "--clang", str(clang),
             "--target", TARGET_NAME, "--sysroot", str(work / "sysroot"),
             "--policy", str(directory / "policy.json"), "--out-dir", str(output),
             "--system-include-dir", str(work / "includes"),
@@ -218,7 +224,7 @@ def regenerate(name: str, work: pathlib.Path, clang: pathlib.Path,
                     if pinned is not None else directory / logical)
             headers.append(f"{logical}={path}")
         command = [
-            refine(), "bindings", "--clang", str(clang),
+            *bindings(), "--clang", str(clang),
             "--target", CORTEX_NAME, "--policy", str(directory / "policy.json"),
             "--out-dir", str(output),
             "--include-dir", str(cache / fixture["include"]),
@@ -277,6 +283,17 @@ def refine() -> str:
     if found is None:
         raise RuntimeError(f"refine {REFINE!r} is not an executable")
     return str(pathlib.Path(found).resolve())
+
+
+def bindings() -> list[str]:
+    """`refine bindings`, or `refine-bindings` when that is the binary named."""
+    return lane_refine.command(refine(), "bindings")
+
+
+def compiler() -> str:
+    """The refine that checks: the one named, or the refine installed
+    beside a `refine-bindings`."""
+    return str(lane_refine.dispatcher(refine()))
 
 
 def diagnostic(message: str) -> str:
@@ -443,7 +460,7 @@ class PolicyNameTests(unittest.TestCase):
                     policy_path.write_text(json.dumps(selected), encoding="utf-8")
                     output = root / f"generated-{index}"
                     process = subprocess.run([
-                        refine(), "bindings", "--clang", sys.executable,
+                        *bindings(), "--clang", sys.executable,
                         "--target", TARGET_NAME, "--sysroot", str(root),
                         "--policy", str(policy_path),
                         "--out-dir", str(output), str(header),
@@ -484,7 +501,7 @@ class PolicyNameTests(unittest.TestCase):
                     policy_path = root / f"policy-{index}.json"
                     policy_path.write_text(json.dumps(selected), encoding="utf-8")
                     process = subprocess.run([
-                        refine(), "bindings", "--clang", clang,
+                        *bindings(), "--clang", clang,
                         "--target", TARGET_NAME, "--sysroot", str(root),
                         "--policy", str(policy_path),
                         "--out-dir", str(root / f"generated-{index}"),
@@ -526,7 +543,7 @@ class GeneratorTests(unittest.TestCase):
     def command(self, parent: pathlib.Path, sysroot: pathlib.Path,
                 includes: pathlib.Path, output: pathlib.Path) -> list[str]:
         return [
-            refine(), "bindings", "--clang", str(self.clang),
+            *bindings(), "--clang", str(self.clang),
             "--target", TARGET_NAME, "--sysroot", str(sysroot),
             "--policy", str(parent / "policy.json"), "--out-dir", str(output),
             "--system-include-dir", str(includes),
@@ -1712,7 +1729,7 @@ int main(void) {
             "end main\n", encoding="utf-8")
         for module in (output, consumer):
             checked = subprocess.run([
-                refine(), "check", "--target=" + TARGET_NAME, "--link=libc",
+                compiler(), "check", "--target=" + TARGET_NAME, "--link=libc",
                 "--root=" + str(source),
                 "--root=" + str(HERE.parent), str(module),
             ], capture_output=True, text=True)
@@ -1905,7 +1922,7 @@ int main(void) {{
             "end main\n", encoding="utf-8")
         for module in (output, consumer):
             checked = subprocess.run([
-                refine(), "check", "--target=" + TARGET_NAME, "--link=libc",
+                compiler(), "check", "--target=" + TARGET_NAME, "--link=libc",
                 "--root=" + str(source),
                 "--root=" + str(HERE.parent), str(module),
             ], capture_output=True, text=True)
@@ -2429,7 +2446,7 @@ int main(void) { return f(36) != 37; }
     def checked(self, source: pathlib.Path, module: pathlib.Path) -> None:
         """The generated module is one refine accepts."""
         done = subprocess.run([
-            refine(), "check", "--target=" + TARGET_NAME, "--link=libc",
+            compiler(), "check", "--target=" + TARGET_NAME, "--link=libc",
             "--root=" + str(source), "--root=" + str(HERE.parent), str(module),
         ], capture_output=True, text=True)
         self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
@@ -3148,13 +3165,16 @@ int main(void) { return f(36) != 37; }
                     environment["PATH"] = str(output) + os.pathsep + environment["PATH"]
                 elif kind in ("response", "nested-response"):
                     source = output / "exports.h"
-                    source.write_text(shlex.join(command[1:]) + "\n")
+                    #  The words after the command's name: `refine bindings
+                    #  @FILE` and `refine-bindings @FILE` each read their own
+                    #  (D1484).
+                    source.write_text(shlex.join(command[len(bindings()):]) + "\n")
                     if kind == "nested-response":
                         outer = parent / "outer.rsp"
                         outer.write_text("@" + shlex.quote(str(source)) + "\n")
-                        command = [refine(), "@" + str(outer)]
+                        command = [*bindings(), "@" + str(outer)]
                     else:
-                        command = [refine(), "@" + str(source)]
+                        command = [*bindings(), "@" + str(source)]
                 elif kind == "hardlink-header":
                     source = output / "exports.h"
                     os.link(parent / "api.h", source)
@@ -3220,7 +3240,7 @@ int main(void) { return f(36) != 37; }
                        headers: list[str], *, resource: bool = True,
                        include: list[pathlib.Path] | None = None) -> list[str]:
         command = [
-            refine(), "bindings", "--clang", str(self.clang),
+            *bindings(), "--clang", str(self.clang),
             "--target", CORTEX_NAME, "--policy", str(parent / "policy.json"),
             "--out-dir", str(output),
         ]
@@ -3497,7 +3517,8 @@ static inline uint32_t mask(Level level, uint32_t bits) { return bits << (level 
         (source / "api.h").write_text(header, encoding="utf-8")
         (source / "policy.json").write_text(json.dumps(selected), encoding="utf-8")
         command = self.cortex_command(source, source / "out", [f"api.h={source / 'api.h'}"])
-        command[4:4] = ["--sysroot", str(source)]
+        at = command.index("--target")
+        command[at:at] = ["--sysroot", str(source)]
         process = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                  text=True)
         self.assertEqual(process.returncode, 2, process.stderr)
@@ -3707,7 +3728,7 @@ static inline uint32_t mask(Level level, uint32_t bits) { return bits << (level 
                     module.mkdir(parents=True)
                     for source in (FIXTURE.parent / name).glob("*.ldn"):
                         shutil.copyfile(source, module / source.name)
-                    command = [refine(), "check", "--target=" + CORTEX_NAME,
+                    command = [compiler(), "check", "--target=" + CORTEX_NAME,
                                "--root=" + str(HERE.parent),
                                "--root=" + str(module.parent)]
                     if float_unit:
@@ -3762,16 +3783,18 @@ static inline uint32_t mask(Level level, uint32_t bits) { return bits << (level 
 
 
 if __name__ == "__main__":
-    arguments = sys.argv[1:]
-    if "--refine" in arguments:
-        at = arguments.index("--refine")
-        REFINE = arguments[at + 1]
-        del arguments[at:at + 2]
-    if "--offline" in arguments:
-        OFFLINE = True
-        arguments.remove("--offline")
-    if "--write" in arguments:
-        if set(arguments) - {"--write"}:
+    import argparse
+    parser = argparse.ArgumentParser(
+        description=__doc__, allow_abbrev=False,
+        formatter_class=argparse.RawDescriptionHelpFormatter)
+    lane_refine.argument(parser, environment=True, required=False)
+    parser.add_argument("--offline", action="store_true")
+    parser.add_argument("--write", action="store_true")
+    options, arguments = parser.parse_known_args()
+    REFINE = None if options.refine is None else str(options.refine)
+    OFFLINE = options.offline
+    if options.write:
+        if arguments:
             sys.exit("bindings/test.py: --write takes --refine PATH and"
                      " --offline, and runs no case")
         sys.exit(write_fixtures(offline=OFFLINE))

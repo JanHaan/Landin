@@ -435,14 +435,13 @@ def linked_image(refine: Path, source, target: str, area: Path, label: str):
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--refine", type=Path, required=True)
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'scripts'))
+    import lane_refine  # the --refine every lane takes
+    lane_refine.argument(parser)
     parser.add_argument("--targets", default=",".join(TARGETS))
     parser.add_argument("--output", type=Path,
                         help="write the measured record here")
     args = parser.parse_args()
-    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'scripts'))
-    import refine_revision
-    refine_revision.warn(args.refine)  # is it this checkout's?
     #  A rebuild of this build waits for the record, rather than replace
     #  refine between the two compilations it compares.
     sys.path.insert(0, str(repository_root() / "scripts"))

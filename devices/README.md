@@ -312,6 +312,10 @@ python3 devices/test.py                          # offline, as check.py runs it
 python3 devices/test.py --refine "$(command -v refine)"   # fetches and regenerates
 ```
 
+`--refine`, or `$LANDIN_REFINE`, is `refine` or the split command
+`refine-svd` itself, which the cases then run directly; the consumer cases,
+which compile, use the `refine` installed beside it.
+
 `--offline` beside `--refine` uses the input cache alone, as
 `scripts/fetch_inputs.py --offline` does: a case whose input the cache
 lacks fails, naming the input and the path the cache wants it at.

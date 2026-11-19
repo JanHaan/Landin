@@ -73,7 +73,9 @@ def sessions(args, target):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n", 1)[0])
-    parser.add_argument("--refine", type=Path, required=True)
+    sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'scripts'))
+    import lane_refine  # the --refine every lane takes
+    lane_refine.argument(parser)
     parser.add_argument("--output", type=Path, required=True,
                         help="a new or empty directory for images and transcripts")
     parser.add_argument("--target", choices=sorted(HOST_TARGET.values()),
@@ -82,9 +84,6 @@ def main(argv=None):
     parser.add_argument("--objdump", default="llvm-objdump-19")
     parser.add_argument("--nm", default="llvm-nm-19")
     args = parser.parse_args(argv)
-    sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'scripts'))
-    import refine_revision
-    refine_revision.warn(args.refine)  # is it this checkout's?
     host = HOST_TARGET.get(platform.machine())
     if platform.system() != "Linux" or host is None:
         parser.error("LLDB runs these images natively, so this needs a Linux"

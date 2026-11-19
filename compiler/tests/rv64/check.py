@@ -445,7 +445,9 @@ def debugger(args, manifest):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--kind', choices=['runtime', 'debugger', 'abi', 'isa'], required=True)
-    parser.add_argument('--refine', type=Path)
+    sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'scripts'))
+    import lane_refine  # the --refine every lane takes
+    lane_refine.argument(parser, required=False)
     parser.add_argument('--prepare-only', action='store_true')
     parser.add_argument('--prepared', type=Path)
     parser.add_argument('--output', type=Path, required=True)
@@ -459,9 +461,6 @@ def main():
                              " user-mode GDB stub, cross evidence that is not the physical lane's")
     parser.add_argument('--case', action='append', help='exact case, development only')
     args = parser.parse_args()
-    sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'scripts'))
-    import refine_revision
-    refine_revision.warn(args.refine)  # is it this checkout's?
     #  A rebuild of this build waits for the lane, rather than replace
     #  refine between two of its compilations.
     sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'scripts'))

@@ -219,7 +219,9 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('--board', choices=build.BOARDS, required=True)
     parser.add_argument('--mode', choices=('ram', 'boot'), default='ram')
-    parser.add_argument('--refine', type=Path, required=True)
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'scripts'))
+    import lane_refine  # the --refine every lane takes
+    lane_refine.argument(parser)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--record', type=Path, help="copy the tool's passed record to a new local file")
     parser.add_argument('--keep-remote', action='store_true',
@@ -228,9 +230,6 @@ def main(argv=None):
     parser.add_argument('--host', default='jan@10.42.0.60')
     parser.add_argument('--identity', type=Path, default=Path('~/.ssh/epycmicro-2026-09-17'))
     args = parser.parse_args(arguments)
-    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'scripts'))
-    import refine_revision
-    refine_revision.warn(args.refine)  # is it this checkout's?
     try:
         return execute(args, board_args)
     except (OSError, bundle.Invalid, common.Failed, subprocess.TimeoutExpired) as error:
