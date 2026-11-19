@@ -46,8 +46,24 @@ package body Landin.Library is
    end Parent;
 
    function Located (Host : Landin.Platform.Filesystem'Class) return String
+   is (Located_From (Host, Host.Executable_Directory));
+
+   function Located_For_Split (Host : Landin.Platform.Filesystem'Class)
+     return String
    is
-      Binaries : constant String := Host.Executable_Directory;
+      Commands : constant String := Host.Executable_Directory;
+      Prefix : constant String :=
+        (if Commands = "" then "" else Parent (Parent (Commands)));
+   begin
+      if Prefix = "" then
+         return "";
+      end if;
+      return Located_From (Host, Landin.Paths.Joined_Path (Prefix, "bin"));
+   end Located_For_Split;
+
+   function Located_From
+     (Host : Landin.Platform.Filesystem'Class; Binaries : String)
+      return String is
    begin
       if Binaries = "" then
          return "";
@@ -95,7 +111,7 @@ package body Landin.Library is
          end;
       end;
       return "";
-   end Located;
+   end Located_From;
 
    function Looked_In (Host : Landin.Platform.Filesystem'Class)
      return String

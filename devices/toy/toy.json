@@ -1,0 +1,36 @@
+{
+  "schema": 2,
+  "device": "TOY1",
+  "svd_version": "1.0",
+  "svd_sha256": "ceb7df390e9f0774ee9497f25c5415a673ddcf02eebbabc2551c1f841c8cef4d",
+  "notice": [
+    "Toy notice."
+  ],
+  "selection": {
+    "UARTA": [
+      "CR",
+      "CR_IN"
+    ],
+    "UARTB": [
+      "CR"
+    ]
+  },
+  "policies": {
+    "UARTA.CR": {
+      "read": "normal",
+      "write": "one_clears",
+      "reserved": "zero",
+      "write_mask": "0x00000001"
+    },
+    "UARTA.CR_IN": {
+      "read": "normal",
+      "write": "refused",
+      "reserved": "zero"
+    },
+    "UARTB.CR": {
+      "read": "modify",
+      "write": "normal",
+      "reserved": "preserve"
+    }
+  }
+}

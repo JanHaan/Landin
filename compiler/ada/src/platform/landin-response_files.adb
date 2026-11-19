@@ -1,4 +1,4 @@
-package body Landin.Commands.Response_Files is
+package body Landin.Response_Files is
    package US renames Ada.Strings.Unbounded;
    use type Landin.Platform.Read_Status;
 
@@ -128,4 +128,4 @@ package body Landin.Commands.Response_Files is
          exit when US.Length (Problem) > 0;
       end loop;
    end Expand;
-end Landin.Commands.Response_Files;
+end Landin.Response_Files;

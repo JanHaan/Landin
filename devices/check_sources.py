@@ -27,12 +27,11 @@ CASES = {
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--refine', type=Path, required=True)
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
+    import lane_refine  # the --refine every lane takes
+    lane_refine.argument(parser)
     parser.add_argument('--output', type=Path, required=True)
     args = parser.parse_args()
-    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
-    import refine_revision
-    refine_revision.warn(args.refine)  # is it this checkout's?
     args.output.mkdir(parents=True, exist_ok=False)
     records = []
     for name, (imports, body, code) in CASES.items():

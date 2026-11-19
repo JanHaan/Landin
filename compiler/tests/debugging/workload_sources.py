@@ -67,14 +67,13 @@ def repository_path(path: str) -> str:
 def main() -> int:
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--refine", type=Path, required=True,
-                        help="the built compiler, e.g. compiler/ada/build/TAG/debug/bin/refine")
+    sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'scripts'))
+    import lane_refine  # the --refine every lane takes
+    lane_refine.argument(
+        parser, help="the built compiler, e.g. compiler/ada/build/TAG/debug/bin/refine")
     parser.add_argument("--write", action="store_true",
                         help="rewrite workload-sources.json with the computed closures")
     args = parser.parse_args()
-    sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'scripts'))
-    import refine_revision
-    refine_revision.warn(args.refine)  # is it this checkout's?
     refine = args.refine.resolve(strict=True)
     recorded = json.loads(RECORD.read_text())
     with tempfile.TemporaryDirectory(prefix="workload-sources-") as directory:

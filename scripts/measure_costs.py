@@ -296,7 +296,8 @@ def main(argv=None) -> int:
         formatter_class=argparse.RawDescriptionHelpFormatter)
     commands = parser.add_subparsers(dest="command", required=True)
     built = commands.add_parser("routines", help="build and sum the counters")
-    built.add_argument("--refine", required=True)
+    import lane_refine  # the --refine every lane takes
+    lane_refine.argument(built)
     built.add_argument("--target", required=True)
     built.add_argument("--level", action="append", default=[])
     built.add_argument("--profile", action="append", default=[],
@@ -318,9 +319,6 @@ def main(argv=None) -> int:
     kinds.add_argument("--target", required=True)
     kinds.add_argument("--symbol")
     args = parser.parse_args(argv)
-    if getattr(args, "refine", None):
-        import refine_revision
-        refine_revision.warn(args.refine)  # is it this checkout's?
     try:
         if args.command == "routines":
             return routines(args)

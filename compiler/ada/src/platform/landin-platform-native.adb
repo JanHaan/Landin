@@ -1144,4 +1144,202 @@ package body Landin.Platform.Native is
       Write_To (2, Line & ASCII.LF);
    end Log;
 
+   ---------------------------------------------------------------------
+   --  A debugger's session
+   ---------------------------------------------------------------------
+
+   type C_Descriptors is array (0 .. 3) of aliased Interfaces.C.int
+     with Convention => C;
+   type C_Ready is array (0 .. 4) of aliased Interfaces.C.int
+     with Convention => C;
+
+   function Debugger_Start
+     (Args, Settings : System.Address;
+      Pipes          : Interfaces.C.int;
+      Child          : access Interfaces.C.int;
+      Descriptors    : System.Address) return Interfaces.C.int
+     with Import, Convention => C, External_Name => "landin_debugger_start";
+
+   function Debugger_Wait
+     (Descriptors  : System.Address;
+      Milliseconds : Interfaces.C.int;
+      Ready        : System.Address) return Interfaces.C.int
+     with Import, Convention => C, External_Name => "landin_debugger_wait";
+
+   function Debugger_Read
+     (Descriptor : Interfaces.C.int;
+      Into       : System.Address;
+      Length     : Interfaces.C.long) return Interfaces.C.long
+     with Import, Convention => C, External_Name => "landin_debugger_read";
+
+   function Debugger_Write
+     (Descriptor : Interfaces.C.int;
+      Item       : System.Address;
+      Length     : Interfaces.C.long) return Interfaces.C.int
+     with Import, Convention => C, External_Name => "landin_debugger_write";
+
+   function Debugger_Stop
+     (Child        : Interfaces.C.int;
+      Descriptors  : System.Address;
+      Milliseconds : Interfaces.C.int;
+      Status       : access Interfaces.C.int) return Interfaces.C.int
+     with Import, Convention => C, External_Name => "landin_debugger_stop";
+
+   overriding procedure Start
+     (Host          : in out Native_Debugger_Session;
+      Arguments     : Path_List;
+      Settings      : Path_List;
+      Program_Pipes : Boolean;
+      Failure       : out Ada.Strings.Unbounded.Unbounded_String)
+   is
+      use type Interfaces.C.int;
+      package Strings renames Interfaces.C.Strings;
+      Words : aliased Strings.chars_ptr_array
+        (0 .. Interfaces.C.size_t (Arguments.Length));
+      Pairs : aliased Strings.chars_ptr_array
+        (0 .. Interfaces.C.size_t (Settings.Length));
+      Child : aliased Interfaces.C.int := 0;
+      Held : C_Descriptors := [others => -1];
+      Error : Interfaces.C.int;
+   begin
+      Failure := Ada.Strings.Unbounded.Null_Unbounded_String;
+      if Host.Child > 0 then
+         Failure := Ada.Strings.Unbounded.To_Unbounded_String
+           ("a debugger is already running");
+         return;
+      elsif Arguments.Is_Empty
+        or else (for some Word of Arguments => not Nameable (Word))
+        or else (for some Pair of Settings => not Nameable (Pair))
+      then
+         Failure := Ada.Strings.Unbounded.To_Unbounded_String
+           ("its command line holds a NUL byte, which no argument can");
+         return;
+      end if;
+      for Index in 0 .. Natural (Arguments.Length) - 1 loop
+         Words (Interfaces.C.size_t (Index)) :=
+           Strings.New_String (Arguments (Index + 1));
+      end loop;
+      Words (Words'Last) := Strings.Null_Ptr;
+      for Index in 0 .. Natural (Settings.Length) - 1 loop
+         Pairs (Interfaces.C.size_t (Index)) :=
+           Strings.New_String (Settings (Index + 1));
+      end loop;
+      Pairs (Pairs'Last) := Strings.Null_Ptr;
+      Error := Debugger_Start
+        (Words'Address, Pairs'Address, (if Program_Pipes then 1 else 0),
+         Child'Access, Held'Address);
+      for Word of Words loop
+         Strings.Free (Word);
+      end loop;
+      for Pair of Pairs loop
+         Strings.Free (Pair);
+      end loop;
+      if Error /= 0 then
+         Failure := Ada.Strings.Unbounded.To_Unbounded_String
+           ("the host could not start it (error" & Error'Image & ")");
+         return;
+      end if;
+      Host.Child := Integer (Child);
+      for Index in Held'Range loop
+         Host.Descriptors (Index) := Integer (Held (Index));
+      end loop;
+   end Start;
+
+   overriding function Variable
+     (Host : Native_Debugger_Session; Name : String) return String
+   is
+      pragma Unreferenced (Host);
+   begin
+      return Ada.Environment_Variables.Value (Name, "");
+   end Variable;
+
+   overriding procedure Wait
+     (Host   : in out Native_Debugger_Session;
+      Client : in out Channel'Class;
+      Limit  : Duration;
+      Ready  : out Ready_Streams)
+   is
+      pragma Unreferenced (Client);
+      use type Interfaces.C.int;
+      Held : C_Descriptors;
+      Got : C_Ready := [others => 0];
+      Milliseconds : constant Interfaces.C.int :=
+        (if Limit < 0.0 then -1
+         elsif Limit > 86_400.0 then 86_400_000
+         else Interfaces.C.int (Limit * 1000));
+   begin
+      for Index in Held'Range loop
+         Held (Index) := Interfaces.C.int (Host.Descriptors (Index));
+      end loop;
+      if Debugger_Wait (Held'Address, Milliseconds, Got'Address) /= 0 then
+         raise Host_Exhausted with "the host refused to poll the session";
+      end if;
+      Ready := [Editor         => Got (0) /= 0,
+                Debugger       => Got (1) /= 0,
+                Program_Output => Got (2) /= 0,
+                Program_Errors => Got (3) /= 0];
+   end Wait;
+
+   overriding procedure Read
+     (Host : in out Native_Debugger_Session;
+      From : Session_Input;
+      Into : out String;
+      Last : out Natural)
+   is
+      use type Interfaces.C.long;
+      Descriptor : constant Integer :=
+        Host.Descriptors (Session_Stream'Pos (From));
+      Got : Interfaces.C.long;
+   begin
+      if Into'Length = 0 or else Descriptor < 0 then
+         Last := Into'First - 1;
+         return;
+      end if;
+      Got := Debugger_Read (Interfaces.C.int (Descriptor),
+                            Into (Into'First)'Address,
+                            Interfaces.C.long (Into'Length));
+      if Got < 0 then
+         raise Host_Exhausted with "the host refused a read of the session";
+      end if;
+      Last := Into'First + Natural (Got) - 1;
+   end Read;
+
+   overriding procedure Send
+     (Host : in out Native_Debugger_Session;
+      Item : String;
+      Sent : out Boolean)
+   is
+      use type Interfaces.C.int;
+   begin
+      Sent := Host.Descriptors (0) >= 0;
+      if Sent and then Item'Length > 0 then
+         Sent := Debugger_Write
+           (Interfaces.C.int (Host.Descriptors (0)), Item (Item'First)'Address,
+            Interfaces.C.long (Item'Length)) = 0;
+      end if;
+   end Send;
+
+   overriding procedure Stop
+     (Host   : in out Native_Debugger_Session;
+      Grace  : Duration;
+      Status : out Integer)
+   is
+      use type Interfaces.C.int;
+      Held : C_Descriptors;
+      Word : aliased Interfaces.C.int := -1;
+   begin
+      for Index in Held'Range loop
+         Held (Index) := Interfaces.C.int (Host.Descriptors (Index));
+      end loop;
+      if Debugger_Stop (Interfaces.C.int (Host.Child), Held'Address,
+                        Interfaces.C.int (Grace * 1000), Word'Access) /= 0
+      then
+         Status := -1;
+      else
+         Status := Integer (Word);
+      end if;
+      Host.Child := 0;
+      Host.Descriptors := [others => -1];
+   end Stop;
+
 end Landin.Platform.Native;

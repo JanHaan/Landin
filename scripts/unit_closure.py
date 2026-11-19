@@ -17,7 +17,12 @@ is what a split command pays for (D1386).
 Several roots give one closure, the closure of a command whose code names
 those units.  `--cut UNIT` leaves a unit out and does not follow its
 withs: `Landin.Driver` and `Landin.Commands` name every command, so a
-measure of one command's code cuts them.  `--objects DIR`, a build tree's
+measure of one command's code cuts them.  A cut no link can honour is
+refused: a unit that is the parent, or any ancestor, of a unit the closure
+keeps, since an Ada partition holding a child holds its parent's body and
+everything that body withs (D1423).  `--cut Landin.Commands
+Landin.Commands.Devices` would report a closure no executable has; the
+refusal names the kept child and what the parent brings back.  `--objects DIR`, a build tree's
 `lib-obj`, adds the size of the closure's `.text` sections (`size -A`),
 the number the command inventory measured, and reads the units the build
 generated, `Landin.Build_Identity` among them, from the tree's
@@ -89,20 +94,49 @@ def read_units(*sources):
     return units
 
 
-def closure(units, roots, cut=()):
-    """The keys of the units `roots` link, without the `cut` ones."""
-    cut = {name.lower() for name in cut}
+class CutError(ValueError):
+    """A cut that no link can honour: an ancestor of a unit kept."""
+
+
+def _follow(units, roots, cut):
     seen = set()
-    pending = [name.lower() for name in roots]
-    for name in pending:
-        if name not in units:
-            raise KeyError(f"no unit {name} in the compiler's sources")
+    pending = list(roots)
     while pending:
         key = pending.pop()
         if key in seen or key in cut:
             continue
         seen.add(key)
         pending.extend(units[key].withs - seen)
+    return seen
+
+
+def closure(units, roots, cut=()):
+    """The keys of the units `roots` link, without the `cut` ones.
+
+    Raises CutError when a cut unit is an ancestor of one the closure
+    keeps: a partition that holds a child holds its parent's body, and
+    what that body withs, so the closure would be one no link has."""
+    cut = {name.lower() for name in cut}
+    roots = [name.lower() for name in roots]
+    for name in [*roots, *sorted(cut)]:
+        if name not in units:
+            raise KeyError(f"no unit {name} in the compiler's sources")
+    seen = _follow(units, roots, cut)
+    for parent in sorted(cut):
+        children = sorted(units[key].name for key in seen
+                          if key.startswith(parent + "."))
+        if children:
+            whole = _follow(units, roots, cut - {parent})
+            named = ", ".join(children[:3]) + (
+                f" and {len(children) - 3} more" if len(children) > 3 else "")
+            raise CutError(
+                f"--cut {units[parent].name}: the closure keeps its"
+                f" {'children' if len(children) > 1 else 'child'} {named},"
+                f" and an Ada partition that holds a child holds its"
+                f" parent's body and everything that body withs (D1423),"
+                f" so a real link brings {units[parent].name} back:"
+                f" {len(whole)} units, not {len(seen)}.  Drop the cut, or"
+                f" cut a unit that no kept unit is a child of")
     return seen
 
 
@@ -159,6 +193,8 @@ def main(argv=None):
         result = measure(options.roots, options.cut, options.objects)
     except KeyError as missing:
         parser.error(missing.args[0])
+    except CutError as refused:
+        parser.error(str(refused))
     if options.json:
         print(json.dumps(result, indent=2))
         return 0

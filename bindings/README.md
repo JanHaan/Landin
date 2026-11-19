@@ -684,7 +684,9 @@ hosted fixture, by [one command](#regenerating-the-committed-fixtures).
 python3 bindings/test.py --refine PATH
 ```
 
-`--refine`, or `$LANDIN_REFINE`, names the compiler under test, and
+`--refine`, or `$LANDIN_REFINE`, names the compiler under test, `refine`
+or the split command `refine-bindings` itself, whose cases that check what
+was generated use the `refine` installed beside it; and
 `$CLANG` the external Clang, `clang-19` by default, or `clang` where there
 is no `clang-19`. The development shell's `clang` is Nix's compiler
 wrapper, which adds `-fzero-call-used-regs`, and the Cortex-M cases fail

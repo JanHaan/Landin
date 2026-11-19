@@ -529,9 +529,11 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--tools', type=Path, default=DEFAULT)
     parser.add_argument('--output', type=Path, required=True)
-    parser.add_argument('--refine', type=Path,
-                        help='the native Landin compiler; every lane from packed-native on'
-                             ' needs one, and the probes before it do not')
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'scripts'))
+    import lane_refine  # the --refine every lane takes
+    lane_refine.argument(parser, required=False,
+                         help='the native Landin compiler; every lane from packed-native on'
+                              ' needs one, and the probes before it do not')
     chosen = parser.add_mutually_exclusive_group()
     chosen.add_argument('--lane', action='append', choices=LANES,
                         help='run only this lane, and the lanes it needs; repeat for more.'
@@ -546,9 +548,6 @@ def main():
     #  First, since on NixOS it runs this lane again inside the flake's FHS
     #  environment, and nothing before it should happen twice.
     supported_host(args.output)
-    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'scripts'))
-    import refine_revision
-    refine_revision.warn(args.refine)  # is it this checkout's?
     #  A rebuild of this build waits for the lane, rather than replace
     #  refine between two of its compilations.
     sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'scripts'))

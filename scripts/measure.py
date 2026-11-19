@@ -860,7 +860,8 @@ def main(argv=None) -> int:
         epilog=__doc__.split("\n\n", 1)[1])
     commands = parser.add_subparsers(dest="command", required=True)
     size = commands.add_parser("size", help="measure section sizes")
-    size.add_argument("--refine", type=Path, required=True)
+    import lane_refine  # the --refine every lane takes
+    lane_refine.argument(size)
     size.add_argument("--target", action="append", required=True)
     size.add_argument("--output", required=True)
     size.add_argument("--environment", required=True,
@@ -895,7 +896,7 @@ def main(argv=None) -> int:
     keep.set_defaults(run=record)
     count = commands.add_parser("instructions", help="count every configuration"
                                 " under its lane's emulator")
-    count.add_argument("--refine", type=Path, required=True)
+    lane_refine.argument(count)
     count.add_argument("--target", required=True, help="linux-rv64 or cortex-m0")
     count.add_argument("--output", required=True)
     count.add_argument("--tools", type=Path,
@@ -908,10 +909,10 @@ def main(argv=None) -> int:
                                " compared with")
     base.set_defaults(run=lambda args: print(default_base()) or 0)
     table = commands.add_parser("runners", help="the runner table, checked")
-    table.add_argument("--refine", type=Path, required=True)
+    lane_refine.argument(table)
     table.set_defaults(run=runners)
     wall = commands.add_parser("time", help="paired wall time on this runner")
-    wall.add_argument("--refine", type=Path, required=True)
+    lane_refine.argument(wall)
     wall.add_argument("--base-refine", type=Path, required=True,
                       help="the base commit's compiler")
     wall.add_argument("--target", required=True, help="this host's target")
@@ -922,9 +923,6 @@ def main(argv=None) -> int:
     wall.set_defaults(run=measure_time)
     import measure_count
     args = measure_count.parse(parser, argv)
-    if getattr(args, "refine", None):
-        import refine_revision
-        refine_revision.warn(args.refine)  # is it this checkout's?
     try:
         return args.run(args)
     except Failure as error:

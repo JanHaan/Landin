@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<device schemaVersion="1.1">
+  <name>TOY1</name>
+  <vendor>Example</vendor>
+  <version>1.0</version>
+  <licenseText>Copyright the vendor.&#10;
+    SPDX-License-Identifier: Apache-2.0</licenseText>
+  <cpu><name>CM7</name><deviceNumInterrupts>4</deviceNumInterrupts></cpu>
+  <size>32</size>
+  <resetValue>0x0</resetValue>
+  <resetMask>0xFFFFFFFF</resetMask>
+  <peripherals>
+    <peripheral>
+      <name>UARTA</name>
+      <baseAddress>0x40001000</baseAddress>
+      <interrupt><name>UARTA_IRQ</name><value>2</value></interrupt>
+      <registers>
+        <register>
+          <name>CR</name>
+          <addressOffset>0x4</addressOffset>
+          <access>read-write</access>
+          <resetValue>0x00000005</resetValue>
+          <fields>
+            <field><name>MODE</name><bitOffset>1</bitOffset><bitWidth>2</bitWidth>
+              <enumeratedValues>
+                <enumeratedValue><name>OFF</name><value>0</value></enumeratedValue>
+                <enumeratedValue><name>FAST</name><value>#10</value></enumeratedValue>
+              </enumeratedValues></field>
+            <field><name>EN</name><bitRange>[0:0]</bitRange><modifiedWriteValues>oneToClear</modifiedWriteValues></field>
+          </fields>
+        </register>
+        <register>
+          <name>CR_IN</name>
+          <alternateRegister>CR</alternateRegister>
+          <addressOffset>0x4</addressOffset>
+          <fields><field><name>LEVEL</name><lsb>8</lsb><msb>15</msb><access>read-only</access></field></fields>
+        </register>
+      </registers>
+    </peripheral>
+    <peripheral derivedFrom="UARTA">
+      <name>UARTB</name>
+      <baseAddress>0x40002000</baseAddress>
+      <interrupt><name>UARTB_IRQ</name><value>3</value></interrupt>
+      <interrupt><name>UARTA_IRQ</name><value>2</value></interrupt>
+    </peripheral>
+  </peripherals>
+</device>

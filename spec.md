@@ -26451,6 +26451,157 @@ corpus at `armv6-m`.
 
 **Pinned by** the commands suite's `the dispatcher` and `scripts/tests/test_cli_native.py`'s contributed command.
 
+### D1543 — A split command links its own work and none of the front end
+
+**D1383 said** that `svd`, `bindings` and `site` are split commands, each
+its own executable linking the same library, and D1423 that a program
+withing a unit links the body of every unit whose specification it holds,
+a parent's among them; it did not say how much of the library a split may
+hold.
+
+**Chosen:** a split command's main withs nothing whose closure reaches the
+scanner, the parser, the checker, the IR, a backend, `Landin.Driver` or
+`Landin.Commands`. What a command produced, its status, output, report and
+the report as data, is `Landin.Outcomes.Outcome`, which `Landin.Driver`
+names as `Outcome`; its presentation is `Landin.Presentation` and response
+files are `Landin.Response_Files`, all three moved out from under
+`Landin.Driver` and `Landin.Commands`, whose bodies with the whole compiler.
+The three commands are `Landin.Splits.Svd`, `Landin.Splits.Bindings` and
+`Landin.Splits.Site`, children of `Landin.Splits`, each called by a main of
+three lines, `refine_svd.adb`, `refine_bindings.adb` or `refine_site.adb`,
+in a project of its own. Linked alone,
+`refine-svd` holds 35 of the compiler's units and 4.2 MB of their text in a
+debug build, `refine-bindings` 33 and 5.1 MB, `refine-site` 25 and 1.7 MB,
+where `refine` holds 155 and 42.8 MB. A closure pin for each main holds it
+to the exact set of units it links, and `scripts/unit_closure.py` refuses a
+cut that a link cannot honour, a parent of a unit the closure keeps, rather
+than measure a closure no executable has.
+
+**The alternatives:** a GPR base project for the splits, which the
+maintainer declined on 2026-11-18 and which bounds nothing an Ada `with`
+does not; keeping the commands under `Landin.Commands` and cutting the
+parent in the measurement, which reports 22 units for a program that links
+149; and a limit on the size of each split, which a growing command would
+keep moving.
+
+**Pinned by** `scripts/tests/test_unit_closure.py`'s `SplitClosures`,
+which also holds that every command in `compiler/ada/split-commands.json`
+has its pin.
+
+### D1544 — A split command keeps the request it answered as a built-in one
+
+**D1485 said** what `refine` asks of a split command, `--describe`,
+`--help` and `--complete`; it did not say what a split reads of the words
+a user writes after its name.
+
+**Chosen:** every split command reads its words through `Landin.Splits`:
+its own options, each written `--NAME=VALUE` or `--NAME VALUE` and given
+once unless it repeats, `--` before literal operands, and `@FILE` response
+files expanded and protected as `refine` expands them; the shared
+`--color`, `--diagnostics`, `--quiet`, `--verbose` and `-vv`, with the same
+values and the same refusal of `--quiet` beside `--verbose`; and `--help`,
+which prints `usage: refine NAME ...`, the options, and the command's own
+notes. A request that does not parse is refused with L0002 at status 2, as
+before, and the report is presented as `--diagnostics` and `--color` ask.
+`--describe` alone, and `--complete` as the first word, are D1485's
+answers: the description names `refine`'s source digest and no prefix,
+since the codes of a shipped command are `L` codes in the one catalogue,
+and completion offers the options a word begins, a shared option's values
+after it, and nothing for a path, which the shell completes. A run that ends
+in a defect, an exhausted host or a tool that could not start ends with
+`refine`'s statuses, 70, 71 and 72, its line naming `refine-NAME`.
+`refine help reference` is the reference of the built-in commands; a
+split's is its own help.
+
+**The alternatives:** a split taking only its own options, which breaks
+every `refine svd --diagnostics=json ...` written before the split; `refine`
+parsing a split's words for it, which D1484 refused; and each split writing
+its own parse, which lets three spellings of one option drift apart.
+
+**Pinned by** the commands suite's `a split answers its own surface`, the
+devices and bindings suites through each split's entry, and
+`devices/test.py`'s `ToyGoldens`, run through `refine svd` and `refine-svd`.
+
+### D1545 — An option before a split command's name is told its new form
+
+**D1484 said** that an option written before an external command's name
+keeps `refine`'s meaning and is refused as D384 says; D384 names the
+command an option belongs to, which for an option of a split `refine` no
+longer knows.
+
+**Chosen:** when the first word that is no option, before any `--` or
+response file, is the name of a split command `refine` was built with, the
+request is refused with L0002, status 2, before anything is read or run:
+the option before the name is `refine`'s own, the command takes its
+options after its name, and the request is written again with the name
+first, `refine --quiet svd x.svd` told `refine svd --quiet x.svd`.
+
+**The alternatives:** dispatching the name with the options before it,
+which makes an option mean something to `refine` and to the command both,
+as D1484 refused; and the unknown-command refusal of D1463, which offered
+`refine check` for a word that names a command.
+
+**Pinned by** the commands suite's `a split answers its own surface`.
+### D1523 — `refine dap` speaks GDB/MI to GDB and relays LLDB's own adapter
+
+**The tour said** nothing; D1383 made `dap` a split command over the debuggers the targets script.
+
+**Chosen:** `refine-dap` holds the protocol's side towards the editor itself, framing as the language server frames, and reaches a debugger through `Landin.Platform.Debugger_Session`: one long-lived process over pipes, waited on beside the editor's input by one thread. GDB is spoken to over GDB/MI, and every request is answered by `refine-dap` from GDB's records, which it reads into JSON. LLDB is LLDB's own adapter, `lldb-dap`, which `refine-dap` starts, initializes as the editor initialized it, and relays: each request renumbered on its way and each answer and event renumbered back, with `launch` and `attach` written in its terms. A program takes LLDB when it is a Mach-O or an ELF whose header names FreeBSD, and GDB otherwise, as the debugging suites debug each target; `"debugger"` names the other, and `"debuggerPath"` the executable, which is otherwise `gdb`, or `lldb-dap` on the search path and then where `xcrun --find` says Xcode keeps it. The adapter adds what is Landin's (D1525, D1526) and nothing it would have to keep in step with a debugger's own presentation.
+
+**The alternatives:** GDB's own `-i dap`, which needs a GDB with Python, and the GDB the toolchain pins has none; translating LLDB's command line, whose text is not an interface, or its SB API, which needs a Python FreeBSD's base system does not have; one translation for both through a common machine interface, which LLDB no longer offers since `lldb-mi` was removed; and building `dap` into `refine`, which D1383 declined.
+
+**Pinned by** the dap suite's `a GDB session` and `LLDB's adapter is relayed`, `scripts/tests/test_unit_closure.py`'s pin of `refine-dap`'s closure, and `compiler/tests/dap/session.py`, which the gate runs over GDB on Linux x86-64, Linux arm64 and RV64 under QEMU, and over LLDB on Darwin and in both FreeBSD VMs.
+
+### D1524 — A launched program writes to the editor; an attached one is reached through its stub
+
+**The tour said** nothing.
+
+**Chosen:** `launch` takes `program`, its `args`, its `cwd` and `stopOnEntry`. Under GDB the program is started through `/bin/sh`, which GDB runs with the shell set back to the caller's for the program itself: its arguments are quoted for that shell, its input is `/dev/null` and its output and error go to two pipes of the adapter's, which become `output` events of category `stdout` and `stderr`; GDB's own input is the adapter's commands, which a program reading its input would otherwise take. `lldb-dap` starts the program on a terminal of its own and sends what it writes as events itself. `attach` takes `program` and `remote`, where a debugger stub serves it: GDB's `target remote` takes `HOST:PORT` or a socket's path, as QEMU's user emulation opens one, and LLDB's adapter `HOST:PORT`, as `lldb-server gdbserver` listens. A `disconnect` ends a launched program and leaves an attached one running, unless `terminateDebuggee` says otherwise, and then ends the debugger and `refine-dap`.
+
+**The alternatives:** leaving GDB's program on GDB's own input and output, where its writes would be read as GDB's records and its reads would take GDB's commands; a pseudo-terminal, which rewrites the program's line ends; and starting QEMU or `lldb-server` from the adapter, which would put each target's emulator and transport into it rather than in the lanes that already start them.
+
+**Pinned by** the dap suite's `a GDB session` and `attach reaches a stub`, and `compiler/tests/dap/session.py`'s launched and attached sessions.
+
+### D1525 — The library's files are shown from the library `refine` was shipped with, one namespace at a time
+
+**The tour said** nothing; D422 records a library file as `/landin-library/` and its module path.
+
+**Chosen:** `refine-dap` finds the library as the `refine` beside it would (D363): `PREFIX/libexec/landin/refine-dap` is shipped with `PREFIX/bin/refine`, in an installation and in a build tree alike. It maps `/landin-library/core`, `/landin-library/hosted` and `/landin-library/platform` each to that namespace's directory, through GDB's `substitute-path` and `lldb-dap`'s `sourceMap`, and maps a frame's path and a breakpoint's path itself where GDB is answered. Nothing else under the library's directory is renamed: a checkout's library is the checkout, whose own sources a whole-directory mapping would have recorded under `/landin-library` and so lost their breakpoints, as LLDB did when it was tried.
+
+**The alternatives:** one mapping of `/landin-library` to the library's directory, which LLDB applies in both directions; and asking `refine version --json` through `LANDIN_REFINE` (D1486), which a `refine-dap` started by its own name, as an editor starts it, would not have.
+
+**Pinned by** the dap suite's `library paths map by namespace` and `a GDB session`, and `LLDB's adapter is relayed`.
+
+### D1526 — A stop in `panic_handler` is an exception at the source of its site
+
+**The tour said** nothing; D1292 resolves a site with `refine site`.
+
+**Chosen:** when the program stops with `panic_handler` as its innermost frame, `refine-dap` asks the debugger for its `site` argument and resolves it through the program's source table, `PROGRAM.sources.json` beside it, as `refine site` would: the stop becomes an `exception` stop whose description is `panic: KIND at PATH:LINE:COLUMN`, and `exceptionInfo` names the check that failed. A table that is missing, or written for another build, is named in the description with the refusal `refine site` would give. The table is read through `Landin.Site_Tables`, which `refine site` now reads it through as well, and which takes no compilation: `Landin.Source_Maps` writes a table from one and keeps the front end (D1423). Under GDB a signal stop is an exception stop too, named by its signal; a panic without a handler writes its site to standard error before it traps, and that line reaches the editor as the program's output.
+
+**The alternatives:** a breakpoint the adapter sets on every program's `panic_handler` itself, which a program without one could not have and which the editor's own function breakpoints already give; and decoding the site in the adapter's own reader, which would be a third reader of a format two units already share.
+
+**Pinned by** the dap suite's `a panic names its site` and `LLDB's adapter is relayed`, and `compiler/tests/dap/session.py`'s panic stop.
+
+### D1527 — What `refine-dap` answers over GDB, and what it refuses
+
+**The tour said** nothing.
+
+**Chosen:** over GDB, `refine-dap` answers `initialize`, `launch`, `attach`, `setBreakpoints` with conditions, `setFunctionBreakpoints`, `setExceptionBreakpoints` with no filters, `configurationDone`, `threads`, `stackTrace`, `scopes` with one scope of a frame's locals and arguments, `variables` through GDB's variable objects, which are deleted when the program runs on, `evaluate` in GDB's own expression language, `exceptionInfo`, `continue`, `next`, `stepIn`, `stepOut`, `pause`, `terminate` and `disconnect`. A frame's identifier is its thread's times 100000 plus its level, valid until the program runs on, and a frame with a source is given column 1, since GDB/MI gives none. Any other request is refused naming it; a request before `launch` or `attach` is refused saying which comes first; and a debugger that does not answer within sixty seconds fails the request rather than the session. Under LLDB the requests are `lldb-dap`'s, and what it answers is its own.
+
+**The alternatives:** answering the protocol's every request, most of which no editor sends for a program without threads of its own, and which would be presentation to keep in step with GDB's; and giving each frame column 0, which some editors take for no position at all.
+
+**Pinned by** the dap suite's `a GDB session` and `refusals say what to do`.
+
+### D1528 — A program or command a closed pipe ended ends `refine` quietly
+
+**D526 said** that `refine run` names the signal that ended its program and exits with 128 and its number, as a shell reports it, and D1384 that a dispatched command is run the same way.
+
+**Chosen:** when the signal is `SIGPIPE`, `refine` still exits with 141 and writes no line. The program or command wrote to a pipe whose reader had left, as `refine dap --help | head` leaves; that is no failure, a shell reports nothing for a pipeline member it ends, and `refine`'s own closed pipe ends it quietly (D1047). Every other signal is named as before.
+
+**The alternatives:** naming it, as `refine` did, which reads as a failure of `refine-dap` when `head` had only read what it wanted; and quieting it for dispatched commands alone, which would make `refine run PROGRAM | head` and `refine NAME | head` differ for one cause.
+
+**Pinned by** the commands suite's `run reports a signal`.
+
 ### D1463 — Every request names its command; the bare-source form is refused
 
 **D526 said** that bare `refine FILE` checks FILE and closes with a line naming `refine run` and `refine compile`, and D731 that the line repeats the options that chose the program. An unknown first word was therefore read as a source, so no word outside the built-in commands could ever name one, and the closing line named the target the request chose, so a recorded fixture that chose it held a line one host's default and another's differed on.
@@ -28951,6 +29102,14 @@ handed a binary by path, where the stale one was met.
 
 **Pinned by** `scripts/tests/test_refine_revision.py`, whose `Callers`
 holds every lane that takes `--refine` and the developer build to asking.
+
+**Amended on 2026-11-19:** every lane takes `--refine` from one
+helper, `scripts/lane_refine.py`, which asks as the argument is read. A
+lane may be handed a split command, `refine-NAME`, which answers
+`--describe` rather than `version --json` (D1387): its `source_digest`
+decides as above, and when it is not the checkout's the revision is that of
+the `refine` installed beside it with the same digest, or the warning says
+none is.
 
 ### D1308 — A runtime fixture may name the targets that do not emit it yet
 

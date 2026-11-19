@@ -414,6 +414,44 @@ On either, GDB's backtrace ends at `main` by default; `set backtrace past-main
 on` shows the `_landin_start_main` and `_landin_start` frames below it, as
 the panic sessions do.
 
+### Debugging from an editor
+
+`refine dap` is a Debug Adapter Protocol server. An editor starts it as its
+debug adapter and talks to it over standard input and output. Set the
+editor's adapter command to `refine` with the argument `dap`, which runs
+the executable `refine-dap`. Then write a launch configuration that names a
+program `refine compile --debug=full` wrote:
+
+```json
+{"request": "launch", "program": "/path/to/program", "args": [],
+ "cwd": "/path/to", "stopOnEntry": false}
+```
+
+The editor's console shows what the program writes.
+
+`refine dap` debugs a Linux program with GDB, over GDB/MI. For a macOS or
+FreeBSD program it starts `lldb-dap`, LLVM's own adapter, and relays the
+session to it. It looks for `lldb-dap` on `PATH` and, on macOS, also asks
+`xcrun --find lldb-dap`. Two keys override this: `"debugger"`, `"gdb"` or
+`"lldb"`, chooses the debugger, and `"debuggerPath"` names the executable
+to start.
+
+To debug a program that runs on another machine or under an emulator, start
+a debugger stub with it and attach. Use `"request": "attach"` and set
+`"remote"` to the stub's `HOST:PORT`, or for GDB to a socket's path. QEMU's
+`-g` option opens a stub for an RV64 program, and on FreeBSD
+`lldb-server gdbserver HOST:PORT -- PROGRAM` serves one. The program and
+its sources must be at the same paths on both machines.
+
+The library's files are recorded as `/landin-library/` and their module
+path. `refine dap` shows them from the library installed with `refine`, so
+you write no source mapping.
+
+Compile with `--panic-map` as well, and a stop in `panic_handler` is shown
+as an exception at the source line and column of its site, with the check
+that failed: `panic: overflow at main.ldn:36:5`. Set a function breakpoint
+on `panic_handler` to stop there.
+
 ### Exact identity and optional deployment
 
 The map's `build_id` is the full SHA-256 digest of the compiler assembly and

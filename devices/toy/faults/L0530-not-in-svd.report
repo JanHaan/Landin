@@ -1,0 +1,5 @@
+error[L0530]: the policy selects the peripheral UARTC, which the SVD does not have
+  --> toy.svd:1:1
+  |
+1 | <?xml version="1.0" encoding="utf-8"?>
+  | ^

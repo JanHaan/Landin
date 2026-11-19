@@ -999,7 +999,11 @@ class SplitSubjects(unittest.TestCase):
         self.assertTrue(any(where == "devices/test.py" for where, _ in said))
 
 
-DEBUGGER = ["scripts/debug.sh", "compiler/tests/debugging"]
+#  The debugging lane takes its --refine from scripts/lane_refine.py, which
+#  asks scripts/refine_revision.py, which reads scripts/build_identity.py.
+DEBUGGER = ["scripts/debug.sh", "compiler/tests/debugging",
+            "scripts/lane_refine.py", "scripts/refine_revision.py",
+            "scripts/build_identity.py"]
 
 HOSTED = ["compiler/tests/fixtures/runtime/derived-hosted-memory/DERIVATION.md",
           "core/region/region.ldn", "examples/derived_hosted",

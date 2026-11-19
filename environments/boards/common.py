@@ -47,6 +47,12 @@ does not depend on the chip:
 Nothing here touches a board unless a tool calls it, and nothing needs more
 than the standard library, so scripts/tests/test_board_common.py runs it on
 the gate's Python with no board, probe or hub.
+
+The board tools run on the rig from a prepared bundle that carries this
+directory and not scripts/: a tool here imports the standard library and
+its neighbours alone, and takes `--refine` from `refine_argument` below
+rather than from scripts/lane_refine.py, which the rig does not have.
+scripts/tests/test_board_common.py refuses such an import.
 """
 
 import argparse
@@ -929,6 +935,16 @@ def verify_ram_helper(args):
     return identity
 
 
+def refine_argument(parser, required=False) -> None:
+    """A board tool's `--refine PATH`, optional unless REQUIRED.
+
+    Every other lane takes it from scripts/lane_refine.py, which asks
+    whether it is the checkout's as it is parsed; a board tool runs on the
+    rig with no scripts/ beside it, so it takes the argument here and asks
+    through warn_stale_refine once it knows there is no bundle."""
+    parser.add_argument('--refine', type=Path, required=required)
+
+
 def warn_stale_refine(args) -> None:
     """Say when the refine a tool builds with is not this checkout's.
 
@@ -939,8 +955,8 @@ def warn_stale_refine(args) -> None:
     if getattr(args, 'bundle', None) or not getattr(args, 'refine', None):
         return
     sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'scripts'))
-    import refine_revision
-    refine_revision.warn(args.refine)  # is it this checkout's?
+    import lane_refine
+    lane_refine.warn(args.refine)  # is it this checkout's?
 
 
 def board_preflight(args, board):

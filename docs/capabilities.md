@@ -319,7 +319,8 @@ The README has [the commands in brief](../README.md#refine-in-brief);
 - `refine run program.ldn -- ARGUMENT ...` compiles into a new private
   directory under `TMPDIR` or `/tmp`, runs the program on this terminal with
   the arguments after `--` exactly, exits with its status, or with 128 and
-  the number of the signal that ended it and a line naming it. The program
+  the number of the signal that ended it and a line naming it, except for
+  a closed pipe, which ends it quietly as a shell would (D1528). The program
   shares refine's process group, and while it runs refine ignores SIGINT
   and SIGQUIT, so the terminal's Ctrl-C and Ctrl-\ reach the program and
   refine stays to clean up; an interrupt or quit refine's caller ignored
@@ -448,9 +449,17 @@ The README has [the commands in brief](../README.md#refine-in-brief);
   under the directory that holds `bin/refine`, and is looked for nowhere
   else. Any other NAME is a contributed `refine-NAME` on `PATH`, where the
   first directory that has one wins (D1384, D1484). Every word after NAME
-  is passed to the command as written. No split command is shipped yet:
-  `compiler/ada/split-commands.json` lists them, and the release archive
-  and the flake carry an empty `libexec/landin` (D1483).
+  is passed to the command as written. `svd`, `bindings` and `site` are
+  split commands, `refine-svd`, `refine-bindings` and `refine-site`, each
+  built from the same tree as `refine` and linked from the same library
+  without its front end (D1383, D1543); `compiler/ada/split-commands.json`
+  lists them, and the release archive and the flake ship them in
+  `libexec/landin` (D1483). Each reads its own options and response files
+  and answers `--help`, `--describe` and `--complete`, and takes the
+  shared `--color`, `--diagnostics`, `--quiet` and `--verbose`, so a
+  request written before the split means what it did (D1544). An option
+  written before a split command's name is `refine`'s own, and the
+  request is refused with its form, the name first (D1545).
 - Before running one, `refine` asks it `refine-NAME --describe`. It
   refuses a command whose answer it cannot accept, saying what came back
   and what to do: a shipped one built from other compiler sources, a
@@ -1072,6 +1081,16 @@ Add `--target=darwin-arm64` for native macOS output, then open
 - **Library paths.** A library file is recorded as `/landin-library/` and its
   module path, never where the library was installed, which a session maps
   to the directory `refine version` names.
+- **From an editor.** `refine dap` is a Debug Adapter Protocol server that
+  an editor starts as its debug adapter. It debugs Linux programs over
+  GDB/MI. For macOS and FreeBSD programs it starts and relays `lldb-dap`,
+  LLVM's own adapter. It launches a program or attaches to a debugger
+  stub. It shows the library's files from the installed library. With
+  `--panic-map`, it shows a stop in `panic_handler` as an exception at the
+  source line of its site (D1523-D1527). The gate scripts a session over
+  GDB on Linux x86-64, Linux arm64 and RV64 under QEMU, and over LLDB on
+  macOS and in both FreeBSD VMs. See
+  [debugging from an editor](targets.md#debugging-from-an-editor).
 - Debug provenance stays independent of DWARF for a possible future PDB
   emitter; PDB is not implemented.
 

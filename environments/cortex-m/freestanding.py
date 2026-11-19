@@ -16,6 +16,8 @@ from setup import DEFAULT, installed_tools, inventory, sha, supported_host
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
+sys.path.insert(0, str(ROOT / 'scripts'))
+import lane_refine  # noqa: E402
 MODULES = tuple('core/'+name for name in
                 ('arena', 'atomic', 'cache', 'cmp', 'diag', 'failure', 'fault', 'fibre',
                  'io', 'line', 'map', 'mem', 'net', 'panic', 'pool', 'random',
@@ -257,8 +259,8 @@ def panic(run, elf, refine):
             'print("R670_PANIC_PASS")', 'end'], 'R670_PANIC_PASS')
         if site:
             #  D1292: the image names its build in `.landin_id`.
-            output = run.command('site-'+str(mode), [refine, 'site', elf,
-                                                     str(site)])
+            output = run.command('site-'+str(mode), [*lane_refine.command(refine, 'site'),
+                                                     elf, str(site)])
             offset = (site-kind)//5
             line = program[:offset].count(b'\n')+1
             column = offset-program.rfind(b'\n', 0, offset)
@@ -393,15 +395,12 @@ def execute_suite(parent, refine, profiles=PROFILES, cases=None):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--refine', type=Path, required=True)
+    lane_refine.argument(parser)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--tools', type=Path, default=DEFAULT)
     parser.add_argument('--all-profiles', action='store_true')
     parser.add_argument('--case', action='append')
     args = parser.parse_args()
-    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'scripts'))
-    import refine_revision
-    refine_revision.warn(args.refine)  # is it this checkout's?
     supported_host(args.output)
     args.tools = installed_tools(args.tools)
     tools_before = inventory(args.tools)

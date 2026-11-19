@@ -754,7 +754,7 @@ edge is cut first (D1386). On Q-11's condition `refine` refuses an
 incompatible `refine-NAME`, judged by a description each prints and, for a
 shipped one, its source digest (D1387). R18.20 measures `Source_Maps` too,
 R18.50 takes the check and the forwarding, and R18.60 is the split
-`refine-dap`; `SR-1277`, `SR-1196` and SR-1224 with SR-1275 are scheduled on
+`refine-dap`; `SR-1277`, `SR-1196` and `SR-1224` with `SR-1275` are scheduled on
 R18.40, R18.50 and R18.70. Found on the way: the cut shrinks no executable
 shipped today, since `fmt`, `explain` and `version` stay inside `refine`;
 it matters for `refine-dap`, which reaches `Driver.Library` through
@@ -900,11 +900,11 @@ language, D1383 and D1385 amended, on the maintainer's answer of
 dispatcher` on the fake host and `scripts/tests/test_cli_native.py`'s
 contributed tool on PATH. Found on the way: `item.py run` runs only in the
 item's worktree (SR-1353), and `unit_closure.py --cut` reports closures no
-link can have (SR-1354, scheduled on R18.70).
+link can have (`SR-1354`, scheduled on R18.70).
 
 ### R18.60 — `refine dap`
 
-Status: planned
+Status: complete
 Depends on: R18.20, R18.50
 
 The first new command: a Debug Adapter Protocol server over the GDB and
@@ -917,19 +917,45 @@ a compilation and keeps the front end (D1423).
 Exit evidence: `refine-dap` linked without the front end; scripted DAP sessions in the gate over GDB and LLDB, the
 debuggers the targets script today, on every hosted target the debugging
 suites run. A further debugger is its own adapter backend.
+Done: `refine-dap` is the split command `refine dap` runs, listed in
+`compiler/ada/split-commands.json` and so built, digested, packaged and
+shipped as every split is. It frames the protocol as the language server
+does and reaches a debugger through `Landin.Platform.Debugger_Session`:
+GDB over GDB/MI, every request answered from GDB's records, and LLDB
+through LLDB's own adapter, `lldb-dap`, relayed and renumbered, the
+debugger chosen from the program's format (D1523). A launched program's
+output reaches the editor through pipes GDB's shell redirects to, and
+`attach` reaches a QEMU or `lldb-server` stub (D1524); library files map
+one namespace at a time, since a checkout's library is the whole checkout
+(D1525); a stop in `panic_handler` is an exception at the source of its
+site (D1526); D1527 lists what is answered over GDB. Source tables are
+read through `Landin.Site_Tables`, which `refine site` now shares and
+which takes no compilation, so `refine-dap` links 18 units of the
+compiler's sources and no front end, pinned in
+`scripts/tests/test_unit_closure.py`. The dap suite holds it on the fake
+host; `compiler/tests/dap/session.py` scripts a session through `refine
+dap` over GDB in the `release` and `arm64-release` jobs and on RV64 under
+QEMU's stub, and over LLDB in `darwin-host-release-2` and both FreeBSD
+debugger jobs, the guest's `lldb-server` reached from the runner's
+`lldb-dap`. Found on the way: the FreeBSD arm64 lane's refusal for a
+missing UEFI firmware now says where it looked and what to install, and
+looks beside the QEMU on the search path; a program or dispatched command
+a closed pipe ends no longer reports itself as a failure (D1528); and the
+gate's `measure-time` jobs take `refine`, not the last executable the build
+names.
 
 ### R18.70 — The existing splits
 
-Status: planned
+Status: complete
 Depends on: R18.50
 
 `svd`, `bindings` and `site` become `refine-svd`, `refine-bindings` and
 `refine-site`, each in lockstep with `refine` (D1383) and each
 keeping its suites and its black-box "destroys nothing" and determinism
 controls. Those controls take the command they test as an argument, so the
-lanes' shared `--refine` becomes one helper (SR-1224), and
+lanes' shared `--refine` becomes one helper (`SR-1224`), and
 `compiler/tests/test_compile_publication.py` reports every selected
-control's failure rather than the first (SR-1275).
+control's failure rather than the first (`SR-1275`).
 Each moves out from under `Landin.Commands`, whose body withs the whole
 compiler, and stops withing `Landin.Driver` for `Outcome`. Its own main
 parses its own arguments and response files and answers `--help`,
@@ -938,14 +964,36 @@ contract with `refine`, and it enters `compiler/ada/split-commands.json`.
 A closure pin for each main in `scripts/tests/test_unit_closure.py` holds
 it without the front end, as D1423 pinned `Landin.Library`, and
 `scripts/unit_closure.py` refuses or reports a cut parent a real link
-would bring back (SR-1354). `svd` gains
+would bring back (`SR-1354`). `svd` gains
 toy-SVD goldens that run offline through the executable: the output
-bytes, and the report and exit status of each fault code. The SR-1224
+bytes, and the report and exit status of each fault code. The `SR-1224`
 helper takes an executable path, so one suite runs `refine svd` or
 `refine-svd`.
 Exit evidence: each split linked without the front end; its black-box
 suites, and every invocation of the old form, pass through the
 dispatcher.
+Done: `svd`, `bindings` and `site` are `refine-svd`, `refine-bindings` and
+`refine-site`, entered in `compiler/ada/split-commands.json` and built,
+packaged and shipped from it. Each is `Landin.Splits.Svd`, `.Bindings` or
+`.Site` under `Landin.Splits`, which reads a split's own options and
+response files, keeps `refine`'s shared presentation options and answers
+`--help`, `--describe` and `--complete` (D1544); none withs `Landin.Driver`
+or `Landin.Commands`, since a command's outcome, its presentation and
+response files moved out to `Landin.Outcomes`, `Landin.Presentation` and
+`Landin.Response_Files` (D1543). A closure pin per main in
+`scripts/tests/test_unit_closure.py` holds `refine-svd` to 35 units,
+`refine-bindings` to 33 and `refine-site` to 25, where `refine` links 155,
+and `scripts/unit_closure.py` refuses a cut a link cannot honour
+(`SR-1354`). An option written before a split's name is told its form, the
+name first (D1545). Every lane takes `--refine` from
+`scripts/lane_refine.py`, which runs `refine NAME` or `refine-NAME` by the
+path it is given and judges a split by its description (`SR-1224`, D1307
+amended); `test_compile_publication.py` runs every selected control and
+lists the failures together (`SR-1275`); `devices/test.py`'s `ToyGoldens`
+hold the toy device's output bytes and each fault code's report and
+status offline through the executable. The fake-host suites call each
+split's entry; the devices, bindings and publication controls pass
+through `refine` and through each split directly.
 
 ### R18 gate
 Every existing invocation works or is refused with its new form; every

@@ -508,6 +508,67 @@ package Landin.Platform is
    --  A line for a person reading the server's log, never the protocol.
    procedure Log (Host : in out Channel; Line : String) is abstract;
 
+   ---------------------------------------------------------------------
+   --  A debugger's session, for refine-dap (D1523).  One long-lived
+   --  debugger is spoken to over its standard input and output, beside the
+   --  editor's Channel; when asked, two more streams carry what the
+   --  debugged program writes to its own standard output and error, which
+   --  the debugger's child holds as descriptors 3 and 4.  Waiting watches
+   --  the editor and every stream at once, so one thread serves them all.
+   ---------------------------------------------------------------------
+
+   type Session_Stream is (Editor, Debugger, Program_Output, Program_Errors);
+   subtype Session_Input is Session_Stream range Debugger .. Program_Errors;
+   type Ready_Streams is array (Session_Stream) of Boolean;
+
+   type Debugger_Session is limited interface;
+
+   --  Start Arguments' first element, found on the search path when it
+   --  has no slash, with the rest as its arguments, in the caller's
+   --  environment with each NAME=VALUE of Settings in its place.  Failure
+   --  is "" when it started, else why not.
+   procedure Start
+     (Host          : in out Debugger_Session;
+      Arguments     : Path_List;
+      Settings      : Path_List;
+      Program_Pipes : Boolean;
+      Failure       : out Ada.Strings.Unbounded.Unbounded_String)
+   is abstract;
+
+   --  The caller's own value of the variable Name, or "".
+   function Variable
+     (Host : Debugger_Session; Name : String) return String is abstract;
+
+   --  Wait up to Limit, or without end when Limit is negative, until the
+   --  editor or a stream has bytes or has ended.
+   procedure Wait
+     (Host   : in out Debugger_Session;
+      Client : in out Channel'Class;
+      Limit  : Duration;
+      Ready  : out Ready_Streams) is abstract;
+
+   --  Up to Into'Length bytes of From, waiting for one; Last is
+   --  Into'First - 1 exactly when the stream has ended.
+   procedure Read
+     (Host : in out Debugger_Session;
+      From : Session_Input;
+      Into : out String;
+      Last : out Natural) is abstract;
+
+   --  Every byte of Item to the debugger; Sent is False when it has gone.
+   procedure Send
+     (Host : in out Debugger_Session;
+      Item : String;
+      Sent : out Boolean) is abstract;
+
+   --  End the session: its input closed, which a debugger takes for the
+   --  end, and the debugger reaped within Grace or killed.  Status is its
+   --  exit status, 128 plus the signal that ended it, or -1.
+   procedure Stop
+     (Host   : in out Debugger_Session;
+      Grace  : Duration;
+      Status : out Integer) is abstract;
+
    --  Helpers for building an argument list without exposing the container.
    function No_Arguments return Path_List;
    function Arguments (First : String) return Path_List;

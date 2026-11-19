@@ -421,7 +421,7 @@ def restore_fixed(run, args):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument('--refine', type=Path)
+    common.refine_argument(parser)
     common.board_arguments(parser)
     parser.add_argument('--probehive', type=Path, default=common.RIG_STATE / 'probehive',
                         help="a probehive checkout; the rig state's by default, as the gate"

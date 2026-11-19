@@ -258,7 +258,9 @@ class Run:
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--refine", type=Path, required=True)
+    sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'scripts'))
+    import lane_refine  # the --refine every lane takes
+    lane_refine.argument(parser)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--case", action="append", help="exact name; development only")
     parser.add_argument("--profile", choices=["none", "size", "speed"], help="development only")
@@ -269,9 +271,6 @@ def main(argv=None):
     args = parser.parse_args(argv)
     if args.shard[1] > 1 and (not args.parity or args.case or args.profile):
         parser.error("--shard divides the complete --parity run and takes no --case or --profile")
-    sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'scripts'))
-    import refine_revision
-    refine_revision.warn(args.refine)  # is it this checkout's?
     require(platform.system() == "Darwin" and platform.machine() == "arm64", "native Darwin arm64 required")
     require(subprocess.check_output(["sysctl", "-n", "sysctl.proc_translated"]).strip() == b"0",
             "translated execution is not Darwin acceptance")

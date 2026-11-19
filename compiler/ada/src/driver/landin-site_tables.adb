@@ -1,14 +1,8 @@
 with Ada.Strings.Fixed;
-with Ada.Strings.Unbounded;
 with GNAT.SHA256;
-with Interfaces;
-with Landin.Diagnostics;
-with Landin.Diagnostics.Catalogue;
-with Landin.Diagnostics.Text;
 with Landin.Json;
-with Landin.Source.Sets;
 
-package body Landin.Commands.Sites is
+package body Landin.Site_Tables is
    package US renames Ada.Strings.Unbounded;
    package Cat renames Landin.Diagnostics.Catalogue;
    package J renames Landin.Json;
@@ -16,8 +10,6 @@ package body Landin.Commands.Sites is
    use type US.Unbounded_String;
    use type J.Integer_Value;
    use type Landin.Platform.Read_Status;
-
-   LF : constant Character := Character'Val (10);
 
    --  A file that ends before what its own headers promise.
    Truncated : exception;
@@ -268,29 +260,25 @@ package body Landin.Commands.Sites is
       new String'("bad_conversion"), new String'("unreachable"),
       new String'("stack_exhausted")];
 
-   procedure Resolve
+   function Resolve
      (Artifact, Map_Path, Dsym_Path : String;
       Operands : Landin.Platform.Path_List;
-      Host     : Landin.Platform.Filesystem'Class;
-      Result   : in out Landin.Driver.Outcome)
+      Host     : Landin.Platform.Filesystem'Class) return Answer
    is
       Table_Path : constant String :=
         (if Map_Path = "" then Artifact & ".sources.json" else Map_Path);
-      Sources : Landin.Source.Sets.Source_Set;
+      Result : Answer;
       Refused : Boolean := False;
 
       procedure Report (Code : Cat.Code_Name; Message : String);
       procedure Report (Code : Cat.Code_Name; Message : String) is
       begin
-         Refused := True;
-         Result.Status := Landin.Driver.Status_Reported;
-         Result.Found.Append
-           (Landin.Diagnostics.Make
-              (Code => Cat.Code (Code), Level => Landin.Diagnostics.Error,
-               Source => Landin.Source.No_Source,
-               Where => Landin.Source.Empty_Span, Message => Message));
-         Result.Report := US.To_Unbounded_String
-           (Landin.Diagnostics.Text.Render (Result.Found, Sources));
+         if not Refused then
+            Refused := True;
+            Result.Kind := Refusal;
+            Result.Code := Code;
+            Result.Message := US.To_Unbounded_String (Message);
+         end if;
       end Report;
 
       --  PATH's bytes, or a report naming WHAT it is.
@@ -438,11 +426,8 @@ package body Landin.Commands.Sites is
       Files : J.Value;
    begin
       if Natural (Operands.Length) not in 1 | 3 then
-         Result.Status := Landin.Driver.Status_Misuse;
-         Result.Report := US.To_Unbounded_String
-           ("refine: site resolves one site number, or a file number, a"
-            & " line and a column: refine site PROGRAM SITE" & LF);
-         return;
+         Result.Kind := Misuse;
+         return Result;
       end if;
       declare
          Program : constant String := Read (Artifact, "the build");
@@ -451,12 +436,12 @@ package body Landin.Commands.Sites is
          Built : Identity;
       begin
          if Refused then
-            return;
+            return Result;
          end if;
          J.Parse (Document, Table);
          if not J.Ok (Document) then
             Bad_Table (J.Fault (Document));
-            return;
+            return Result;
          elsif not J.Is_Kind (Document, J.Root (Document), J.Object_Value)
            or else not Is_Digest (Text_Member ("build_id"))
            or else not Is_Digest (Text_Member ("assembly_sha256"))
@@ -465,12 +450,12 @@ package body Landin.Commands.Sites is
               J.Array_Value)
          then
             Bad_Table ("it needs build_id, assembly_sha256 and files");
-            return;
+            return Result;
          end if;
          Files := J.Member (Document, J.Root (Document), "files");
          Built := Identify (Artifact, Program);
          if Refused then
-            return;
+            return Result;
          end if;
          --  D192, D1292: the table answers only for the build it was
          --  written with.
@@ -481,13 +466,13 @@ package body Landin.Commands.Sites is
                           & " build " & Table_Path & " was written with:"
                           & " it is neither an ELF or Mach-O file nor the"
                           & " assembly whose SHA-256 the table records");
-                  return;
+                  return Result;
                end if;
             when Mach_O_Symbols =>
                Report (Cat.Site_Build_Mismatch, Artifact & " is a dSYM's"
                        & " DWARF file; name the executable, and this file"
                        & " with --dsym");
-               return;
+               return Result;
             when ELF | Mach_O_Executable =>
                if US.To_String (Built.Build_Id) /= Text_Member ("build_id")
                then
@@ -501,7 +486,7 @@ package body Landin.Commands.Sites is
                                & " not write")
                           & ", and " & Table_Path & " was written with build "
                           & Text_Member ("build_id"));
-                  return;
+                  return Result;
                end if;
          end case;
          if Dsym_Path /= "" then
@@ -510,11 +495,11 @@ package body Landin.Commands.Sites is
                Debug : Identity;
             begin
                if Refused then
-                  return;
+                  return Result;
                end if;
                Debug := Identify (Dsym_Path, Symbols);
                if Refused then
-                  return;
+                  return Result;
                elsif Built.Kind /= Mach_O_Executable
                  or else Debug.Kind /= Mach_O_Symbols
                  or else US.Length (Built.UUID) = 0
@@ -524,7 +509,7 @@ package body Landin.Commands.Sites is
                           & " dSYM of " & Artifact & ": --dsym names the"
                           & " DWARF file whose UUID a Mach-O executable"
                           & " shares");
-                  return;
+                  return Result;
                end if;
             end;
          end if;
@@ -542,11 +527,11 @@ package body Landin.Commands.Sites is
                Report (Cat.Site_Unresolved, "`" & Operands.First_Element
                        & "` is not a site: a panic handler's site is a"
                        & " u32");
-               return;
+               return Result;
             elsif Site = 0 then
                Report (Cat.Site_Unresolved, "site 0 is the compiler's own"
                        & " guard, which no source operation has");
-               return;
+               return Result;
             end if;
             for Index in 1 .. J.Length (Document, Files) loop
                declare
@@ -575,7 +560,7 @@ package body Landin.Commands.Sites is
                           then ""
                           else ", which records no sites: compile with"
                             & " --panic-map"));
-               return;
+               return Result;
             end if;
             declare
                Offset : constant J.Integer_Value :=
@@ -590,7 +575,7 @@ package body Landin.Commands.Sites is
                  or else J.Length (Document, Starts_At) = 0
                then
                   Bad_Table ("a file with sites has no line_offsets");
-                  return;
+                  return Result;
                end if;
                for Index in 1 .. J.Length (Document, Starts_At) loop
                   declare
@@ -605,7 +590,7 @@ package body Landin.Commands.Sites is
                      then
                         Bad_Table ("a file's line_offsets do not ascend"
                                    & " from zero");
-                        return;
+                        return Result;
                      end if;
                      Previous := Here;
                      if Here <= Offset then
@@ -629,7 +614,7 @@ package body Landin.Commands.Sites is
                Report (Cat.Site_Unresolved, "a caller's coordinates are"
                        & " three positive numbers: its file, line and"
                        & " column");
-               return;
+               return Result;
             end if;
             for Index in 1 .. J.Length (Document, Files) loop
                if Field (J.Element (Document, Files, Index), "file_id")
@@ -642,22 +627,42 @@ package body Landin.Commands.Sites is
             if Matches /= 1 then
                Report (Cat.Site_Unresolved, "file " & Trimmed (File)
                        & " is not one file of " & Table_Path);
-               return;
+               return Result;
             end if;
          end if;
          declare
             Path : constant String := Path_Of (Found);
          begin
             if Refused then
-               return;
+               return Result;
             end if;
             --  The path is filesystem bytes, written as they are.
-            Result.Output := US.To_Unbounded_String
-              (Path & ":" & Trimmed (Line) & ":" & Trimmed (Column)
-               & (if Natural (Operands.Length) = 1
-                  then " (" & Reasons (Reason).all & ")" else "") & LF);
+            Result.Path := US.To_Unbounded_String (Path);
+            Result.Line := Natural (Line);
+            Result.Column := Natural (Column);
+            if Natural (Operands.Length) = 1 then
+               Result.Reason := US.To_Unbounded_String (Reasons (Reason).all);
+            end if;
+            return Result;
          end;
       end;
    end Resolve;
 
-end Landin.Commands.Sites;
+   function Resolve_Site
+     (Artifact, Map_Path : String;
+      Site : Interfaces.Unsigned_32;
+      Host : Landin.Platform.Filesystem'Class) return Answer is
+   begin
+      return Resolve
+        (Artifact, Map_Path, "",
+         Landin.Platform.Arguments (Trimmed (J.Integer_Value (Site))), Host);
+   end Resolve_Site;
+
+   function Text (Of_Answer : Answer) return String is
+     (US.To_String (Of_Answer.Path)
+      & ":" & Trimmed (J.Integer_Value (Of_Answer.Line))
+      & ":" & Trimmed (J.Integer_Value (Of_Answer.Column))
+      & (if US.Length (Of_Answer.Reason) = 0 then ""
+         else " (" & US.To_String (Of_Answer.Reason) & ")"));
+
+end Landin.Site_Tables;

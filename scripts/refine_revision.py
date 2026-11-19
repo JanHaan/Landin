@@ -27,11 +27,18 @@ how it parts, by the revision it names:
   from another line of history, and is neither older nor newer;
 - `unknown`, a build outside a git checkout: its sources are other ones.
 
-Only a binary that answers `refine version --json` is judged: one that
-does not, a stand-in or a program that is no refine, is the lane's to
-refuse, and nothing is said.  dev-build.sh and dev-test.sh run this after
-their build, and every lane that takes `--refine` calls `warn` with it; a
-warning never changes a status.
+A split command, `refine-NAME` (D1383), is asked `--describe` instead
+(D1387): a shipped one names the source digest it was built from, which
+is `refine`'s, so the digest decides for it as for `refine`.  Its revision
+is the `refine` its installation holds, PREFIX/bin/refine beside its
+PREFIX/libexec/landin/, when that one answers with the same digest; when
+none does, the warning says the sources part without saying how.
+
+Only a binary that answers as refine or a split command does is judged:
+one that does not, a stand-in or a program that is no refine, is the
+lane's to refuse, and nothing is said.  dev-build.sh and dev-test.sh run
+this after their build, and every lane that takes `--refine` asks it
+through scripts/lane_refine.py; a warning never changes a status.
 """
 import argparse
 import json
@@ -46,12 +53,35 @@ sys.path.insert(0, str(HERE))
 import build_identity  # noqa: E402
 
 
-def binary_identity(refine, timeout=60):
-    """What REFINE says it was built from: (revision, digest, dirty), or
-    None when it does not answer `version --json` as refine does."""
+def split_name(refine):
+    """NAME when REFINE is a split command's executable, `refine-NAME`
+    (`refine-NAME.exe` on Windows); None for `refine` or anything else."""
+    name = Path(str(refine)).name
+    if name.lower().endswith('.exe'):
+        name = name[:-4]
+    if name.startswith('refine-') and len(name) > len('refine-'):
+        return name[len('refine-'):]
+    return None
+
+
+def installation_refine(split):
+    """The `refine` installed beside SPLIT, PREFIX/bin/refine for a
+    PREFIX/libexec/landin/refine-NAME (D1384), or None when SPLIT is not
+    in an installation's libexec or no refine is there."""
+    split = Path(str(split))
+    if split.parent.name != 'landin' or split.parent.parent.name != 'libexec':
+        return None
+    prefix = split.parent.parent.parent
+    for name in ('refine', 'refine.exe'):
+        if (prefix / 'bin' / name).is_file():
+            return prefix / 'bin' / name
+    return None
+
+
+def _answer(command, timeout):
+    """The JSON object COMMAND prints with status 0, or None."""
     try:
-        ran = subprocess.run([str(refine), 'version', '--json'],
-                             capture_output=True, timeout=timeout,
+        ran = subprocess.run(command, capture_output=True, timeout=timeout,
                              stdin=subprocess.DEVNULL, check=False)
         out = ran.stdout
         said = json.loads(out.decode('utf-8') if isinstance(out, bytes)
@@ -60,13 +90,46 @@ def binary_identity(refine, timeout=60):
             subprocess.SubprocessError):
         #  Not a refine's answer; a lane's own stand-in among them.
         return None
-    if (ran.returncode != 0 or not isinstance(said, dict)
-            or said.get('compiler') != 'refine'
+    if ran.returncode != 0 or not isinstance(said, dict):
+        return None
+    return said
+
+
+def _refine_identity(refine, timeout):
+    said = _answer([str(refine), 'version', '--json'], timeout)
+    if (said is None or said.get('compiler') != 'refine'
             or not isinstance(said.get('revision'), str)
             or not isinstance(said.get('source_digest'), str)
             or not isinstance(said.get('dirty'), bool)):
         return None
     return said['revision'], said['source_digest'], said['dirty']
+
+
+def _split_identity(split, name, timeout):
+    said = _answer([str(split), '--describe'], timeout)
+    if (said is None or said.get('format') != 'landin-command-1'
+            or said.get('name') != name
+            or not isinstance(said.get('source_digest'), str)):
+        #  A contributed command, built from no tree of Landin's, names no
+        #  digest (D1387): there is nothing to judge it by.
+        return None
+    digest = said['source_digest']
+    shipped = installation_refine(split)
+    beside = _refine_identity(shipped, timeout) if shipped else None
+    if beside is not None and beside[1] == digest:
+        return beside
+    return None, digest, False
+
+
+def binary_identity(refine, timeout=60):
+    """What REFINE says it was built from: (revision, digest, dirty), or
+    None when it does not answer `version --json` as refine does, nor
+    `--describe` as a shipped split command does.  A split command's
+    revision is None when no refine of its build is installed beside it."""
+    name = split_name(refine)
+    if name is not None:
+        return _split_identity(refine, name, timeout)
+    return _refine_identity(refine, timeout)
 
 
 def _git(root, *words):
@@ -91,6 +154,10 @@ def judgement(binary, checkout, root):
     head, current = checkout[0], checkout[1]
     if digest == current:
         return None
+    if revision is None:
+        return ('was built from compiler sources other than this'
+                ' checkout\'s, and no refine of the same build is installed'
+                ' beside it to name their revision')
     built = revision[:12] + (' (dirty)' if dirty else '')
     if revision == 'unknown':
         return ('was built outside a git checkout, from compiler sources'

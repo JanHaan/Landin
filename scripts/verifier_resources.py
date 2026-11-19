@@ -97,12 +97,11 @@ def stack_probe(command, stack_kib, timeout):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--refine", required=True)
+    import lane_refine  # the --refine every lane takes
+    lane_refine.argument(parser)
     parser.add_argument("--output", required=True)
     parser.add_argument("--timeout", type=float, default=120)
     args = parser.parse_args(argv)
-    import refine_revision
-    refine_revision.warn(args.refine)  # is it this checkout's?
     if not math.isfinite(args.timeout) or args.timeout <= 0:
         parser.error("--timeout must be finite and positive")
     refine = Path(args.refine).resolve()

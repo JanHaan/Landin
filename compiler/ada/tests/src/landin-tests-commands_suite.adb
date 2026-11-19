@@ -9,6 +9,9 @@ with Landin.Diagnostics;
 with Landin.Diagnostics.Catalogue;
 with Landin.Json;
 with Landin.Platform;
+with Landin.Splits.Bindings;
+with Landin.Splits.Site;
+with Landin.Splits.Svd;
 with Landin.Platform.Native;
 with Landin.Testing.Fakes;
 
@@ -32,7 +35,6 @@ package body Landin.Tests.Commands_Suite is
    is
       Host  : Landin.Testing.Fakes.Fake_Filesystem;
       Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
-      Meter : Landin.Platform.Unmetered;
       LF : constant Character := Character'Val (10);
       NUL : constant Character := Character'Val (0);
       Build : constant String (1 .. 64) := [others => 'a'];
@@ -132,9 +134,17 @@ package body Landin.Tests.Commands_Suite is
            & Commands & (if Kind = 2 then Id else "");
       end Mach_O;
 
+      --  `refine site WORDS` is `refine-site WORDS` (D1383).
+      function Run (Words : Landin.Platform.Path_List)
+        return Landin.Driver.Outcome;
       function Run (Words : Landin.Platform.Path_List)
         return Landin.Driver.Outcome
-        is (Landin.Commands.Execute (Words, Host, Tools, Meter));
+      is
+         Rest : Landin.Platform.Path_List := Words;
+      begin
+         Rest.Delete_First;
+         return Landin.Splits.Site.Execute (Rest, Host, Tools);
+      end Run;
 
       procedure Answers (Words : Landin.Platform.Path_List; Line : String);
       procedure Answers (Words : Landin.Platform.Path_List; Line : String)
@@ -1376,8 +1386,8 @@ package body Landin.Tests.Commands_Suite is
                "--emit=asm is an option of compile, not of check, and"
                & " follows its command: refine compile --emit=asm ...");
       Refused (["--target=linux-x86-64", "--version"],
-               "--target=linux-x86-64 is an option of check, compile, run"
-               & " and bindings, not of version");
+               "--target=linux-x86-64 is an option of check, compile and"
+               & " run, not of version");
       --  D1463: with no command, the request is named again after the
       --  command of the option `check` does not take.
       Refused (["-o", "x.s", "main.ldn"],
@@ -1614,6 +1624,19 @@ package body Landin.Tests.Commands_Suite is
            and then not Host.Exists ("/virtual/tmp/refine-run-2"),
          "a program a forwarded termination ended is reported, and its"
          & " directory removed: " & US.To_String (Result.Report));
+      --  D1528: a closed pipe is its reader leaving, and ends refine as
+      --  quietly as a shell's pipeline.
+      Tools.Set_Program_Result (0, Signal => 13, Signal_Name => "SIGPIPE");
+      Result := Landin.Commands.Execute
+        (["run", "--link=libc", "game.ldn"], Host, Tools, Meter,
+         Built_For => Linux_Host);
+      Landin.Commands.Launch (Result, Host, Tools);
+      Landin.Testing.Check
+        (Item, Result.Status = 141
+           and then US.To_String (Result.Report) = ""
+           and then not Host.Exists ("/virtual/tmp/refine-run-3"),
+         "a program a closed pipe ended ends refine quietly: "
+         & US.To_String (Result.Report));
    end Run_Reports_A_Signal;
 
    --  D526: the directory goes on every way out before the program runs.
@@ -2367,6 +2390,142 @@ package body Landin.Tests.Commands_Suite is
          "every shell's completion delegates to refine-NAME --complete");
    end Dispatcher;
 
+   --  D1485, D1544: each split command answers its process surface
+   --  itself, and keeps the shared options and response files a built-in
+   --  command takes; D1545: an option before a split's name is refine's.
+   procedure Split_Surface (Item : in out Landin.Testing.Context);
+   procedure Split_Surface (Item : in out Landin.Testing.Context) is
+      Host : Landin.Testing.Fakes.Fake_Filesystem;
+      Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+      Meter : Landin.Platform.Unmetered;
+
+      type Split is (Svd, Bindings, Site);
+
+      function Run (Command : Split; Words : Landin.Platform.Path_List)
+        return Landin.Driver.Outcome is
+        (case Command is
+            when Svd => Landin.Splits.Svd.Execute (Words, Host, Tools),
+            when Bindings => Landin.Splits.Bindings.Execute
+              (Words, Host, Tools, "x86_64-pc-linux-gnu"),
+            when Site => Landin.Splits.Site.Execute (Words, Host, Tools));
+
+      function Name (Command : Split) return String is
+        (case Command is
+            when Svd => "svd", when Bindings => "bindings",
+            when Site => "site");
+
+      function Own_Option (Command : Split) return String is
+        (case Command is
+            when Svd => "--policy", when Bindings => "--clang",
+            when Site => "--map");
+   begin
+      Host.Add_File ("words", "--policy=toy.json" & ASCII.LF);
+      for Command in Split loop
+         declare
+            Said : constant Landin.Driver.Outcome :=
+              Run (Command, ["--describe"]);
+            Text : constant String := US.To_String (Said.Output);
+         begin
+            Landin.Testing.Check
+              (Item, Said.Status = 0
+                 and then Contains (Text, """format"":""landin-command-1""")
+                 and then Contains (Text, """name"":""" & Name (Command)
+                                    & """")
+                 and then Contains (Text, """source_digest"":"""
+                   & Landin.Build_Identity.Source_Digest & """")
+                 and then Contains (Text, """codes"":[]"),
+               Name (Command) & " describes itself as shipped: " & Text);
+         end;
+         declare
+            Said : constant Landin.Driver.Outcome :=
+              Run (Command, ["--help"]);
+            Text : constant String := US.To_String (Said.Output);
+         begin
+            Landin.Testing.Check
+              (Item, Said.Status = 0
+                 and then Text'Length > 0
+                 and then Contains (Text, "usage: refine " & Name (Command)
+                                    & " ")
+                 and then Contains (Text, Own_Option (Command))
+                 and then Contains (Text, "--diagnostics"),
+               Name (Command) & " prints its own help: " & Text);
+         end;
+         declare
+            Said : constant Landin.Driver.Outcome :=
+              Run (Command, ["--complete", "--",
+                             Own_Option (Command) (1 .. 4)]);
+            Text : constant String := US.To_String (Said.Output);
+         begin
+            Landin.Testing.Check
+              (Item, Said.Status = 0
+                 and then Contains (Text, Own_Option (Command) & ASCII.LF),
+               Name (Command) & " completes its own options: " & Text);
+         end;
+         declare
+            Said : constant Landin.Driver.Outcome :=
+              Run (Command, ["--colour=never", "x"]);
+            Text : constant String := US.To_String (Said.Report);
+         begin
+            Landin.Testing.Check
+              (Item, Said.Status = Landin.Driver.Status_Misuse
+                 and then Contains (Text, "error[L0002]: unknown option:"
+                   & " --colour=never; did you mean --color?"),
+               Name (Command) & " refuses an unknown option: " & Text);
+         end;
+         declare
+            Said : constant Landin.Driver.Outcome :=
+              Run (Command, ["--diagnostics=json", "--color=never"]);
+            Text : constant String := US.To_String (Said.Report);
+         begin
+            Landin.Testing.Check
+              (Item, Said.Status = Landin.Driver.Status_Misuse
+                 and then Contains (Text, """severity"":""error""")
+                 and then Contains (Text, "L0002"),
+               Name (Command) & " presents a refusal as --diagnostics asks: "
+               & Text);
+         end;
+      end loop;
+      --  A response file is read as before the split.
+      declare
+         Said : constant Landin.Driver.Outcome :=
+           Run (Svd, ["@words", "toy.svd"]);
+      begin
+         Landin.Testing.Check
+           (Item, Said.Status = Landin.Driver.Status_Misuse
+              and then Contains (US.To_String (Said.Report),
+                "svd needs the policy the SVD was reviewed against"),
+            "svd reads its response file: " & US.To_String (Said.Report));
+      end;
+      declare
+         Said : constant Landin.Driver.Outcome :=
+           Run (Svd, ["--policy=a", "--policy=b", "--out-dir=o", "x.svd"]);
+      begin
+         Landin.Testing.Check
+           (Item, Said.Status = Landin.Driver.Status_Misuse
+              and then Contains (US.To_String (Said.Report),
+                "--policy may be given once"),
+            "a single option is given once: " & US.To_String (Said.Report));
+      end;
+      --  D1545: `refine --quiet svd ...` is told its form with the name
+      --  first, and nothing is run.
+      declare
+         Said : constant Landin.Driver.Outcome :=
+           Landin.Commands.Execute
+             (["--quiet", "svd", "--policy=p.json", "x.svd"], Host, Tools,
+              Meter, Shipped => "bindings site svd");
+      begin
+         Landin.Testing.Check
+           (Item, Said.Status = Landin.Driver.Status_Misuse
+              and then Tools.Run_Count = 0
+              and then Contains (US.To_String (Said.Report),
+                "an option before svd is refine's own, and svd takes its"
+                & " options after its name: refine svd --quiet"
+                & " --policy=p.json x.svd"),
+            "an option before a split's name is placed after it: "
+            & US.To_String (Said.Report));
+      end;
+   end Split_Surface;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
       Landin.Testing.Register
@@ -2431,5 +2590,8 @@ package body Landin.Tests.Commands_Suite is
          Reference_Is_Recorded'Access);
       Landin.Testing.Register
         (Into, "commands", "the dispatcher", Dispatcher'Access);
+      Landin.Testing.Register
+        (Into, "commands", "a split answers its own surface",
+         Split_Surface'Access);
    end Register;
 end Landin.Tests.Commands_Suite;

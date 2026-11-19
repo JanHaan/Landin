@@ -289,11 +289,24 @@ def qemu_argv(arch, overlay, output, private):
         require(os.access('/dev/kvm', os.R_OK | os.W_OK), 'x86-64 guest requires accessible KVM')
         return ['qemu-system-x86_64', '-accel', 'kvm', '-cpu', 'host', *common,
                 '-drive', f'file={chardev_path(overlay)},format=qcow2,if=virtio']
-    firmware = next((p for p in (Path('/usr/share/AAVMF/AAVMF_CODE.fd'),
-                      Path('/usr/share/qemu/edk2-aarch64-code.fd')) if p.is_file()), None)
+    #  Ubuntu's qemu-efi-aarch64, then the firmware a QEMU on PATH ships
+    #  in its own share directory, as the Nix store's does.
+    candidates = [Path('/usr/share/AAVMF/AAVMF_CODE.fd'),
+                  Path('/usr/share/qemu/edk2-aarch64-code.fd')]
+    emulator = shutil.which('qemu-system-aarch64')
+    if emulator:
+        candidates.append(Path(emulator).resolve().parent.parent
+                          / 'share/qemu/edk2-aarch64-code.fd')
+    firmware = next((p for p in candidates if p.is_file()), None)
     if os.environ.get('LANDIN_FREEBSD_EFI'):
         firmware = Path(os.environ['LANDIN_FREEBSD_EFI'])
-    require(firmware is not None and firmware.is_file(), 'arm64 UEFI firmware missing')
+    require(firmware is not None and firmware.is_file(),
+            'arm64 UEFI firmware missing: '
+            + (f'LANDIN_FREEBSD_EFI names {firmware}, which is not a file'
+               if os.environ.get('LANDIN_FREEBSD_EFI') else
+               'looked for ' + ', '.join(map(str, candidates))
+               + '; install qemu-efi-aarch64, or name the firmware file in'
+               ' LANDIN_FREEBSD_EFI'))
     return ['qemu-system-aarch64', '-machine', 'virt', '-cpu', 'max', '-bios', str(firmware),
             *common, '-drive', f'file={chardev_path(overlay)},format=qcow2,if=none,id=hd0',
             '-device', 'virtio-blk-pci,drive=hd0']

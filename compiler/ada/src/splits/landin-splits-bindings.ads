@@ -1,4 +1,5 @@
---  `refine bindings`: bind C headers for Landin (D820, D821).
+--  `refine bindings`, the split command `refine-bindings` (D1383): bind C
+--  headers for Landin (D820, D821).
 --
 --  The command checks its request, reads the headers and the policy, and
 --  runs the named Clang through Landin.Platform for everything a header
@@ -15,10 +16,10 @@
 --  their original inode. Group visibility is not atomic.
 
 with Ada.Strings.Unbounded;
-with Landin.Driver;
+with Landin.Outcomes;
 with Landin.Platform;
 
-package Landin.Commands.Bindings is
+package Landin.Splits.Bindings is
 
    type Request is record
       Clang     : Ada.Strings.Unbounded.Unbounded_String;
@@ -36,11 +37,21 @@ package Landin.Commands.Bindings is
       Protected_Identities : Landin.Platform.Identity_List;
    end record;
 
+   --  The command's whole run, as its main and the fake host's cases call
+   --  it: Arguments are the words after `bindings`.  Built_For is the
+   --  triplet whose host a request that names no target binds for.
+   function Execute
+     (Arguments      : Landin.Platform.Path_List;
+      Host           : Landin.Platform.Filesystem'Class;
+      Tools          : Landin.Platform.Tool_Runner'Class;
+      Built_For      : String;
+      Terminal_Color : Boolean := False) return Landin.Outcomes.Outcome;
+
    procedure Generate
      (Asked     : Request;
       Host      : Landin.Platform.Filesystem'Class;
       Tools     : Landin.Platform.Tool_Runner'Class;
       Built_For : String;
-      Result    : in out Landin.Driver.Outcome);
+      Result    : in out Landin.Outcomes.Outcome);
 
-end Landin.Commands.Bindings;
+end Landin.Splits.Bindings;

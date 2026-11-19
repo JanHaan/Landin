@@ -20,6 +20,8 @@ import tty
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
+sys.path.insert(0, str(ROOT / "scripts"))
+import lane_refine  # noqa: E402
 MAIN_SOURCE = HERE / "main.ldn"
 ODD_SOURCE = HERE / 'caller"\\path.ldn'
 SOURCES = (MAIN_SOURCE, ODD_SOURCE)
@@ -1690,7 +1692,8 @@ def measure(refine: Path, tools: dict[str, str], gdb: str,
             "stripped executable output differs from its fixture oracle")
     #  D1292: `refine site` reads the build's identity out of the stripped
     #  executable, or hashes the assembly.
-    resolver = [str(refine), "site", "--map=" + str(map_path)]
+    site = lane_refine.command(refine, "site")
+    resolver = [*site, "--map=" + str(map_path)]
     caller_id, caller_line, caller_column = 2, CALLER_LINE, CALLER_COLUMN
     if workload:
         entry_source = fixture / "main.ldn"
@@ -1716,7 +1719,7 @@ def measure(refine: Path, tools: dict[str, str], gdb: str,
     wrong_map = scratch / f"debug-{key}-wrong.sources.json"
     wrong_map.write_text(json.dumps(
         dict(json.loads(map_path.read_text()), build_id=wrong_build_id)))
-    refusal = run([str(refine), "site", "--map=" + str(wrong_map),
+    refusal = run([*site, "--map=" + str(wrong_map),
                    str(stripped), *coordinate_args], cwd=debugger_cwd,
                   expected_status=1)
     require("error[L0689]" in refusal and stripped_id in refusal,
@@ -1869,7 +1872,7 @@ def measure_workloads(measurement: Callable[[str, tuple[str, str, str]], dict],
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--refine", type=Path, required=True)
+    lane_refine.argument(parser)
     parser.add_argument("--toolchain", type=Path, required=True,
                         help="checksum-pinned Linux GNAT installation")
     parser.add_argument("--output", type=Path, required=True,
@@ -1891,9 +1894,6 @@ def main() -> None:
     parser.add_argument("--workload", choices=(*WORKLOADS, "switch"),
                         help="exact developer workload; FILTERED, not acceptance")
     args = parser.parse_args()
-    sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'scripts'))
-    import refine_revision
-    refine_revision.warn(args.refine)  # is it this checkout's?
     global LANE
     require(platform.system() == "Linux",
             "source debugging requires Linux; no skip is a pass")

@@ -7,6 +7,7 @@ import shutil
 import sys
 
 import check as shared
+import lane_refine
 import macho_identity
 
 
@@ -139,14 +140,15 @@ def measure(refine, output, capture, tools, selected=None, profile=None):
             assert 'no locations (pending)' in stripped_session
             first = table['files'][0]
             #  D1292: as darwin.py's lookup.
-            lookup = [refine.resolve(), 'site', '--map=' + str(table_path), '--dsym=' + str(dsym),
+            site = lane_refine.command(refine.resolve(), 'site')
+            lookup = [*site, '--map=' + str(table_path), '--dsym=' + str(dsym),
                       stripped, str(first['file_id']), '1', '1']
             resolved = run(key + '-lookup', lookup)
             assert os.fsdecode(bytes.fromhex(first['path_hex'])) in resolved
             wrong = {**table, 'build_id': '0' * 64}
             mismatch = output / (key + '-wrong.sources.json')
             mismatch.write_text(json.dumps(wrong) + '\n')
-            run(key + '-mismatch', [*lookup[:2], '--map=' + str(mismatch), *lookup[3:]], 1)
+            run(key + '-mismatch', [*site, '--map=' + str(mismatch), *lookup[len(site) + 1:]], 1)
             assert list(deployment.iterdir()) == [stripped]
             results.append(dict(workload=workload, optimize=opt, specialize=spec, status='passed',
                                 identity=identity, checks=len(session['checks']), sources=table['files'],

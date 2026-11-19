@@ -252,14 +252,13 @@ def check_refusal(refine: str, target: str, work: str) -> list[str]:
 
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--refine", required=True)
+    import lane_refine  # the --refine every lane takes
+    lane_refine.argument(parser)
     parser.add_argument("--target", default="linux-x86-64", choices=sorted(REACH))
     parser.add_argument("--toolchain", default="cc")
     parser.add_argument("--shape", action="append", choices=sorted(shapes(1)),
                         help="one shape, which repeats; every shape by default")
     options = parser.parse_args(argv)
-    import refine_revision
-    refine_revision.warn(options.refine)  # is it this checkout's?
     driver = shutil.which(options.toolchain) or options.toolchain
     if not os.access(driver, os.X_OK):
         print("image_bounds: no driver %s; name the target's with --toolchain"

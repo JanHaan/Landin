@@ -39,6 +39,7 @@ with Landin.Tests.Fixes_Suite;
 with Landin.Tests.Formatting_Suite;
 with Landin.Tests.Harness_Suite;
 with Landin.Tests.IR_Suite;
+with Landin.Tests.Dap_Suite;
 with Landin.Tests.Json_Suite;
 with Landin.Tests.Lexer_Suite;
 with Landin.Tests.Lowering_Suite;
@@ -119,6 +120,7 @@ procedure Landin_Tests is
       "host reports     ",
       "catalogue        ",
       "checking         ",
+      "dap              ",
       "debugging        ",
       "bindings         ",
       "devices          ",
@@ -716,6 +718,7 @@ begin
    Landin.Tests.Fixes_Suite.Register (Cases);
    Landin.Tests.Harness_Suite.Register (Cases);
    Landin.Tests.IR_Suite.Register (Cases);
+   Landin.Tests.Dap_Suite.Register (Cases);
    Landin.Tests.Json_Suite.Register (Cases);
    Landin.Tests.Lexer_Suite.Register (Cases);
    Landin.Tests.Lowering_Suite.Register (Cases);

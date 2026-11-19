@@ -246,17 +246,21 @@ it names.
 | `refine site prog SITE` | name the source line and the failed check of the panic site a program's handler received, from the table `--panic-map` writes beside it |
 | `refine site prog FILE LINE COLUMN` | name the source position of a caller's three coordinates, from the same table |
 | `refine lsp` | the language server an editor starts |
+| `refine dap` | the debug adapter an editor starts: a Debug Adapter Protocol server that debugs through GDB or LLDB and shows a panic at its source line |
 | `refine svd --policy=P.json --out-dir=DIR CHIP.svd` | generate a chip's register modules and interrupts from its SVD (System View Description); see [devices](devices/README.md) |
 | `refine bindings --clang=clang-19 ... api.h` | generate Landin bindings and C adapters for C headers; see [bindings](bindings/README.md) |
 | `refine version` | name the compiler, the library it uses and the commands shipped beside it |
 | `refine targets` | list the described targets, their CPU feature levels and debug modes; `--json` gives structured output |
 | `refine completion bash` | print shell completion definitions; also `zsh` and `fish` |
 | `refine --help`, `refine compile --help` | every command, and one command's options |
-| `refine help compile`, `refine help reference` | the same command help, and the complete command-line reference |
+| `refine help compile`, `refine help reference` | the same command help, and the reference of every built-in command |
 | `refine NAME ...` | run `refine-NAME`, a command shipped beside `refine` or found on `PATH`; `refine help` lists them |
 
-`refine help reference` prints the complete interface, and
-[the command line](docs/capabilities.md#the-command-line) describes it.
+`refine help reference` prints the complete interface of the built-in
+commands, and [the command line](docs/capabilities.md#the-command-line)
+describes it. `svd`, `bindings` and `site` are split commands, executables
+of their own that `refine` runs from `libexec/landin`, and print their own
+help: `refine help svd` or `refine svd --help`.
 
 ## Current compiler capabilities
 
@@ -311,8 +315,9 @@ run records and what the gate checks for each target.
   [The Benchmark Game, measured](docs/benchmarks.md) compares five ports
   with seven other languages.
 - **Tooling:** source debugging on every target, a formatter, a language
-  server, explained diagnostics with fixes, stack-depth reports, and
-  `refine site`, which turns a panic site into its source line.
+  server, a debug adapter that an editor runs over GDB or LLDB, explained
+  diagnostics with fixes, stack-depth reports, and `refine site`, which
+  turns a panic site into its source line.
 
 ## The roadmap
 
@@ -333,7 +338,7 @@ run records and what the gate checks for each target.
   manager, self-hosting, a browser target, dates and times in the library
   and every release decision stay outside it.
 
-**Next roadmap item: R18.60 — `refine dap` (planned).**
+**Next roadmap item: R19.10 — Decide the candidates (planned).**
 
 ## Questions, bugs and ideas
 

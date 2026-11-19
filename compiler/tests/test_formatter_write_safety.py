@@ -407,15 +407,14 @@ class FormatterWriteSafety(unittest.TestCase):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--refine", required=True, type=Path)
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'scripts'))
+    import lane_refine  # the --refine every lane takes
+    lane_refine.argument(parser)
     parser.add_argument("--scratch", type=Path, default=SCRATCH)
     parser.add_argument("--allow-unsupported", action="store_true",
                         help="skip, rather than fail, a case the scratch "
                              "file system or a privileged user cannot run")
     arguments, rest = parser.parse_known_args()
-    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'scripts'))
-    import refine_revision
-    refine_revision.warn(arguments.refine)  # is it this checkout's?
     REFINE = arguments.refine.resolve()
     SCRATCH = arguments.scratch
     ALLOW_UNSUPPORTED = arguments.allow_unsupported
