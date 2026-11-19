@@ -47,6 +47,11 @@ python3 "$root/highlight/generate.py" --check
 #  uncommitted grammar change still gets its structural and corpus verdicts;
 #  the run still fails on it, so the gate is not weakened.
 python3 "$root/highlight/test_adapters.py" --without-grammar-pin
+#  test_adapters.py runs the Pygments lexer smoke only where python3 can
+#  import Pygments, and says so in its own output; count it here too.
+if ! python3 -c 'import pygments' >/dev/null 2>&1; then
+    skip pygments "Pygments absent; lexer smoke skipped (highlight/README.md says how to run it)"
+fi
 python3 "$root/highlight/tests/test_adapters_revision.py"
 
 if test -d "$root/highlight/textmate/node_modules" && command -v node >/dev/null 2>&1; then

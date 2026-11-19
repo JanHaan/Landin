@@ -110,7 +110,7 @@ puts the steps in order:
 |---|---|---|
 | start | `item.py start ITEM` | refuses a complete item or one with an incomplete dependency; makes `../Landin-ITEM` and its branch from `origin/main`; reserves blocks of decision, row and question numbers no other running item of the clone holds, which `register_next.py` then gives out first; marks the item active, moves a pointer naming it, commits that as `Gate: explanatory`; writes `brief.md` |
 | after a reopen | `item.py resume [ITEM]` | the worktree, every recorded run as running, finished or lost, the gate runs, the journal's last lines and the next step |
-| along the way | `item.py note ITEM TEXT`, `item.py run ITEM NAME --limit S -- COMMAND` | a dated journal line; a detached `run_logged.py` run kept in the state |
+| along the way | `item.py note ITEM TEXT`, `item.py run ITEM NAME --limit S [--cwd DIR] -- COMMAND` | a dated journal line; a detached `run_logged.py` run kept in the state, in the item's worktree or DIR |
 | gate | `item.py gate ITEM [--main] [--watch]` | records the pushed head's runs, or main's after promotion, and follows them with `gate_watch.py --all` in a detached run |
 | boards | `item.py boards ITEM [--watch]` | dispatches `scope=boards` on the pushed head, records the run and with `--watch` follows it in a detached run |
 | promotion | `item.py promote ITEM [--dry-run] [--partial]` | pushes the head to main only as the [promotion rule](#physical-boards-and-promotion) allows: a passed push gate on it with its whole job listing, boards on its tree or before only explanatory commits, main its ancestor, the item complete; refuses an item that says `Promotion: maintainer` |
@@ -710,6 +710,13 @@ python3 scripts/script_tests.py test_fuzz_close test_scaling
 # leaning on one the shell alone carries, lldb for instance, fails here
 # first; script_tests.py's GATE_TOOLS names what a test may assume.
 python3 scripts/script_tests.py --gate-environment
+# The gate's documents and scripts jobs run the runner image's Python 3.12,
+# and the development shell gives a newer one, under which an argparse form
+# or a library call 3.12 lacks passes.  This runs the modules, or check.py,
+# under 3.12 from the flake's locked nixpkgs.
+nix shell --inputs-from . nixpkgs#python312 -c \
+    python3 scripts/script_tests.py --gate-environment test_fuzz_close
+nix shell --inputs-from . nixpkgs#python312 -c python3 check.py
 
 # Every workflow through the actionlint environments/pins.sh pins, with
 # .github/actionlint.yaml's runner labels and the pinned shellcheck's pass
@@ -908,8 +915,8 @@ still succeed. The linked full run contains the target-test results.
 | job | runner | runs |
 |---|---|---|
 | `inputs` | `ubuntu-24.04-arm` | verify a recent full pass for an identical candidate, or a full push pass of main or a branch for a declared explanatory edit |
-| `documents` | `ubuntu-24.04` | `check.py` over a checkout with the whole history, which the register's age rule reads, about ninety seconds, needing neither the toolchain nor a built compiler |
-| `scripts` | `ubuntu-24.04` | every `scripts/tests` module at once through `scripts/script_tests.py`, `check.py`'s controls among them in shards, every workflow through the pinned actionlint and its `run:` scripts through the pinned shellcheck, which `scripts/actionlint.py --install` fetches and verifies, and the determinism, quality and debugging controls |
+| `documents` | `ubuntu-24.04` | under the image's own Python 3.12, `check.py` over a checkout with the whole history, which the register's age rule reads, about ninety seconds, needing neither the toolchain nor a built compiler |
+| `scripts` | `ubuntu-24.04` | under the image's own Python 3.12, every `scripts/tests` module at once through `scripts/script_tests.py`, `check.py`'s controls among them in shards, every workflow through the pinned actionlint and its `run:` scripts through the pinned shellcheck, which `scripts/actionlint.py --install` fetches and verifies, and the determinism, quality and debugging controls |
 | `linux-debug-build` | `ubuntu-24.04` | build the debug executables once for the `compiler` shards, `compiler-checks`, `build-modes` and the Linux x86-64 determinism manifest |
 | `compiler` matrix | `ubuntu-24.04` | the debug compiler's complete suite in three `--shard` jobs, `compiler-1` to `compiler-3`, at `LANDIN_TEST_JOBS=8` |
 | `compiler-checks` | `ubuntu-24.04` | with the same debug compiler: the default target, a required Emacs-to-`refine lsp` diagnostic smoke, the determinism closures, native report identity, the scripted server sessions through `refine lsp`, and the server under one round of mutated corpus sources |

@@ -129,13 +129,16 @@ class GateWatch(unittest.TestCase):
 
     def test_a_failed_job_of_an_active_run_gets_a_log_command_that_answers(self):
         #  `gh run view --log-failed` refuses until the whole run ends; the
-        #  job's own endpoint answers at once.  Both name run 7 and job 3.
+        #  job's own endpoint answers at once, printed with the flag the
+        #  pinned gh needs before it writes the log's escape sequences to a
+        #  terminal.  Both name run 7 and job 3.
         result = self.watch([
             state("in_progress", [job(2, "compiler", status="in_progress"),
                                   job(3, "scripts", conclusion="failure")]),
         ], "--run=7")
         self.assertEqual(result.returncode, 1, result.stdout)
-        self.assertIn("log:    gh api repos/{owner}/{repo}/actions/jobs/3/logs",
+        self.assertIn("log:    gh api --allow-escape-sequences "
+                      "repos/{owner}/{repo}/actions/jobs/3/logs",
                       result.stdout)
         self.assertIn("readable while run 7 is still active", result.stdout)
         self.assertIn("once the run ends: gh run view 7 --job 3 --log-failed",

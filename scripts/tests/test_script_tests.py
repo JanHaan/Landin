@@ -109,6 +109,14 @@ class GateEnvironment(unittest.TestCase):
                 self.assertEqual(result.returncode, 0, result.stdout)
                 self.assertEqual((home / "seen").read_text(), seen)
         self.assertIn("== gate environment: PATH holds", result.stdout)
+        self.assertIn("Python %d.%d" % sys.version_info[:2], result.stdout)
+
+    def test_the_mode_names_the_gates_python(self):
+        self.assertEqual(self.runner.python_note((3, 12, 3)),
+                         "Python 3.12, the gate's jobs' own")
+        said = self.runner.python_note((3, 14, 0))
+        self.assertIn("Python 3.14, and the gate's jobs run 3.12", said)
+        self.assertIn("nix shell --inputs-from . nixpkgs#python312", said)
 
 
 class ScriptTests(unittest.TestCase):

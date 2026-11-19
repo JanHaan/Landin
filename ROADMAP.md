@@ -430,7 +430,7 @@ every profile. The seven Cortex-M board records were made again on the rig.
 The programs and corpus lanes, the unit suites and the fixtures pass, the
 build modes agree and the scaling bound holds. The candidate passed its
 [gate](https://github.com/JanHaan/Landin/actions/runs/44498481394) and
-[boards](https://github.com/JanHaan/Landin/actions/runs/44503738502). R16.25
+[boards](https://github.com/JanHaan/Landin/actions/runs/44503738502). R16.27
 takes what is left: SR-581, SR-582's CBZ, SR-583, SR-596, SR-869 and SR-231,
 each with today's figures. Findings fixed on the way: the devices lane's
 cached consumer read a register's address only from literal words; and
@@ -471,12 +471,48 @@ iteration, a loop's shape and the bounds check an indexed increment keeps,
 a routine with an assembly block, which on x86-64 takes no caller-saved
 register and whole-routine spans and on arm64 no slot in a register. This
 takes on SR-1268's SipHash round state and R551-12, whose atomic and barrier
-lowering is taken or recorded with its measurement.
+lowering is taken or recorded with its measurement, and SR-387's heap lock
+path, which with no thread started still makes two out-of-line calls an
+allocation and free.
 
 Exit evidence: each cost taken measured lower against its R16.10 baseline,
 with unchanged behavior, ABI and debugger evidence.
 
-### R16.25 — Cortex-M's remaining selection
+### R16.25 — RISC-V's remaining costs
+
+Status: planned
+Depends on: R16.10
+
+After R16.21's allocation (D1503) the largest RISC-V cost is selection's
+emulation of Arm's condition flags, SR-1363: copies into x20 and x21 before
+every comparison and a carry and overflow computed for every addition, 22%
+of RV64's instructions over four hosted workloads, and five registers kept
+from the allocator. This takes on SR-1363 and SR-637, RV32's frames
+reserving a home for every scratch register a routine might save, which
+R16.21 left as it was.
+
+Exit evidence: RV64's instructions and both targets' sizes measured lower
+than their R16.21 baselines, RV32's frames no larger than their saves need,
+with unchanged behavior, ABI and debugger evidence and the board records
+made again.
+
+### R16.26 — The library's costs
+
+Status: planned
+Depends on: R16.10
+
+R16.10 measured costs the library imposes rather than code generation: a
+`list` grown by allocate and copy where the text builder grows by `resize`
+(SR-275), and on Cortex-M0 `text.format` against `text.append` and
+`core/mem`'s byte loops (SR-1023), with the erased table, `diag.stream`
+and `core/README.md`'s Cortex-M size rows not yet measured. This takes on
+SR-275 and SR-1023.
+
+Exit evidence: each cost measured, and either lowered against its R16.10
+baseline or recorded with its measurement, with the counter fixtures it
+changes re-decided.
+
+### R16.27 — Cortex-M's remaining selection
 
 Status: planned
 Depends on: R16.10
@@ -527,7 +563,7 @@ the R22 items that take them.
 Exit evidence: every row typed and under the cap; the allocation script and
 its control; the cap and age rule refused in a control.
 
-Done: every moved row typed, the rows-to-be filed as `SR-1282` to SR-1298,
+Done: every moved row typed, the rows-to-be filed as `SR-1282` to `SR-1298`,
 `scripts/register_next.py` with its controls, and `check.py` refusing a
 register over its cap or a row past its age in controls. The maintainer's
 answers to Q-1 to Q-5 retired 43 rows and scheduled `SR-195` and `SR-768` on
@@ -630,14 +666,14 @@ script. Closing it met two defects the script's controls had not: `run`
 refused its documented form, on the gate's Python 3.12 after a first fix
 under the shell's 3.14, and promotion while a boards run was going said to
 dispatch one; both are fixed, and the Python the gate's script jobs run,
-which nothing names, is SR-1301. A fresh session with no context resumed it from
+which nothing names, is `SR-1301`. A fresh session with no context resumed it from
 disk with `item.py resume` while the gate ran; it said what the next step
 was, but not what came after the wait, nor what to do with an
 uncommitted file, which `resume` now says. Whether that run is this
 item's exit evidence, with the start-to-finish run left to R16.10 and the
 R17 gate, is Q-8; the R17 gate is not claimed until R16.10 has run start
 to finish under the scripts. The manager's finding that `agent_hook.py
---check` sees only its own checkout is SR-1300.
+--check` sees only its own checkout is `SR-1300`.
 
 ### R17.50 — Gate wall time
 
@@ -899,7 +935,7 @@ language, D1383 and D1385 amended, on the maintainer's answer of
 2026-11-18, and Q-19 is answered. Pinned by the commands suite's `the
 dispatcher` on the fake host and `scripts/tests/test_cli_native.py`'s
 contributed tool on PATH. Found on the way: `item.py run` runs only in the
-item's worktree (SR-1353), and `unit_closure.py --cut` reports closures no
+item's worktree (`SR-1353`), and `unit_closure.py --cut` reports closures no
 link can have (`SR-1354`, scheduled on R18.70).
 
 ### R18.60 — `refine dap`
@@ -995,6 +1031,52 @@ status offline through the executable. The fake-host suites call each
 split's entry; the devices, bindings and publication controls pass
 through `refine` and through each split directly.
 
+### R18.71 — Concurrent compiles into one directory
+
+Status: planned
+Depends on: R18.50
+
+Two `refine compile` runs that publish into one output directory at once,
+as `make -j` starts them, can refuse each other with L0005, "another
+process holds its lock": each inspects the other's live
+`.refine-publication-` workspace and waits two seconds for its lock
+(D1049). The refusal reads as a stale lock, and nothing says outputs that
+share a directory cannot be built in parallel. It failed R18.10's
+concurrent measuring builds, and the harness's own runtime fixtures, which
+compile into one `bin` directory at once: `runtime/r420-vec-large-list`
+failed `compiler-3` in gate run 44424959169's first attempt. This takes on SR-1343 so that items and builds can work in
+parallel.
+
+Exit evidence: concurrent compiles of different outputs into one
+directory succeeding, under a control that starts them together on every
+hosted target the publication controls run; a workspace that is truly
+abandoned still recovered or refused as D1049 says.
+
+### R18.72 — A contributed `refine build`
+
+Status: planned
+Depends on: R18.50
+
+`build` is reserved (D1484): `refine build` refuses with L0002, "build is
+reserved for future project orchestration", even with a compatible
+`refine-build` on PATH, which is left out of `refine help`, is an unknown
+command to `refine help build`, and is asked for no code prefix, so
+`refine explain` refuses its codes, and nothing says a `refine-build` was
+found and passed over. The maintainer decided on 2026-11-19 to lift the
+reservation when a compatible contributed `refine-build` is found, so that
+it is dispatched, listed in help, asked for its prefix and given its
+explanations as any contributed command is. Whether the reservation goes
+outright or L0002 stays for the case where none is found is this item's to
+design and record against D1484. Met writing refine-build, a contributed
+build tool (its friction entry 16).
+
+Exit evidence: a contributed `refine-build` that answers `--describe`,
+`--complete` and `explain` (refine-build at ce197f9, prefix `RB`, is the
+subject) dispatched by `refine build`, listed by `refine help`, shown by
+`refine help build` and given `refine explain RB...`, under the
+dispatcher's black-box controls; the case with no `refine-build` refused
+as the item decides; D1484 amended.
+
 ### R18 gate
 Every existing invocation works or is refused with its new form; every
 split command ships in the archive and the flake and keeps its controls;
@@ -1019,6 +1101,11 @@ removed them on 2026-11-16, replaced by a `distinct` type with a checking
 constructor, and R19.10 records that and groups it. The candidates that
 wait on R20 (SC-17, SC-18) are recorded as such, not forced. The answers
 on labels, `break with` and `complete` (SC-01, SC-02) settle E1.
+It takes on SR-1288: the answer on SC-24 either folds the
+value-model decisions or marks each boundary a later decision lifted, so
+that a superseded boundary no longer reads as a live rule. SC-27 is
+decided on a count, not an estimate, so R19.10 takes on SR-1286 and counts
+the constructs over the library, the examples and the corpus first.
 R19.10 also decides SR-1237 itself, whether a type application's fixed
 actual folds compiler facts and `sizeof` as an array length does or D135
 stands, rather than leave it to R19.20, which runs only if SC-24 is taken.
@@ -1117,7 +1204,9 @@ Depends on: R20.10
 One task concept for `core/fibre` and `hosted/thread`; the I/O concepts
 grouped, and `world` giving each of its parts without `lent`; whether
 containers iterate through `iterable`, and the fate of `zeroable` and
-`caller`. Each change goes on the breaking list.
+`caller`. It takes on SR-1284: either the library declares `iterable` and
+`fallible_iterable`, which the compiler recognises by name, or the tour
+says a program declares its own. Each change goes on the breaking list.
 Exit evidence: the concept changes on the list, prototype 3's concept
 uses reread against them.
 
