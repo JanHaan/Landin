@@ -26272,6 +26272,66 @@ sessions, the RV32 lanes' corpus and `compiler/tests/measure/baselines/`.
 
 **Pinned by** the commands suite's `the dispatcher` and `scripts/tests/test_cli_native.py`'s contributed command.
 
+### D1523 — `refine dap` speaks GDB/MI to GDB and relays LLDB's own adapter
+
+**The tour said** nothing; D1383 made `dap` a split command over the debuggers the targets script.
+
+**Chosen:** `refine-dap` holds the protocol's side towards the editor itself, framing as the language server frames, and reaches a debugger through `Landin.Platform.Debugger_Session`: one long-lived process over pipes, waited on beside the editor's input by one thread. GDB is spoken to over GDB/MI, and every request is answered by `refine-dap` from GDB's records, which it reads into JSON. LLDB is LLDB's own adapter, `lldb-dap`, which `refine-dap` starts, initializes as the editor initialized it, and relays: each request renumbered on its way and each answer and event renumbered back, with `launch` and `attach` written in its terms. A program takes LLDB when it is a Mach-O or an ELF whose header names FreeBSD, and GDB otherwise, as the debugging suites debug each target; `"debugger"` names the other, and `"debuggerPath"` the executable, which is otherwise `gdb`, or `lldb-dap` on the search path and then where `xcrun --find` says Xcode keeps it. The adapter adds what is Landin's (D1525, D1526) and nothing it would have to keep in step with a debugger's own presentation.
+
+**The alternatives:** GDB's own `-i dap`, which needs a GDB with Python, and the GDB the toolchain pins has none; translating LLDB's command line, whose text is not an interface, or its SB API, which needs a Python FreeBSD's base system does not have; one translation for both through a common machine interface, which LLDB no longer offers since `lldb-mi` was removed; and building `dap` into `refine`, which D1383 declined.
+
+**Pinned by** the dap suite's `a GDB session` and `LLDB's adapter is relayed`, `scripts/tests/test_unit_closure.py`'s pin of `refine-dap`'s closure, and `compiler/tests/dap/session.py`, which the gate runs over GDB on Linux x86-64, Linux arm64 and RV64 under QEMU, and over LLDB on Darwin and in both FreeBSD VMs.
+
+### D1524 — A launched program writes to the editor; an attached one is reached through its stub
+
+**The tour said** nothing.
+
+**Chosen:** `launch` takes `program`, its `args`, its `cwd` and `stopOnEntry`. Under GDB the program is started through `/bin/sh`, which GDB runs with the shell set back to the caller's for the program itself: its arguments are quoted for that shell, its input is `/dev/null` and its output and error go to two pipes of the adapter's, which become `output` events of category `stdout` and `stderr`; GDB's own input is the adapter's commands, which a program reading its input would otherwise take. `lldb-dap` starts the program on a terminal of its own and sends what it writes as events itself. `attach` takes `program` and `remote`, where a debugger stub serves it: GDB's `target remote` takes `HOST:PORT` or a socket's path, as QEMU's user emulation opens one, and LLDB's adapter `HOST:PORT`, as `lldb-server gdbserver` listens. A `disconnect` ends a launched program and leaves an attached one running, unless `terminateDebuggee` says otherwise, and then ends the debugger and `refine-dap`.
+
+**The alternatives:** leaving GDB's program on GDB's own input and output, where its writes would be read as GDB's records and its reads would take GDB's commands; a pseudo-terminal, which rewrites the program's line ends; and starting QEMU or `lldb-server` from the adapter, which would put each target's emulator and transport into it rather than in the lanes that already start them.
+
+**Pinned by** the dap suite's `a GDB session` and `attach reaches a stub`, and `compiler/tests/dap/session.py`'s launched and attached sessions.
+
+### D1525 — The library's files are shown from the library `refine` was shipped with, one namespace at a time
+
+**The tour said** nothing; D422 records a library file as `/landin-library/` and its module path.
+
+**Chosen:** `refine-dap` finds the library as the `refine` beside it would (D363): `PREFIX/libexec/landin/refine-dap` is shipped with `PREFIX/bin/refine`, in an installation and in a build tree alike. It maps `/landin-library/core`, `/landin-library/hosted` and `/landin-library/platform` each to that namespace's directory, through GDB's `substitute-path` and `lldb-dap`'s `sourceMap`, and maps a frame's path and a breakpoint's path itself where GDB is answered. Nothing else under the library's directory is renamed: a checkout's library is the checkout, whose own sources a whole-directory mapping would have recorded under `/landin-library` and so lost their breakpoints, as LLDB did when it was tried.
+
+**The alternatives:** one mapping of `/landin-library` to the library's directory, which LLDB applies in both directions; and asking `refine version --json` through `LANDIN_REFINE` (D1486), which a `refine-dap` started by its own name, as an editor starts it, would not have.
+
+**Pinned by** the dap suite's `library paths map by namespace` and `a GDB session`, and `LLDB's adapter is relayed`.
+
+### D1526 — A stop in `panic_handler` is an exception at the source of its site
+
+**The tour said** nothing; D1292 resolves a site with `refine site`.
+
+**Chosen:** when the program stops with `panic_handler` as its innermost frame, `refine-dap` asks the debugger for its `site` argument and resolves it through the program's source table, `PROGRAM.sources.json` beside it, as `refine site` would: the stop becomes an `exception` stop whose description is `panic: KIND at PATH:LINE:COLUMN`, and `exceptionInfo` names the check that failed. A table that is missing, or written for another build, is named in the description with the refusal `refine site` would give. The table is read through `Landin.Site_Tables`, which `refine site` now reads it through as well, and which takes no compilation: `Landin.Source_Maps` writes a table from one and keeps the front end (D1423). Under GDB a signal stop is an exception stop too, named by its signal; a panic without a handler writes its site to standard error before it traps, and that line reaches the editor as the program's output.
+
+**The alternatives:** a breakpoint the adapter sets on every program's `panic_handler` itself, which a program without one could not have and which the editor's own function breakpoints already give; and decoding the site in the adapter's own reader, which would be a third reader of a format two units already share.
+
+**Pinned by** the dap suite's `a panic names its site` and `LLDB's adapter is relayed`, and `compiler/tests/dap/session.py`'s panic stop.
+
+### D1527 — What `refine-dap` answers over GDB, and what it refuses
+
+**The tour said** nothing.
+
+**Chosen:** over GDB, `refine-dap` answers `initialize`, `launch`, `attach`, `setBreakpoints` with conditions, `setFunctionBreakpoints`, `setExceptionBreakpoints` with no filters, `configurationDone`, `threads`, `stackTrace`, `scopes` with one scope of a frame's locals and arguments, `variables` through GDB's variable objects, which are deleted when the program runs on, `evaluate` in GDB's own expression language, `exceptionInfo`, `continue`, `next`, `stepIn`, `stepOut`, `pause`, `terminate` and `disconnect`. A frame's identifier is its thread's times 100000 plus its level, valid until the program runs on, and a frame with a source is given column 1, since GDB/MI gives none. Any other request is refused naming it; a request before `launch` or `attach` is refused saying which comes first; and a debugger that does not answer within sixty seconds fails the request rather than the session. Under LLDB the requests are `lldb-dap`'s, and what it answers is its own.
+
+**The alternatives:** answering the protocol's every request, most of which no editor sends for a program without threads of its own, and which would be presentation to keep in step with GDB's; and giving each frame column 0, which some editors take for no position at all.
+
+**Pinned by** the dap suite's `a GDB session` and `refusals say what to do`.
+
+### D1528 — A program or command a closed pipe ended ends `refine` quietly
+
+**D526 said** that `refine run` names the signal that ended its program and exits with 128 and its number, as a shell reports it, and D1384 that a dispatched command is run the same way.
+
+**Chosen:** when the signal is `SIGPIPE`, `refine` still exits with 141 and writes no line. The program or command wrote to a pipe whose reader had left, as `refine dap --help | head` leaves; that is no failure, a shell reports nothing for a pipeline member it ends, and `refine`'s own closed pipe ends it quietly (D1047). Every other signal is named as before.
+
+**The alternatives:** naming it, as `refine` did, which reads as a failure of `refine-dap` when `head` had only read what it wanted; and quieting it for dispatched commands alone, which would make `refine run PROGRAM | head` and `refine NAME | head` differ for one cause.
+
+**Pinned by** the commands suite's `run reports a signal`.
+
 ### D1463 — Every request names its command; the bare-source form is refused
 
 **D526 said** that bare `refine FILE` checks FILE and closes with a line naming `refine run` and `refine compile`, and D731 that the line repeats the options that chose the program. An unknown first word was therefore read as a source, so no word outside the built-in commands could ever name one, and the closing line named the target the request chose, so a recorded fixture that chose it held a line one host's default and another's differed on.

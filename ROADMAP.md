@@ -888,7 +888,7 @@ link can have (SR-1354, scheduled on R18.70).
 
 ### R18.60 — `refine dap`
 
-Status: planned
+Status: complete
 Depends on: R18.20, R18.50
 
 The first new command: a Debug Adapter Protocol server over the GDB and
@@ -901,6 +901,32 @@ a compilation and keeps the front end (D1423).
 Exit evidence: `refine-dap` linked without the front end; scripted DAP sessions in the gate over GDB and LLDB, the
 debuggers the targets script today, on every hosted target the debugging
 suites run. A further debugger is its own adapter backend.
+Done: `refine-dap` is the split command `refine dap` runs, listed in
+`compiler/ada/split-commands.json` and so built, digested, packaged and
+shipped as every split is. It frames the protocol as the language server
+does and reaches a debugger through `Landin.Platform.Debugger_Session`:
+GDB over GDB/MI, every request answered from GDB's records, and LLDB
+through LLDB's own adapter, `lldb-dap`, relayed and renumbered, the
+debugger chosen from the program's format (D1523). A launched program's
+output reaches the editor through pipes GDB's shell redirects to, and
+`attach` reaches a QEMU or `lldb-server` stub (D1524); library files map
+one namespace at a time, since a checkout's library is the whole checkout
+(D1525); a stop in `panic_handler` is an exception at the source of its
+site (D1526); D1527 lists what is answered over GDB. Source tables are
+read through `Landin.Site_Tables`, which `refine site` now shares and
+which takes no compilation, so `refine-dap` links 18 units of the
+compiler's sources and no front end, pinned in
+`scripts/tests/test_unit_closure.py`. The dap suite holds it on the fake
+host; `compiler/tests/dap/session.py` scripts a session through `refine
+dap` over GDB in the `release` and `arm64-release` jobs and on RV64 under
+QEMU's stub, and over LLDB in `darwin-host-release-2` and both FreeBSD
+debugger jobs, the guest's `lldb-server` reached from the runner's
+`lldb-dap`. Found on the way: the FreeBSD arm64 lane's refusal for a
+missing UEFI firmware now says where it looked and what to install, and
+looks beside the QEMU on the search path; a program or dispatched command
+a closed pipe ends no longer reports itself as a failure (D1528); and the
+gate's `measure-time` jobs take `refine`, not the last executable the build
+names.
 
 ### R18.70 — The existing splits
 
