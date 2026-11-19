@@ -1329,6 +1329,25 @@ Exit evidence: linear time pinned on adversarial patterns on a hosted
 target and on Cortex-M0; an external conformance suite passes for the
 supported syntax.
 
+### R22.61 — A finished `for` no longer holds its source
+
+Status: planned
+Depends on: none
+
+SR-1405, a checker defect met writing refine-build (its friction entry 3)
+and scheduled by the maintainer on 2026-11-19 ahead of its phase: inside
+an outer loop, releasing a list after a `for` over it has ended is L0315,
+naming the `for`'s element as still viewing the list. D1084 holds a
+`for`'s source only for a call in its body, and D1370 makes a declaration
+that runs again a new binding; the reference check's back-edge scan reads
+the element in the `for`'s body as the binding asked about. Placed here
+so that the R18 gate does not wait for it; it depends on no other item.
+
+Exit evidence: the release accepted after the `for` under `loop`,
+`loop ... break when` and `while`, with the list declared inside or
+outside the outer loop, by a runtime fixture; a negative fixture still
+refusing the release inside the `for`'s body.
+
 ### R22 gate
 Each addition on every target its namespace admits, with its oracle; each
 generated table held by its check.
