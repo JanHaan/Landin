@@ -1678,6 +1678,14 @@ package body Landin.Adapter.Sessions is
                   & " debugger stub listens: HOST:PORT, or for GDB a"
                   & " socket's path");
          return;
+      elsif (for some C of Remote => C in ' ' | ASCII.HT | ASCII.LF
+                                       | ASCII.CR | '"' | '\')
+      then
+         Respond (S, Seq, Name, False, """remote"" is " & Remote
+                  & ", which GDB's target remote cannot take: a stub's"
+                  & " address or socket path has no spaces, quotes or"
+                  & " backslashes");
+         return;
       elsif Named not in "" | "gdb" | "lldb" then
          Respond (S, Seq, Name, False, """debugger"" is ""gdb"" or"
                   & " ""lldb"", not """ & Named & """");
@@ -1754,8 +1762,9 @@ package body Landin.Adapter.Sessions is
          Require (S, "-file-exec-and-symbols "
                   & Landin.Adapter.MI.Quoted (Program), Failure);
          if S.Attached then
-            Require (S, "-target-select remote "
-                     & Landin.Adapter.MI.Quoted (Remote), Failure,
+            --  GDB hands the operand to `target remote` as it is written,
+            --  quotes and all, and that takes no quoting.
+            Require (S, "-target-select remote " & Remote, Failure,
                      Wanted => "connected");
          else
             declare

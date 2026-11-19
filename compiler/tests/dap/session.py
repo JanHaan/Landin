@@ -268,6 +268,13 @@ def main():
                         ' user emulator and attach GDB to its stub')
     parser.add_argument('--output', required=True)
     args = parser.parse_args()
+    sys.path.insert(0, str(HERE.parents[2] / 'scripts'))
+    import refine_revision
+    import build_lock
+    refine_revision.warn(args.refine)  # is it this checkout's?
+    #  A rebuild of this build waits for the session rather than replace
+    #  refine-dap under it.
+    build_lock.reading(args.refine)
 
     output = Path(args.output).resolve()
     output.mkdir(parents=True, exist_ok=True)

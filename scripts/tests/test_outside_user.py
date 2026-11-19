@@ -8,6 +8,7 @@ show is found, with the oracle it is held to, and the archive is the
 installed prefix `refine` looks for, the same bytes on a second packaging.
 """
 import hashlib
+import json
 import os
 from pathlib import Path
 import shutil
@@ -103,6 +104,25 @@ class Documents(unittest.TestCase):
 
 
 class Archive(unittest.TestCase):
+    #  The split commands the real list names, which package.sh takes from
+    #  libexec/landin beside bin/refine.
+    SPLITS = [entry["name"] for entry in json.loads(
+        (ROOT / "compiler/ada/split-commands.json").read_text(
+            encoding="utf-8"))["commands"]]
+
+    def built(self, directory):
+        """Where a build publishes refine, under DIRECTORY."""
+        binary = directory / "build/bin/refine"
+        binary.parent.mkdir(parents=True, exist_ok=True)
+        return binary
+
+    def install_splits(self, binary):
+        """Each listed split command beside BINARY: a copy of it."""
+        libexec = binary.parent.parent / "libexec/landin"
+        libexec.mkdir(parents=True, exist_ok=True)
+        for name in self.SPLITS:
+            shutil.copy2(binary, libexec / ("refine-" + name))
+
     def package(self, directory, binary, name, umask=None):
         asset = directory / name
         subprocess.run([str(ROOT / "scripts/package.sh"), str(binary),
@@ -117,9 +137,10 @@ class Archive(unittest.TestCase):
         #  whichever local account has that number.
         with TemporaryDirectory() as scratch:
             directory = Path(scratch)
-            binary = directory / "refine"
+            binary = self.built(directory)
             binary.write_text("#!/bin/sh\n")
             os.chmod(binary, 0o700)
+            self.install_splits(binary)
             open_ = self.package(directory, binary, "open.tar.gz", umask=0o022)
             closed = self.package(directory, binary, "closed.tar.gz",
                                   umask=0o077)
@@ -131,14 +152,17 @@ class Archive(unittest.TestCase):
             self.assertEqual({m.mode for m in members if m.isdir()}, {0o755})
             self.assertEqual({m.name: m.mode for m in members
                               if m.isfile() and m.mode != 0o644},
-                             {"bin/refine": 0o755})
+                             {"bin/refine": 0o755,
+                              **{"libexec/landin/refine-" + name: 0o755
+                                 for name in self.SPLITS}})
 
     def test_the_archive_is_an_installed_prefix_and_reproducible(self):
         with TemporaryDirectory() as scratch:
             directory = Path(scratch)
-            binary = directory / "refine"
+            binary = self.built(directory)
             binary.write_text("#!/bin/sh\n")
             os.chmod(binary, 0o755)
+            self.install_splits(binary)
             first = self.package(directory, binary, "first.tar.gz")
             second = self.package(directory, binary, "second.tar.gz")
             self.assertEqual(hashlib.sha256(first.read_bytes()).hexdigest(),
@@ -150,6 +174,8 @@ class Archive(unittest.TestCase):
                 #  Where the dispatcher finds its split commands, there
                 #  when the list names none.
                 self.assertTrue(archive.getmember("libexec/landin").isdir())
+                for name in self.SPLITS:
+                    self.assertIn("libexec/landin/refine-" + name, names)
                 for namespace in ("core", "hosted", "platform"):
                     self.assertIn("lib/landin/" + namespace, names)
                 self.assertIn("lib/landin/core/mem/mem.ldn", names)
@@ -171,9 +197,10 @@ class Archive(unittest.TestCase):
             directory = Path(scratch)
             source = directory / "main.c"
             source.write_text("int main(void) { return 0; }\n")
-            binary = directory / "refine"
+            binary = self.built(directory)
             subprocess.run(["cc", "-g", "-o", str(binary), str(source)],
                            check=True)
+            self.install_splits(binary)
             before = binary.read_bytes()
             asset = directory / "landin.tar.gz"
             debug = directory / "landin-debug.tar.gz"
@@ -195,7 +222,10 @@ class Archive(unittest.TestCase):
             self.assertIn(".gnu_debuglink", stripped)
             self.assertIn(".debug_info", sections(unpacked / "refine.debug"))
             with tarfile.open(debug) as opened:
-                self.assertEqual(opened.getnames(), ["refine.debug"])
+                self.assertEqual(
+                    sorted(opened.getnames()),
+                    sorted(["refine.debug"] + ["refine-%s.debug" % name
+                                               for name in self.SPLITS]))
 
     @unittest.skipUnless(sys.platform.startswith("linux"),
                          "a program interpreter is an ELF matter")
@@ -210,10 +240,11 @@ class Archive(unittest.TestCase):
                     ("/opt/store/abc-glibc-2.42/lib/ld-linux-x86-64.so.2", True),
                     ("/lib64/ld-linux-x86-64.so.2", False)):
                 with self.subTest(loader=loader):
-                    binary = directory / "refine"
+                    binary = self.built(directory)
                     subprocess.run(
                         ["cc", "-o", str(binary), str(source),
                          "-Wl,--dynamic-linker=" + loader], check=True)
+                    self.install_splits(binary)
                     asset = directory / "landin.tar.gz"
                     asset.unlink(missing_ok=True)
                     ran = subprocess.run(

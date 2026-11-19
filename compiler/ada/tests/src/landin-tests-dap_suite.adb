@@ -770,7 +770,7 @@ package body Landin.Tests.Dap_Suite is
       begin
          Landin.Testing.Check
            (Item, Contains (Sent, "-target-select remote"
-                            & " ""/tmp/app.gdb.sock""")
+                            & " /tmp/app.gdb.sock" & LF)
             and then not Contains (Sent, "-exec-arguments")
             and then not Over_GDB.Pipes,
             "GDB attaches to the stub, and starts nothing");
@@ -805,8 +805,10 @@ package body Landin.Tests.Dap_Suite is
         & Request (6, "launch", "{""program"":""/work/app"","
                    & """debugger"":""cdb""}")
         & Request (7, "launch", "{""program"":""/work/none""}")
-        & Request (8, "launch", "{""program"":""/work/app""}")
-        & Request (9, "disconnect");
+        & Request (8, "attach", "{""program"":""/work/app"","
+                   & """remote"":""a b:1""}")
+        & Request (9, "launch", "{""program"":""/work/app""}")
+        & Request (10, "disconnect");
    begin
       Fakes.Add_File (Files, "/work/app", ELF_Header);
       Debugger.Refuse := True;
@@ -835,6 +837,10 @@ package body Landin.Tests.Dap_Suite is
            (Item, Contains (Said, "cannot read the program /work/none: it"
                             & " does not exist"),
             "a missing program is named");
+         Landin.Testing.Check
+           (Item, Contains (Said, "\""remote\"" is a b:1, which GDB's target"
+                            & " remote cannot take"),
+            "a stub's address GDB cannot take is refused");
          Landin.Testing.Check
            (Item, Contains (Said, "cannot start GDB as gdb: no such program;"
                             & " name the debugger with \""debuggerPath\"""),
