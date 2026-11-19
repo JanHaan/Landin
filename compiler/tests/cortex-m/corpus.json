@@ -3082,16 +3082,6 @@
     "runtime/io-write-format-memory": {
       "profile_limit": "selected-image",
       "reason": "At none/off the image needs FLASH 33048 of the 32 KiB profile, over by 280 (.isr_vector 192, .text 32668): D1122's copy of a builder's own bytes before a moved block is released and D1123's count of what a builder has handed on grew core/text's growth and format by about 1.6 KiB of unoptimized Cortex-M0 code, which gives every IR slot a frame home of its own. Each profile still attempts execution; size/off, size/auto and speed/auto fit in about 28 KiB and run, and must pass, as none/off does on the AN505's map; this image limit is not runtime evidence.",
-      "lanes": {
-        "esp32c3": {
-          "mode": "limit",
-          "reason": "D698: at size/off, size/auto and speed/auto its stack overran the 4 KiB reservation, in memory_write_some called from memory_write, with 4096 to 4176 bytes in use when the guard was written; at none/off it peaks at 4004 bytes, and Cortex-M0's images peak at 3456 to 3792, so the program sits at the reservation's edge on both architectures."
-        },
-        "sifive-e": {
-          "mode": "limit",
-          "reason": "D698: at size/off, size/auto and speed/auto its stack overran the 4 KiB reservation, in memory_write_some called from memory_write, with 4096 to 4176 bytes in use when the guard was written; at none/off it peaks at 4004 bytes, and Cortex-M0's images peak at 3456 to 3792, so the program sits at the reservation's edge on both architectures."
-        }
-      },
       "mode": "execute"
     },
     "runtime/kqueue-events": {
