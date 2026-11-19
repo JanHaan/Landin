@@ -10,9 +10,8 @@ package body Landin.Commands.Catalogue is
      (case Command is
          when Overview => "", when Check => "check",
          when Compile => "compile", when Run => "run",
-         when Format => "fmt", when Svd => "svd",
-         when Bindings => "bindings",
-         when Explain => "explain", when Site => "site",
+         when Format => "fmt",
+         when Explain => "explain",
          when Server => "lsp",
          when Version => "version", when Targets => "targets",
          when Completion => "completion", when Help => "help");
@@ -27,14 +26,8 @@ package body Landin.Commands.Catalogue is
            "Compile a whole program to a temporary executable and run it",
          when Format =>
            "Format source files, or a directory's, in the one Landin layout",
-         when Svd =>
-           "Generate a device's register modules and interrupts from its SVD",
-         when Bindings =>
-           "Generate Landin bindings and C adapters for C headers",
          when Explain =>
            "Explain diagnostic codes, and the rules and decisions notes cite",
-         when Site =>
-           "Resolve a panic site or a caller's coordinates to a source line",
          when Server => "Serve the language server protocol over stdio",
          when Version => "Identify this compiler build",
          when Targets => "List described targets and their CPU feature levels",
@@ -78,13 +71,7 @@ package body Landin.Commands.Catalogue is
          when Format_Stdout => "--stdout", when Explain_Full => "--full",
          when Stdio => "--stdio", when JSON => "--json",
          when Warnings => "--warnings", when Warn => "--warn",
-         when Allow => "--allow", when Deny => "--deny",
-         when Policy => "--policy", when Out_Dir => "--out-dir",
-         when Clang => "--clang", when Sysroot => "--sysroot",
-         when Include_Dir => "--include-dir",
-         when System_Include_Dir => "--system-include-dir",
-         when Define => "--define", when Map => "--map",
-         when Dsym => "--dsym");
+         when Allow => "--allow", when Deny => "--deny");
 
    function Description (Flag : Option) return String is
      (case Flag is
@@ -145,22 +132,7 @@ package body Landin.Commands.Catalogue is
          when Warnings => "Base warning selection: default, all, none",
          when Warn => "Enable a warning code or all (repeatable)",
          when Allow => "Suppress a warning code or all (repeatable)",
-         when Deny => "Enable and promote a warning to an error (repeatable)",
-         when Policy =>
-           "The policy that selects what is generated, and how",
-         when Out_Dir => "Directory the outputs are written under",
-         when Clang => "The Clang that reads the headers, by path or name",
-         when Sysroot => "The target's system root; an empty one will do",
-         when Include_Dir =>
-           "Search DIR for quoted and angled headers (repeatable)",
-         when System_Include_Dir =>
-           "Search DIR for system headers (repeatable)",
-         when Define =>
-           "Define NAME, or NAME=VALUE, for Clang (repeatable)",
-         when Map =>
-           "The build's source table; default PROGRAM.sources.json",
-         when Dsym =>
-           "A Mach-O program's dSYM DWARF file, held to its UUID");
+         when Deny => "Enable and promote a warning to an error (repeatable)");
 
    function Values (Flag : Option) return String is
      (case Flag is
@@ -203,12 +175,8 @@ package body Landin.Commands.Catalogue is
                            | Dry_Run | Depfile)
             or else Flag in Warnings .. Deny,
           when Format => Flag in Format_Check | Format_Stdout,
-          when Svd => Flag in Policy | Out_Dir,
-          when Bindings =>
-            Flag in Target | Policy | Out_Dir | Clang .. Define,
           --  D1240: where the citations file is, as a compilation's.
           when Explain => Flag in Explain_Full | Library,
-          when Site => Flag in Map | Dsym,
           when Server => Flag = Stdio,
           when Version => Flag in JSON | Library,
           when Targets => Flag = JSON,
@@ -249,8 +217,7 @@ package body Landin.Commands.Catalogue is
 
    function Repeatable (Flag : Option) return Boolean is
      (Flag in Help_Flag | Verbose | Quiet | Root | Library_Directory
-       | Build_Option | Warn | Allow | Deny | Include_Dir
-       | System_Include_Dir | Define);
+       | Build_Option | Warn | Allow | Deny);
 
    function Valid_Value (Flag : Option; Text : String) return Boolean is
    begin
@@ -461,13 +428,7 @@ package body Landin.Commands.Catalogue is
             when Check | Compile => " [options] source.ldn ...",
             when Run => " [options] source.ldn ... [-- ARGUMENT ...]",
             when Format => " [options] source.ldn|DIR ...",
-            when Svd => " --policy=POLICY.json --out-dir=DIR DEVICE.svd",
-            when Bindings =>
-              " --clang=CLANG [--sysroot=DIR] --policy=POLICY.json"
-              & " --out-dir=DIR [LOGICAL=]HEADER.h ...",
             when Explain => " [options] [CODE|[NNNN]|DNNN ...]",
-            when Site =>
-              " [options] PROGRAM SITE | PROGRAM FILE LINE COLUMN",
             when Completion => " [options] bash|zsh|fish",
             when Help => " [COMMAND|reference]",
             when others => " [options]");
@@ -499,8 +460,7 @@ package body Landin.Commands.Catalogue is
                      when Quiet => "-q, --quiet",
                      when Output => "-o, --output",
                      when others => Name (Flag))
-                 & (if Flag in Library_Directory | Sysroot | Include_Dir
-                             | System_Include_Dir
+                 & (if Flag = Library_Directory
                     then " DIR"
                     elsif Takes_Value (Flag) then " VALUE" else "");
             begin
@@ -611,54 +571,6 @@ package body Landin.Commands.Catalogue is
               & "  zsh:  autoload -Uz compinit; compinit" & LF
               & "        source <(refine completion zsh)" & LF
               & "  fish: refine completion fish | source" & LF);
-         when Svd =>
-            US.Append (Text, LF
-              & "Example: refine svd --policy=devices/policies/rp2040.json"
-              & LF & "  --out-dir=devices RP2040.svd" & LF
-              & "The SVD must be the file the policy was reviewed against,"
-              & LF & "by its SHA-256. The policy selects the peripherals and"
-              & LF & "registers to generate and says how each may be read and"
-              & LF & "written; devices/README.md describes it. Every output is"
-              & LF & "written beside its destination and read back before any"
-              & LF & "is replaced, and a failure puts back what was replaced."
-              & LF & "scripts/fetch_inputs.py fetches a pinned SVD by its"
-              & " hash."
-              & LF);
-         when Site =>
-            US.Append (Text, LF
-              & "Example: refine site firmware.elf 4194" & LF
-              & "PROGRAM is what the compilation wrote: an executable, a"
-              & LF & "firmware image, or the assembly of --emit=asm. SITE is"
-              & LF & "the number a panic_handler receives, in decimal or"
-              & LF & "after 0x; compile with --panic-map to record sites."
-              & LF & "FILE LINE COLUMN are a caller's three coordinates."
-              & LF & "The answer is the source path, line and column, and"
-              & LF & "for a site the check that failed. The table beside the"
-              & LF & "program, PROGRAM.sources.json, answers only for the"
-              & LF & "build it was written with: the program's build"
-              & LF & "identity, or the assembly's SHA-256, must be the"
-              & LF & "table's. A stripped program keeps its identity."
-              & LF);
-         when Bindings =>
-            US.Append (Text, LF
-              & "Example: refine bindings --clang=clang-19"
-              & " --target=linux-x86-64" & LF
-              & "  --sysroot=sysroot --policy=policy.json --out-dir=generated"
-              & LF & "  --system-include-dir=""$(clang-19 -print-resource-dir)"
-              & "/include""" & LF & "  api/public.h=include/public.h" & LF
-              & "A header is LOGICAL=PATH, or PATH, whose last name is then"
-              & LF & "its logical one: the relative name exports.h includes it"
-              & LF & "by. Clang reads the headers and nothing else: it gets"
-              & LF & "-nostdinc, the roots and defines named here, and an"
-              & LF & "environment of PATH, HOME and the temporary directory"
-              & LF & "alone. --sysroot is required for a hosted target and"
-              & LF & "refused for cortex-m0, which is freestanding: name its"
-              & LF & "Clang's own headers with --system-include-dir."
-              & LF & "Four files are written: bindings.ldn, adapters.c,"
-              & LF & "exports.h and bindings.json; each is written beside its"
-              & LF & "destination and read back, and adapters.c compiled,"
-              & LF & "before any is replaced. The complete policy reference:"
-              & LF & "https://www.701.dev/bindings.html" & LF);
          when others => null;
       end case;
       return US.To_String (Text);

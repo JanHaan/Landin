@@ -1,9 +1,11 @@
 with Ada.Characters.Handling;
 with Ada.Containers.Indefinite_Hashed_Sets;
+with Ada.Containers.Vectors;
 with Ada.Exceptions;
 with Ada.Strings.Fixed;
 with Ada.Strings.Hash;
 with Ada.Strings.Maps;
+with Ada.Strings.Unbounded;
 
 with Landin.Backend.Entry_Point;
 with Landin.Backend.Firmware;
@@ -42,6 +44,7 @@ with Landin.IR;
 with Landin.Json;
 with Landin.Modules;
 with Landin.Resolution;
+with Landin.Source;
 with Landin.Source.Names;
 with Landin.Source.Sets;
 with Landin.Source_Digests;

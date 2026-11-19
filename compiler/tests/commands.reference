@@ -5,10 +5,7 @@ Commands:
   compile     Compile a whole program to an executable or assembly
   run         Compile a whole program to a temporary executable and run it
   fmt         Format source files, or a directory's, in the one Landin layout
-  svd         Generate a device's register modules and interrupts from its SVD
-  bindings    Generate Landin bindings and C adapters for C headers
   explain     Explain diagnostic codes, and the rules and decisions notes cite
-  site        Resolve a panic site or a caller's coordinates to a source line
   lsp         Serve the language server protocol over stdio
   version     Identify this compiler build
   targets     List described targets and their CPU feature levels
@@ -266,76 +263,6 @@ fmt reads named files or directories, not standard input.
 refine fmt --stdout source.ldn prints one source in the
 layout, and an editor can format through refine lsp.
 
-usage: refine svd --policy=POLICY.json --out-dir=DIR DEVICE.svd
-
-Generate a device's register modules and interrupts from its SVD
-
-Options:
-  -h, --help                Print this command's help and exit
-  -v, --verbose             Describe the request and name the sources read; repeat to trace tool commands
-  -q, --quiet               Suppress progress, retaining warnings and errors
-  --color VALUE             Diagnostic color: auto (default), always, never
-  --diagnostics VALUE       Diagnostic format on standard error: human (default), short, json
-  --policy VALUE            The policy that selects what is generated, and how
-  --out-dir VALUE           Directory the outputs are written under
-
-Shared options work before or after the command. Values may use
-a space or '='. Use '--' before literal operands; @FILE reads
-a response file. Single-valued options may be given once.
-Of the shared options, lsp takes only --help.
-
-Example: refine svd --policy=devices/policies/rp2040.json
-  --out-dir=devices RP2040.svd
-The SVD must be the file the policy was reviewed against,
-by its SHA-256. The policy selects the peripherals and
-registers to generate and says how each may be read and
-written; devices/README.md describes it. Every output is
-written beside its destination and read back before any
-is replaced, and a failure puts back what was replaced.
-scripts/fetch_inputs.py fetches a pinned SVD by its hash.
-
-usage: refine bindings --clang=CLANG [--sysroot=DIR] --policy=POLICY.json --out-dir=DIR [LOGICAL=]HEADER.h ...
-
-Generate Landin bindings and C adapters for C headers
-
-Options:
-  -h, --help                Print this command's help and exit
-  -v, --verbose             Describe the request and name the sources read; repeat to trace tool commands
-  -q, --quiet               Suppress progress, retaining warnings and errors
-  --color VALUE             Diagnostic color: auto (default), always, never
-  --diagnostics VALUE       Diagnostic format on standard error: human (default), short, json
-  --target VALUE            Select a target; default is this compiler's host
-  --policy VALUE            The policy that selects what is generated, and how
-  --out-dir VALUE           Directory the outputs are written under
-  --clang VALUE             The Clang that reads the headers, by path or name
-  --sysroot DIR             The target's system root; an empty one will do
-  --include-dir DIR         Search DIR for quoted and angled headers (repeatable)
-  --system-include-dir DIR  Search DIR for system headers (repeatable)
-  --define VALUE            Define NAME, or NAME=VALUE, for Clang (repeatable)
-
-Shared options work before or after the command. Values may use
-a space or '='. Use '--' before literal operands; @FILE reads
-a response file. Single-valued options may be given once.
-Of the shared options, lsp takes only --help.
-
-Example: refine bindings --clang=clang-19 --target=linux-x86-64
-  --sysroot=sysroot --policy=policy.json --out-dir=generated
-  --system-include-dir="$(clang-19 -print-resource-dir)/include"
-  api/public.h=include/public.h
-A header is LOGICAL=PATH, or PATH, whose last name is then
-its logical one: the relative name exports.h includes it
-by. Clang reads the headers and nothing else: it gets
--nostdinc, the roots and defines named here, and an
-environment of PATH, HOME and the temporary directory
-alone. --sysroot is required for a hosted target and
-refused for cortex-m0, which is freestanding: name its
-Clang's own headers with --system-include-dir.
-Four files are written: bindings.ldn, adapters.c,
-exports.h and bindings.json; each is written beside its
-destination and read back, and adapters.c compiled,
-before any is replaced. The complete policy reference:
-https://www.701.dev/bindings.html
-
 usage: refine explain [options] [CODE|[NNNN]|DNNN ...]
 
 Explain diagnostic codes, and the rules and decisions notes cite
@@ -353,37 +280,6 @@ Shared options work before or after the command. Values may use
 a space or '='. Use '--' before literal operands; @FILE reads
 a response file. Single-valued options may be given once.
 Of the shared options, lsp takes only --help.
-
-usage: refine site [options] PROGRAM SITE | PROGRAM FILE LINE COLUMN
-
-Resolve a panic site or a caller's coordinates to a source line
-
-Options:
-  -h, --help                Print this command's help and exit
-  -v, --verbose             Describe the request and name the sources read; repeat to trace tool commands
-  -q, --quiet               Suppress progress, retaining warnings and errors
-  --color VALUE             Diagnostic color: auto (default), always, never
-  --diagnostics VALUE       Diagnostic format on standard error: human (default), short, json
-  --map VALUE               The build's source table; default PROGRAM.sources.json
-  --dsym VALUE              A Mach-O program's dSYM DWARF file, held to its UUID
-
-Shared options work before or after the command. Values may use
-a space or '='. Use '--' before literal operands; @FILE reads
-a response file. Single-valued options may be given once.
-Of the shared options, lsp takes only --help.
-
-Example: refine site firmware.elf 4194
-PROGRAM is what the compilation wrote: an executable, a
-firmware image, or the assembly of --emit=asm. SITE is
-the number a panic_handler receives, in decimal or
-after 0x; compile with --panic-map to record sites.
-FILE LINE COLUMN are a caller's three coordinates.
-The answer is the source path, line and column, and
-for a site the check that failed. The table beside the
-program, PROGRAM.sources.json, answers only for the
-build it was written with: the program's build
-identity, or the assembly's SHA-256, must be the
-table's. A stripped program keeps its identity.
 
 usage: refine lsp [options]
 

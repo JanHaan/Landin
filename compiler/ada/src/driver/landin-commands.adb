@@ -1,13 +1,8 @@
 with Ada.Exceptions;
 with Ada.Strings.Fixed;
 with Ada.Strings.Unbounded;
-with Landin.Commands.Bindings;
 with Landin.Commands.Catalogue;
-with Landin.Commands.Devices;
 with Landin.Commands.External;
-with Landin.Commands.Presentation;
-with Landin.Commands.Response_Files;
-with Landin.Commands.Sites;
 with Landin.Commands.Tracing;
 with Landin.Diagnostics;
 with Landin.Diagnostics.Catalogue;
@@ -16,6 +11,8 @@ with Landin.Diagnostics.Text;
 with Landin.Diagnostics.Warning_Policy;
 with Landin.Library;
 with Landin.Paths;
+with Landin.Presentation;
+with Landin.Response_Files;
 with Landin.Json;
 with Landin.Source;
 with Landin.Source.Sets;
@@ -25,6 +22,8 @@ with Landin.Targets.Firmware;
 with Landin.Targets.Levels;
 
 package body Landin.Commands is
+   package Presentation renames Landin.Presentation;
+   package Response_Files renames Landin.Response_Files;
    package C renames Catalogue;
    package US renames Ada.Strings.Unbounded;
    package J renames Landin.Json;
@@ -137,13 +136,19 @@ package body Landin.Commands is
       return US.To_String (Quoted) & "'";
    end Shell_Word;
 
+   --  Shipped is the split commands this refine was built with, so an
+   --  option written before one is told where it goes.
    function Parse
      (Arguments : Landin.Platform.Path_List;
-      Host : Landin.Platform.Filesystem'Class) return Request;
+      Host : Landin.Platform.Filesystem'Class;
+      Shipped : Landin.Platform.Path_List :=
+        Landin.Platform.Path_Vectors.Empty_Vector) return Request;
 
    function Parse
      (Arguments : Landin.Platform.Path_List;
-      Host : Landin.Platform.Filesystem'Class) return Request
+      Host : Landin.Platform.Filesystem'Class;
+      Shipped : Landin.Platform.Path_List :=
+        Landin.Platform.Path_Vectors.Empty_Vector) return Request
    is
       Result : Request;
       Expanded : Landin.Platform.Path_List;
@@ -180,6 +185,36 @@ package body Landin.Commands is
          end if;
       end Refuse;
    begin
+      --  D1484: the words after a split command's name are its own, so an
+      --  option written before the name is refine's; the request is told
+      --  its new form, the name first (D1545).
+      for Position in 1 .. Natural (Arguments.Length) loop
+         declare
+            Word : constant String := Arguments (Position);
+         begin
+            exit when Word = "--"
+              or else (Word'Length > 0 and then Word (Word'First) = '@');
+            if Word'Length = 0 or else Word (Word'First) /= '-' then
+               if Position > 1 and then Shipped.Contains (Word) then
+                  declare
+                     Written : US.Unbounded_String;
+                  begin
+                     for Other in 1 .. Natural (Arguments.Length) loop
+                        if Other /= Position then
+                           US.Append (Written,
+                             " " & Shell_Word (Arguments (Other)));
+                        end if;
+                     end loop;
+                     Refuse ("an option before " & Word & " is refine's own,"
+                       & " and " & Word & " takes its options after its"
+                       & " name: refine " & Word & US.To_String (Written));
+                     return Result;
+                  end;
+               end if;
+               exit;
+            end if;
+         end;
+      end loop;
       Response_Files.Expand
         (Arguments, Host, Expanded, Result.Problem,
          Result.Consumed_Response_Files, Result.Consumed_Response_Identities);
@@ -423,44 +458,6 @@ package body Landin.Commands is
             if Natural (Result.Operands.Length) > 1 then
                Refuse (C.Name (Result.Command) & " takes one operand");
             end if;
-         when C.Svd =>
-            if Natural (Result.Operands.Length) /= 1
-              and then not Result.Wants_Help
-            then
-               Refuse ("svd reads one SVD: refine svd"
-                 & " --policy=POLICY.json --out-dir=DIR DEVICE.svd");
-            elsif not Result.Wants_Help
-              and then (not Seen (C.Policy) or else not Seen (C.Out_Dir))
-            then
-               Refuse ("svd needs the policy the SVD was reviewed against"
-                 & " and where to write: refine svd --policy=POLICY.json"
-                 & " --out-dir=DIR DEVICE.svd");
-            end if;
-         when C.Bindings =>
-            if Result.Wants_Help then
-               null;
-            elsif Result.Operands.Is_Empty then
-               Refuse ("bindings binds at least one header: refine bindings"
-                 & " --clang=CLANG [--sysroot=DIR] --policy=POLICY.json"
-                 & " --out-dir=DIR [LOGICAL=]HEADER.h ...");
-            elsif not Seen (C.Clang)
-              or else not Seen (C.Policy) or else not Seen (C.Out_Dir)
-            then
-               --  A hosted target's system root is required too, which
-               --  Landin.Commands.Bindings says once the target is known.
-               Refuse ("bindings needs the Clang that reads the headers, the"
-                 & " policy and where to write: refine bindings"
-                 & " --clang=CLANG [--sysroot=DIR] --policy=POLICY.json"
-                 & " --out-dir=DIR [LOGICAL=]HEADER.h ...");
-            end if;
-         when C.Site =>
-            if not Result.Wants_Help
-              and then Natural (Result.Operands.Length) not in 2 | 4
-            then
-               Refuse ("site resolves a site number, or a file number, a"
-                 & " line and a column, against a build: refine site"
-                 & " PROGRAM SITE");
-            end if;
          when C.Run =>
             if Result.Operands.Is_Empty and then not Result.Wants_Help then
                Refuse ("run needs a source to compile and run: refine run"
@@ -620,7 +617,8 @@ package body Landin.Commands is
       Terminal_Color : Boolean;
       Shipped : String) return Landin.Driver.Outcome
    is
-      Asked : constant Request := Parse (Arguments, Host);
+      Asked : constant Request :=
+        Parse (Arguments, Host, External.Names (Shipped));
       Result : Landin.Driver.Outcome;
       Forwarded : Landin.Platform.Path_List := Asked.Forwarded;
       Transcript : aliased US.Unbounded_String;
@@ -1234,74 +1232,6 @@ package body Landin.Commands is
                Result.Output := US.To_Unbounded_String (Overview);
             when C.Version => Identify;
             when C.Targets => List_Targets;
-            when C.Svd =>
-               Landin.Commands.Devices.Import
-                 (Svd_Path => Asked.Operands.First_Element,
-                  Policy_Path => Effective (C.Policy, ""),
-                  Out_Dir => Effective (C.Out_Dir, ""),
-                  Host => Host, Result => Result,
-                  Protected_Inputs =>
-                                Asked.Consumed_Response_Files,
-                  Protected_Identities => Asked.Consumed_Response_Identities);
-            when C.Site =>
-               declare
-                  After : Landin.Platform.Path_List := Asked.Operands;
-               begin
-                  After.Delete_First;
-                  Landin.Commands.Sites.Resolve
-                    (Artifact => Asked.Operands.First_Element,
-                     Map_Path => Effective (C.Map, ""),
-                     Dsym_Path => Effective (C.Dsym, ""),
-                     Operands => After, Host => Host, Result => Result);
-               end;
-            when C.Bindings =>
-               declare
-                  Request : Landin.Commands.Bindings.Request;
-
-                  --  Every value given for Flag, in order.
-                  function Every (Flag : C.Option)
-                    return Landin.Platform.Path_List;
-
-                  function Every (Flag : C.Option)
-                    return Landin.Platform.Path_List
-                  is
-                     Prefix : constant String := C.Name (Flag) & "=";
-                     Found : Landin.Platform.Path_List;
-                  begin
-                     for Text of Asked.Forwarded loop
-                        if Text'Length >= Prefix'Length
-                          and then Text (Text'First
-                                         .. Text'First + Prefix'Length - 1)
-                                   = Prefix
-                        then
-                           Found.Append
-                             (Text (Text'First + Prefix'Length .. Text'Last));
-                        end if;
-                     end loop;
-                     return Found;
-                  end Every;
-               begin
-                  Request.Clang := US.To_Unbounded_String
-                    (Effective (C.Clang, ""));
-                  Request.Target := US.To_Unbounded_String
-                    (Effective (C.Target, ""));
-                  Request.Sysroot := US.To_Unbounded_String
-                    (Effective (C.Sysroot, ""));
-                  Request.Policy := US.To_Unbounded_String
-                    (Effective (C.Policy, ""));
-                  Request.Out_Dir := US.To_Unbounded_String
-                    (Effective (C.Out_Dir, ""));
-                  Request.Headers := Asked.Operands;
-                  Request.Protected_Inputs := Asked.Consumed_Response_Files;
-                  Request.Protected_Identities :=
-                    Asked.Consumed_Response_Identities;
-                  Request.Include_Dirs := Every (C.Include_Dir);
-                  Request.System_Include_Dirs :=
-                    Every (C.System_Include_Dir);
-                  Request.Defines := Every (C.Define);
-                  Landin.Commands.Bindings.Generate
-                    (Request, Host, Tools, Built_For, Result);
-               end;
             when C.Completion =>
                if Asked.Operands.Is_Empty or else Asked.Operands.Element (1)
                  not in "bash" | "zsh" | "fish"

@@ -1,1 +1,5 @@
-{"format": "landin-split-commands-1", "commands": []}
+{"format": "landin-split-commands-1", "commands": [
+  {"name": "bindings", "project": "refine_bindings.gpr", "main": "refine_bindings.adb"},
+  {"name": "site", "project": "refine_site.gpr", "main": "refine_site.adb"},
+  {"name": "svd", "project": "refine_svd.gpr", "main": "refine_svd.adb"}
+]}

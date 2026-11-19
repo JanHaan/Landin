@@ -13,12 +13,35 @@ with Ada.Strings.Fixed;
 with Ada.Strings.Unbounded;
 
 with Landin.Bindings;
-with Landin.Commands;
+with Landin.Outcomes;
+with Landin.Splits.Bindings;
+with Landin.Targets.Selection;
 with Landin.Driver;
 with Landin.Platform;
 with Landin.Testing.Fakes;
 
 package body Landin.Tests.Bindings_Suite is
+
+   --  `refine bindings WORDS` is `refine-bindings WORDS` (D1383): the request
+   --  without its first word, the command's name.
+   function Run_Split
+     (Arguments : Landin.Platform.Path_List;
+      Host      : Landin.Platform.Filesystem'Class;
+      Tools     : Landin.Platform.Tool_Runner'Class)
+      return Landin.Outcomes.Outcome;
+
+   function Run_Split
+     (Arguments : Landin.Platform.Path_List;
+      Host      : Landin.Platform.Filesystem'Class;
+      Tools     : Landin.Platform.Tool_Runner'Class)
+      return Landin.Outcomes.Outcome
+   is
+      Rest : Landin.Platform.Path_List := Arguments;
+   begin
+      Rest.Delete_First;
+      return Landin.Splits.Bindings.Execute
+        (Rest, Host, Tools, Landin.Targets.Selection.Build_Triplet);
+   end Run_Split;
 
    package US renames Ada.Strings.Unbounded;
    package B renames Landin.Bindings;
@@ -443,7 +466,6 @@ package body Landin.Tests.Bindings_Suite is
    procedure A_Cortex_Header_Is_Bound_Freestanding
      (Item : in out Landin.Testing.Context)
    is
-      Meter : Landin.Platform.Unmetered;
       Asked : constant Landin.Platform.Path_List :=
         ["bindings", "--clang=clang-19", "--target=cortex-m0",
          "--policy=policy.json", "--out-dir=out",
@@ -462,7 +484,7 @@ package body Landin.Tests.Bindings_Suite is
                     Target_Macros => Cortex_Macros (VFP));
             declare
                Result : constant Landin.Driver.Outcome :=
-                 Landin.Commands.Execute (Asked, Host, Tools, Meter);
+                 Run_Split (Asked, Host, Tools);
                Bindings : constant String :=
                  Content_Of (Host, Root & "/out/bindings.ldn");
             begin
@@ -577,13 +599,12 @@ package body Landin.Tests.Bindings_Suite is
    is
       Host : Landin.Testing.Fakes.Fake_Filesystem;
       Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
-      Meter : Landin.Platform.Unmetered;
    begin
       Prepare (Host);
       Tools.Add_Result (0, "arm64-apple-macosx26.0.0" & LF);
       declare
          Result : constant Landin.Driver.Outcome :=
-           Landin.Commands.Execute (Arguments, Host, Tools, Meter);
+           Run_Split (Arguments, Host, Tools);
       begin
          Landin.Testing.Check
            (Item, Result.Status = Landin.Driver.Status_Reported
@@ -607,7 +628,6 @@ package body Landin.Tests.Bindings_Suite is
    procedure A_Header_Is_Bound (Item : in out Landin.Testing.Context) is
       Host : Landin.Testing.Fakes.Fake_Filesystem;
       Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
-      Meter : Landin.Platform.Unmetered;
       Environment : constant Landin.Platform.Path_List :=
         ["PATH", "HOME", "TMPDIR", "TMP", "TEMP", "SystemRoot", "LC_ALL=C",
          "TZ=UTC"];
@@ -633,7 +653,7 @@ package body Landin.Tests.Bindings_Suite is
       Script (Tools);
       declare
          Result : constant Landin.Driver.Outcome :=
-           Landin.Commands.Execute (Arguments, Host, Tools, Meter);
+           Run_Split (Arguments, Host, Tools);
          Bindings : constant String :=
            Content_Of (Host, Root & "/out/bindings.ldn");
       begin
@@ -716,7 +736,7 @@ package body Landin.Tests.Bindings_Suite is
       Script (Tools, "/virtual/tmp/refine-bindings-2");
       declare
          Again : constant Landin.Driver.Outcome :=
-           Landin.Commands.Execute (Arguments, Host, Tools, Meter);
+           Run_Split (Arguments, Host, Tools);
       begin
          Landin.Testing.Check
            (Item, Again.Status = 0
@@ -732,7 +752,6 @@ package body Landin.Tests.Bindings_Suite is
    procedure Requests_Are_Refused_By_Code
      (Item : in out Landin.Testing.Context)
    is
-      Meter : Landin.Platform.Unmetered;
 
       procedure Expect
         (Asked : Landin.Platform.Path_List; Code, Words : String;
@@ -768,7 +787,7 @@ package body Landin.Tests.Bindings_Suite is
          end if;
          declare
             Result : constant Landin.Driver.Outcome :=
-              Landin.Commands.Execute (Asked, Host, Tools, Meter);
+              Run_Split (Asked, Host, Tools);
          begin
             Landin.Testing.Check
               (Item, Result.Status /= 0
@@ -945,7 +964,6 @@ package body Landin.Tests.Bindings_Suite is
    procedure A_Failed_Replacement_Puts_Back
      (Item : in out Landin.Testing.Context)
    is
-      Meter : Landin.Platform.Unmetered;
    begin
       for Existing in Boolean loop
          for At_Move in 1 .. (if Existing then 8 else 2) loop
@@ -969,7 +987,7 @@ package body Landin.Tests.Bindings_Suite is
                Host.Fail_Move (At_Move);
                declare
                   Result : constant Landin.Driver.Outcome :=
-                    Landin.Commands.Execute (Arguments, Host, Tools, Meter);
+                    Run_Split (Arguments, Host, Tools);
                begin
                   Landin.Testing.Check
                     (Item, Result.Status = Landin.Driver.Status_Reported
@@ -1022,7 +1040,6 @@ package body Landin.Tests.Bindings_Suite is
    procedure Missing_Output_Trees_Are_Private
      (Item : in out Landin.Testing.Context)
    is
-      Meter : Landin.Platform.Unmetered;
    begin
       for Nested in Boolean loop
          for Invalid_Policy in Boolean loop
@@ -1045,7 +1062,7 @@ package body Landin.Tests.Bindings_Suite is
                end if;
                declare
                   Result : constant Landin.Driver.Outcome :=
-                    Landin.Commands.Execute (Asked, Host, Tools, Meter);
+                    Run_Split (Asked, Host, Tools);
                begin
                   Landin.Testing.Check
                     (Item, Result.Status = Landin.Driver.Status_Reported
@@ -1071,7 +1088,7 @@ package body Landin.Tests.Bindings_Suite is
          Script (Tools);
          declare
             Result : constant Landin.Driver.Outcome :=
-              Landin.Commands.Execute (Asked, Host, Tools, Meter);
+              Run_Split (Asked, Host, Tools);
          begin
             Landin.Testing.Check
               (Item, Result.Status = 0
@@ -1090,7 +1107,7 @@ package body Landin.Tests.Bindings_Suite is
          Host.Set_Identity_Uncertain (Root & "/out");
          declare
             Result : constant Landin.Driver.Outcome :=
-              Landin.Commands.Execute (Arguments, Host, Tools, Meter);
+              Run_Split (Arguments, Host, Tools);
          begin
             Landin.Testing.Check
               (Item, Result.Status = Landin.Driver.Status_Reported
@@ -1111,7 +1128,7 @@ package body Landin.Tests.Bindings_Suite is
          Script (Tools);
          declare
             Result : constant Landin.Driver.Outcome :=
-              Landin.Commands.Execute (Arguments, Host, Tools, Meter);
+              Run_Split (Arguments, Host, Tools);
          begin
             Landin.Testing.Check
               (Item, Result.Status = 0
@@ -1130,7 +1147,6 @@ package body Landin.Tests.Bindings_Suite is
      (Item : in out Landin.Testing.Context)
    is
       use type Landin.Platform.File_Identity;
-      Meter : Landin.Platform.Unmetered;
       Output_Root : constant String := Root & "/out";
       Spare : constant String := Root & "/foreign";
    begin
@@ -1160,7 +1176,7 @@ package body Landin.Tests.Bindings_Suite is
                end if;
                declare
                   Result : constant Landin.Driver.Outcome :=
-                    Landin.Commands.Execute (Arguments, Host, Tools, Meter);
+                    Run_Split (Arguments, Host, Tools);
                begin
                   Landin.Testing.Check
                     (Item, Result.Status = Landin.Driver.Status_Reported
@@ -1199,7 +1215,6 @@ package body Landin.Tests.Bindings_Suite is
    procedure A_Record_Is_Laid_Out_In_Target_Bytes
      (Item : in out Landin.Testing.Context)
    is
-      Meter : Landin.Platform.Unmetered;
 
       function Big_Ast (Fields : String) return String is
         ("{""id"":""0x1"",""kind"":""TranslationUnitDecl"",""inner"":["
@@ -1253,7 +1268,7 @@ package body Landin.Tests.Bindings_Suite is
          Tools.Add_Result
            (0, "refine-bindings: " & Work & "/output/adapters.c "
             & Work & "/headers/api/api.h" & LF);
-         Result := Landin.Commands.Execute (Asked, Host, Tools, Meter);
+         Result := Run_Split (Asked, Host, Tools);
          Bindings := US.To_Unbounded_String
            (Content_Of (Host, Root & "/out/bindings.ldn"));
          Adapters := US.To_Unbounded_String

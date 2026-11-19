@@ -1,4 +1,4 @@
-with Landin.Commands.Presentation;
+with Landin.Presentation;
 with Landin.Driver;
 with Ada.Strings.Unbounded;
 with Ada.Strings.Fixed;
@@ -1206,8 +1206,8 @@ package body Landin.Tests.Diagnostics_Suite is
    begin
       Result.Named.Append (Raw);
       Result.Found.Append (Make ("L0100", Error, 1, (0, 1), Raw));
-      Landin.Commands.Presentation.Render
-        (Result, Landin.Commands.Presentation.Short, False);
+      Landin.Presentation.Render
+        (Result, Landin.Presentation.Short, False);
       Landin.Testing.Check_Equal
         (Item, Ada.Strings.Unbounded.To_String (Result.Report),
          "name\x1B\x0A:1:1: error[L0100]: name\x1B\x0A" & LF,

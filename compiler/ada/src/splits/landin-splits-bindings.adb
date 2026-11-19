@@ -11,7 +11,7 @@ with Landin.Source.Sets;
 with Landin.Targets;
 with Landin.Targets.Selection;
 
-package body Landin.Commands.Bindings is
+package body Landin.Splits.Bindings is
 
    package US renames Ada.Strings.Unbounded;
    package B renames Landin.Bindings;
@@ -157,7 +157,7 @@ package body Landin.Commands.Bindings is
       Host      : Landin.Platform.Filesystem'Class;
       Tools     : Landin.Platform.Tool_Runner'Class;
       Built_For : String;
-      Result    : in out Landin.Driver.Outcome)
+      Result    : in out Landin.Outcomes.Outcome)
    is
       None : Landin.Source.Sets.Source_Set;
       Session : B.Session;
@@ -181,7 +181,7 @@ package body Landin.Commands.Bindings is
 
       procedure Report (Code : Cat.Code_Name; Message : String) is
       begin
-         Result.Status := Landin.Driver.Status_Reported;
+         Result.Status := Landin.Outcomes.Status_Reported;
          Result.Found.Append
            (Landin.Diagnostics.Make
               (Code => Cat.Code (Code), Level => Landin.Diagnostics.Error,
@@ -217,7 +217,7 @@ package body Landin.Commands.Bindings is
       procedure Refuse (Message : String) is
       begin
          Report (Cat.Unknown_Option, Message);
-         Result.Status := Landin.Driver.Status_Misuse;
+         Result.Status := Landin.Outcomes.Status_Misuse;
       end Refuse;
 
       function Absolute (Path : String) return String;
@@ -1339,4 +1339,128 @@ package body Landin.Commands.Bindings is
       Clean_Up;
    end Generate;
 
-end Landin.Commands.Bindings;
+   Target_Option      : constant := 1;
+   Policy_Option      : constant := 2;
+   Out_Dir_Option     : constant := 3;
+   Clang_Option       : constant := 4;
+   Sysroot_Option     : constant := 5;
+   Include_Option     : constant := 6;
+   System_Option      : constant := 7;
+   Define_Option      : constant := 8;
+
+   Options : constant Option_Array :=
+     [Target_Option => Valued
+        ("--target", "VALUE",
+         "Select a target; default is this compiler's host"),
+      Policy_Option => Valued
+        ("--policy", "VALUE",
+         "The policy that selects what is generated, and how"),
+      Out_Dir_Option => Valued
+        ("--out-dir", "VALUE", "Directory the outputs are written under"),
+      Clang_Option => Valued
+        ("--clang", "VALUE",
+         "The Clang that reads the headers, by path or name"),
+      Sysroot_Option => Valued
+        ("--sysroot", "DIR",
+         "The target's system root; an empty one will do"),
+      Include_Option => Valued
+        ("--include-dir", "DIR",
+         "Search DIR for quoted and angled headers (repeatable)",
+         Repeatable => True),
+      System_Option => Valued
+        ("--system-include-dir", "DIR",
+         "Search DIR for system headers (repeatable)", Repeatable => True),
+      Define_Option => Valued
+        ("--define", "VALUE",
+         "Define NAME, or NAME=VALUE, for Clang (repeatable)",
+         Repeatable => True)];
+
+   Usage_Line : constant String :=
+     "--clang=CLANG [--sysroot=DIR] --policy=POLICY.json --out-dir=DIR"
+     & " [LOGICAL=]HEADER.h ...";
+
+   About : constant Command :=
+     (Name => US.To_Unbounded_String ("bindings"),
+      Summary => US.To_Unbounded_String
+        ("Generate Landin bindings and C adapters for C headers"),
+      Usage => US.To_Unbounded_String (Usage_Line),
+      Notes => US.To_Unbounded_String
+        ("Example: refine bindings --clang=clang-19"
+         & " --target=linux-x86-64" & LF
+         & "  --sysroot=sysroot --policy=policy.json --out-dir=generated"
+         & LF & "  --system-include-dir=""$(clang-19 -print-resource-dir)"
+         & "/include""" & LF & "  api/public.h=include/public.h" & LF
+         & "A header is LOGICAL=PATH, or PATH, whose last name is then"
+         & LF & "its logical one: the relative name exports.h includes it"
+         & LF & "by. Clang reads the headers and nothing else: it gets"
+         & LF & "-nostdinc, the roots and defines named here, and an"
+         & LF & "environment of PATH, HOME and the temporary directory"
+         & LF & "alone. --sysroot is required for a hosted target and"
+         & LF & "refused for cortex-m0, which is freestanding: name its"
+         & LF & "Clang's own headers with --system-include-dir."
+         & LF & "Four files are written: bindings.ldn, adapters.c,"
+         & LF & "exports.h and bindings.json; each is written beside its"
+         & LF & "destination and read back, and adapters.c compiled,"
+         & LF & "before any is replaced. The complete policy reference:"
+         & LF & "https://www.701.dev/bindings.html" & LF));
+
+   function Perform
+     (Asked     : Landin.Splits.Request;
+      Host      : Landin.Platform.Filesystem'Class;
+      Tools     : Landin.Platform.Tool_Runner'Class;
+      Built_For : String) return Landin.Outcomes.Outcome;
+
+   function Perform
+     (Asked     : Landin.Splits.Request;
+      Host      : Landin.Platform.Filesystem'Class;
+      Tools     : Landin.Platform.Tool_Runner'Class;
+      Built_For : String) return Landin.Outcomes.Outcome
+   is
+      Result : Landin.Outcomes.Outcome;
+      Order : Request;
+   begin
+      if Asked.Operands.Is_Empty then
+         return Refused
+           (Cat.Unknown_Option,
+            "bindings binds at least one header: refine bindings "
+            & Usage_Line, Landin.Outcomes.Status_Misuse);
+      elsif not Given (Asked, Clang_Option)
+        or else not Given (Asked, Policy_Option)
+        or else not Given (Asked, Out_Dir_Option)
+      then
+         --  A hosted target's system root is required too, which
+         --  Generate says once the target is known.
+         return Refused
+           (Cat.Unknown_Option,
+            "bindings needs the Clang that reads the headers, the policy"
+            & " and where to write: refine bindings " & Usage_Line,
+            Landin.Outcomes.Status_Misuse);
+      end if;
+      Order.Clang := US.To_Unbounded_String (Value (Asked, Clang_Option));
+      Order.Target := US.To_Unbounded_String (Value (Asked, Target_Option));
+      Order.Sysroot := US.To_Unbounded_String
+        (Value (Asked, Sysroot_Option));
+      Order.Policy := US.To_Unbounded_String (Value (Asked, Policy_Option));
+      Order.Out_Dir := US.To_Unbounded_String
+        (Value (Asked, Out_Dir_Option));
+      Order.Headers := Asked.Operands;
+      Order.Include_Dirs := Values (Asked, Include_Option);
+      Order.System_Include_Dirs := Values (Asked, System_Option);
+      Order.Defines := Values (Asked, Define_Option);
+      Order.Protected_Inputs := Asked.Consumed_Response_Files;
+      Order.Protected_Identities := Asked.Consumed_Response_Identities;
+      Generate (Order, Host, Tools, Built_For, Result);
+      return Result;
+   end Perform;
+
+   function Execute
+     (Arguments      : Landin.Platform.Path_List;
+      Host           : Landin.Platform.Filesystem'Class;
+      Tools          : Landin.Platform.Tool_Runner'Class;
+      Built_For      : String;
+      Terminal_Color : Boolean := False) return Landin.Outcomes.Outcome is
+     (Landin.Splits.Execute
+        (About, Options, Perform'Access, Arguments, Host, Tools, Built_For,
+         Terminal_Color));
+
+end Landin.Splits.Bindings;
