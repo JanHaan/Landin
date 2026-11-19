@@ -1,6 +1,5 @@
 landin-citations 1
-source 90e7163f841c23af5d5e029340539b81b2ae5f7725cfc3da9845383136ed747a
-source 03b0c744041336ed0f9ff222c58255a8a8ddd9474ecf5748af7feca5bc60a781
+source e1a408e161091288e8bc24b47269572691fe34eaefba98c28c29aa08624d8ade
 C	10	Line comments	tour.md	https://www.701.dev/tour.html#0010	`--` starts a comment that runs to the end of the line.\n\n    -- [0010] Line comment, to end of line.
 C	20	Block comments, which nest	tour.md	https://www.701.dev/tour.html#0020	`--(` opens a block comment and `)--` closes it. A block comment may sit between two tokens on one line.\n\n    --( [0020] Block comment. Nests properly.\n        --( so this inner one is fine )--\n    )--\n\nBecause block comments nest, you can comment out a region that already contains one.\n\nA block comment that is never closed runs to the end of the file, and the compiler reports it there.
 C	30	Doc comments	tour.md	https://www.701.dev/tour.html#0030	`---` starts a doc comment, which documents the declaration on the next line.\n\n    --- [0030] Doc comment. Attaches to the declaration that follows.\n\nA doc comment changes nothing about what the program means. Spec [2000] says which lines count as a declaration's doc comment.
