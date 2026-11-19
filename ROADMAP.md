@@ -1000,6 +1000,31 @@ directory succeeding, under a control that starts them together on every
 hosted target the publication controls run; a workspace that is truly
 abandoned still recovered or refused as D1049 says.
 
+### R18.72 — A contributed `refine build`
+
+Status: planned
+Depends on: R18.50
+
+`build` is reserved (D1484): `refine build` refuses with L0002, "build is
+reserved for future project orchestration", even with a compatible
+`refine-build` on PATH, which is left out of `refine help`, is an unknown
+command to `refine help build`, and is asked for no code prefix, so
+`refine explain` refuses its codes, and nothing says a `refine-build` was
+found and passed over. The maintainer decided on 2026-11-19 to lift the
+reservation when a compatible contributed `refine-build` is found, so that
+it is dispatched, listed in help, asked for its prefix and given its
+explanations as any contributed command is. Whether the reservation goes
+outright or L0002 stays for the case where none is found is this item's to
+design and record against D1484. Met writing refine-build, a contributed
+build tool (its friction entry 16).
+
+Exit evidence: a contributed `refine-build` that answers `--describe`,
+`--complete` and `explain` (refine-build at ce197f9, prefix `RB`, is the
+subject) dispatched by `refine build`, listed by `refine help`, shown by
+`refine help build` and given `refine explain RB...`, under the
+dispatcher's black-box controls; the case with no `refine-build` refused
+as the item decides; D1484 amended.
+
 ### R18 gate
 Every existing invocation works or is refused with its new form; every
 split command ships in the archive and the flake and keeps its controls;
