@@ -942,8 +942,8 @@ jobs:
           git worktree add --detach "$RUNNER_TEMP/base" "$base"
           ./scripts/dev-build.sh | tee "$RUNNER_TEMP/candidate.log"
           (cd "$RUNNER_TEMP/base" && ./scripts/dev-build.sh) | tee "$RUNNER_TEMP/base.log"
-          echo "CANDIDATE_REFINE=$(sed -n 's/^built: //p' "$RUNNER_TEMP/candidate.log" | tail -1)" >> "$GITHUB_ENV"
-          echo "BASE_REFINE=$(sed -n 's/^built: //p' "$RUNNER_TEMP/base.log" | tail -1)" >> "$GITHUB_ENV"
+          echo "CANDIDATE_REFINE=$(sed -n 's|^built: \(.*/bin/refine\)$|\1|p' "$RUNNER_TEMP/candidate.log" | tail -1)" >> "$GITHUB_ENV"
+          echo "BASE_REFINE=$(sed -n 's|^built: \(.*/bin/refine\)$|\1|p' "$RUNNER_TEMP/base.log" | tail -1)" >> "$GITHUB_ENV"
       - name: Paired wall time of every configuration the runner table times here
         run: >-
           python3 scripts/measure.py time --refine "$CANDIDATE_REFINE"
