@@ -1596,7 +1596,33 @@ MENTION = re.compile(r"(?<![\w./-])(?:README|ROADMAP|handoff|AGENTS)\.md"
                      r"|\*\*?\.md\b|(?<![\w./-])roadmap/")
 
 
+def mentioned_by(name, text):
+    """NAME, or, for the generated citations.txt, the constructs and
+    decisions whose copied text names a document: the passage to reword
+    is theirs, in tour.md or spec.md, not the generated line."""
+    if name != "citations.txt":
+        return name
+    entries = []
+    for line in text.splitlines():
+        fields = line.split("\t")
+        if len(fields) > 2 and MENTION.search(line):
+            number = ("D" + fields[1] if fields[0] == "D"
+                      else "[%04d]" % int(fields[1]))
+            entries.append("%s (%s)" % (number, fields[2]))
+    return ("citations.txt, which check.py --generate copies from %s;"
+            " reword that text in tour.md or spec.md" % "; ".join(entries))
+
+
 class Readers(unittest.TestCase):
+    def test_a_generated_citation_names_its_decision(self):
+        text = ("landin-citations 1\nsource x\n"
+                "C\t10\tLine comments\ttour.md\tpage\tplain\n"
+                "D\t7\tA rule\tDecisions: x\tpage\tChosen: as ROADMAP.md says\n")
+        said = mentioned_by("citations.txt", text)
+        self.assertIn("D7 (A rule)", said)
+        self.assertNotIn("Line comments", said)
+        self.assertEqual(mentioned_by("scripts/x.py", text), "scripts/x.py")
+
     def test_no_lane_reads_the_four_documents(self):
         tracked = subprocess.run(["git", "ls-files", "-z"], cwd=ROOT, check=True,
                                  stdout=subprocess.PIPE, text=True).stdout
@@ -1613,7 +1639,7 @@ class Readers(unittest.TestCase):
             except UnicodeDecodeError:
                 continue
             if MENTION.search(text):
-                unexplained.append(name)
+                unexplained.append(mentioned_by(name, text))
         self.assertEqual(unexplained, [],
                          "these name one of %s bare, so a lane gate_inputs.py "
                          "may skip could read it.  A file that only names "

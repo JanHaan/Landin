@@ -30,9 +30,10 @@ not concern the row.  A row that only such a directory matched is listed
 apart, as one to read, not one the changes are known to meet.
 
 It also names the passes the gate runs and no local check does, when the
-changes reach their inputs: the editor grammar's corpus, the flake, and
-actionlint over the workflows.  --run runs those passes, from inside
-`nix develop`.
+changes reach their inputs: the editor grammar's corpus, the flake,
+actionlint over the workflows, and the Cortex-M firmware lane, whose
+controls match the firmware stage's diagnostics by their words.  --run
+runs those passes, from inside `nix develop`.
 
 The changes are `git diff --name-only BASE...HEAD`, the commits since HEAD
 left BASE, together with the uncommitted ones: staged, unstaged and
@@ -61,6 +62,7 @@ BASE defaults to `main`.  The exit status is 0 whatever is listed, unless
 import argparse
 import os
 import re
+import shlex
 import subprocess
 import sys
 from pathlib import Path
@@ -101,6 +103,15 @@ PASSES = (
     ("the workflows' actionlint, a step of the gate's scripts job",
      (".github/", "scripts/actionlint.py", "environments/pins.sh"),
      (("python3", "scripts/actionlint.py"),)),
+    #  The firmware lane's refusals control matches the firmware stage's
+    #  diagnostics by their words, and no local check reads them.  Its
+    #  tools are firmware.py's default root; --tools names another.
+    ("the Cortex-M firmware lane, in the gate's cortex-m job",
+     ("compiler/ada/src/stages/landin-targets-firmware.adb",
+      "environments/cortex-m/firmware.py"),
+     (("sh", "-c", 'python3 environments/cortex-m/firmware.py --all-profiles'
+       ' --refine "$PWD/compiler/ada/build/$LANDIN_BUILD_TAG/debug/bin/refine"'
+       ' --output "$(mktemp -d)/firmware"'),)),
 )
 
 
@@ -431,13 +442,13 @@ def main(argv=None, root=ROOT, out=sys.stdout):
     for description, commands in called:
         print("\nThe changes reach %s; run, inside nix develop:" % description, file=out)
         for command in commands:
-            print("    " + " ".join(command), file=out)
+            print("    " + shlex.join(command), file=out)
     if not args.run:
         return 0
     status = 0
     for description, commands in called:
         for command in commands:
-            print("\nactivations: running " + " ".join(command), file=out, flush=True)
+            print("\nactivations: running " + shlex.join(command), file=out, flush=True)
             if subprocess.run(command, cwd=root).returncode != 0:
                 print("activations: %s failed" % description, file=out)
                 status = 1

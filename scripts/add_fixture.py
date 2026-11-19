@@ -12,7 +12,9 @@ others are still added, and the run ends unsuccessfully.  `--refuse`,
 `--reason` and `--stops` describe one fixture's row, so they take one
 fixture.  This then
 
-1. reads its metadata as the test program does, and stops on any fault;
+1. reads its metadata as the test program does, and stops on any fault,
+   or on a negative fixture whose `program:` imports the library, which
+   the parser suite reads without it, naming the directory form instead;
 2. for a runtime or ABI fixture without one, adds its row to
    compiler/tests/cortex-m/corpus.json.  A runtime fixture is compiled for
    Cortex-M0 with refine, the one `--refine` names or the newest this
@@ -409,6 +411,33 @@ def corpus_row(meta, refuse, reason, refused=None, stops=None,
     return {"mode": "execute"}
 
 
+#  An import of the library's namespaces, which a negative fixture's
+#  program alone is not given: the parser suite reads it on a fake
+#  filesystem holding only the program and its `with` sources.
+LIBRARY_IMPORT = re.compile(
+    r"^[ \t]*(?:public[ \t]+)?import[ \t]+((?:core|hosted|platform)/\S+)",
+    re.MULTILINE)
+
+
+def library_import(meta, directory):
+    """The first library module an unrooted negative fixture's program or
+    `with` sources import, when its report would need the library to be
+    read: none of its codes comes before the imports are resolved, the
+    driver's, scanner's, loader's and parser's below L0200."""
+    if (meta.cls != "negative" or meta.rooted or not meta.get("program")
+            or any(code < "L0200" for code in meta.codes)):
+        return None
+    for name in [meta["program"], *meta.with_sources]:
+        try:
+            text = (directory / name).read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+        found = LIBRARY_IMPORT.search(text)
+        if found:
+            return found.group(1)
+    return None
+
+
 def add_one(fixture, args, refine, executing):
     """Steps 1 to 3 for one fixture: its directory and metadata.  A
     refusal is a SystemExit, raised before anything of this fixture's is
@@ -427,6 +456,18 @@ def add_one(fixture, args, refine, executing):
                 fixture, (directory / fixture_meta.NAME).read_text(
                     encoding="utf-8", errors="replace"))
         raise SystemExit(str(error) + hint)
+    imported = library_import(meta, directory)
+    if imported:
+        raise SystemExit(
+            "%s: its program imports %s, and the parser suite reads a"
+            " negative fixture's program without the library, so it would"
+            " be refused with L0006.  Make the fixture a directory module:"
+            " its source in %s/main.ldn and, in its metadata, `args:"
+            " --root=../.. ../tests/fixtures/%s` and `expect: expected.txt`"
+            " in place of `program:`, as compiler/tests/README.md's account"
+            " of `root` says and negative/a-concept-entry-names-its-public-"
+            "operation does" % (meta.label, imported,
+                                directory.relative_to(ROOT), meta.label))
 
     if meta.cls in ("runtime", "abi"):
         record = json.loads(CORPUS.read_text(encoding="utf-8"))

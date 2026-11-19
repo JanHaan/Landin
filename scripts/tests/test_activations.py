@@ -271,7 +271,10 @@ class Activations(unittest.TestCase):
                              ("environments/pins.sh", "the flake"),
                              ("flake.lock", "the flake"),
                              (".github/actionlint.yaml", "actionlint"),
-                             ("scripts/actionlint.py", "actionlint")):
+                             ("scripts/actionlint.py", "actionlint"),
+                             ("compiler/ada/src/stages/landin-targets-firmware.adb",
+                              "firmware lane"),
+                             ("environments/cortex-m/firmware.py", "firmware lane")):
             with self.subTest(path=path):
                 self.assertIn(wanted, self.listed(path)[1])
         self.assertNotIn("The changes reach", self.listed("scripts/debug.sh")[1])

@@ -511,7 +511,7 @@ the R22 items that take them.
 Exit evidence: every row typed and under the cap; the allocation script and
 its control; the cap and age rule refused in a control.
 
-Done: every moved row typed, the rows-to-be filed as `SR-1282` to SR-1298,
+Done: every moved row typed, the rows-to-be filed as `SR-1282` to `SR-1298`,
 `scripts/register_next.py` with its controls, and `check.py` refusing a
 register over its cap or a row past its age in controls. The maintainer's
 answers to Q-1 to Q-5 retired 43 rows and scheduled `SR-195` and `SR-768` on
@@ -614,7 +614,7 @@ script. Closing it met two defects the script's controls had not: `run`
 refused its documented form, on the gate's Python 3.12 after a first fix
 under the shell's 3.14, and promotion while a boards run was going said to
 dispatch one; both are fixed, and the Python the gate's script jobs run,
-which nothing names, is SR-1301. A fresh session with no context resumed it from
+which nothing names, is `SR-1301`. A fresh session with no context resumed it from
 disk with `item.py resume` while the gate ran; it said what the next step
 was, but not what came after the wait, nor what to do with an
 uncommitted file, which `resume` now says. Whether that run is this
