@@ -416,7 +416,9 @@ def row_line(row):
 
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--refine',type=Path,required=True)
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'scripts'))
+    import lane_refine  # the --refine every lane takes
+    lane_refine.argument(parser)
     parser.add_argument('--output',type=Path,required=True)
     parser.add_argument('--tools',type=Path,default=DEFAULT)
     parser.add_argument('--program',action='append',choices=PROGRAMS,default=[],
@@ -428,9 +430,6 @@ def main():
                         help='a profile to run at; repeat for more, and the first without one')
     parser.add_argument('--all-profiles',action='store_true')
     args=parser.parse_args()
-    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'scripts'))
-    import refine_revision
-    refine_revision.warn(args.refine)  # is it this checkout's?
     if not args.program and not args.control:
         parser.error('name a --program or a --control; run.py --lane evidence runs them all')
     supported_host(args.output)

@@ -492,13 +492,12 @@ def main(argv=None):
     parser.add_argument("--stops", metavar="WHAT",
                         help="what stops a restriction on Cortex-M0, which the"
                              " corpus holds its build to (D986)")
-    parser.add_argument("--refine", type=Path,
-                        help="the refine that compiles a runtime or ABI"
-                             " fixture for Cortex-M0; the newest this checkout"
-                             " built by default")
+    import lane_refine  # the --refine every lane takes
+    lane_refine.argument(parser, required=False,
+                         help="the refine that compiles a runtime or ABI"
+                              " fixture for Cortex-M0; the newest this checkout"
+                              " built by default")
     args = parser.parse_args(argv)
-    import refine_revision
-    refine_revision.warn(args.refine)  # is it this checkout's?
     if len(args.fixtures) > 1 and (args.refuse or args.reason or args.stops):
         raise SystemExit("--refuse, --reason and --stops describe one"
                          " fixture's row; add %s in a run of its own each"

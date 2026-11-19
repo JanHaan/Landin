@@ -22,6 +22,9 @@ import sys
 import tempfile
 import time
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'scripts'))
+import lane_refine  # noqa: E402
+
 
 def command_controls(refine, output):
     """Interrupt an actual compile/run at the tool's readiness boundary."""
@@ -162,7 +165,8 @@ def child_policy_commands(refine, executable, output):
                 path.write_bytes(b'prior generated sentinel\x00\xff\n')
                 stat = path.stat()
                 bindings_before[path] = (stat.st_dev, stat.st_ino, path.read_bytes())
-            argv = [str(executable), 'exec-ignored', str(refine), 'bindings',
+            argv = [str(executable), 'exec-ignored',
+                    *lane_refine.command(refine, 'bindings'),
                     '--clang=' + str(driver), '--target=linux-x86-64',
                     '--sysroot=' + str(sysroot), '--policy=' + str(policy),
                     '--out-dir=' + str(generated), 'api.h=' + str(header)]
@@ -391,15 +395,12 @@ def main():
     parser.add_argument("--case", choices=("cancellation", "attached"))
     parser.add_argument("--native-only", action="store_true",
                         help="test the production POSIX helper without refine")
-    parser.add_argument('--refine', type=Path,
-                        help='also interrupt actual compile/run commands')
+    lane_refine.argument(parser, required=False,
+                         help='also interrupt actual compile/run commands')
     parser.add_argument("--cc", default=os.environ.get("CC", "cc"))
     parser.add_argument("--output", type=Path,
                         help="new directory for retained binaries/logs/results")
     args = parser.parse_args()
-    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'scripts'))
-    import refine_revision
-    refine_revision.warn(args.refine)  # is it this checkout's?
     if args.native_only == bool(args.refine):
         parser.error('give --native-only or --refine PATH')
     repo = Path(__file__).resolve().parents[2]

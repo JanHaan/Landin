@@ -339,7 +339,7 @@ def wait_for_path(path, seconds):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument('--refine', type=Path)
+    common.refine_argument(parser)
     common.board_arguments(parser)
     parser.add_argument('--probe-rs', type=Path, default=shutil.which('probe-rs'),
                         help='a probe-rs that reaches the ST-LINK')

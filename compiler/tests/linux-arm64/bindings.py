@@ -50,7 +50,9 @@ def digest(path):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--refine", type=Path, required=True)
+    sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'scripts'))
+    import lane_refine  # the --refine every lane takes
+    lane_refine.argument(parser)
     parser.add_argument("--clang", default=os.environ.get("CLANG", "clang"))
     parser.add_argument("--driver", default="aarch64-linux-gnu-gcc",
                         help="the C driver that links the program")
@@ -58,14 +60,12 @@ def main():
                         help="the aarch64 sysroot Clang reads headers from")
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
-    sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'scripts'))
-    import refine_revision
-    refine_revision.warn(args.refine)  # is it this checkout's?
     require((platform.system(), platform.machine()) == ("Linux", "aarch64"),
             "native Linux arm64 required; no skip is a pass")
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=False)
     refine = args.refine.resolve(strict=True)
+    compiler = lane_refine.dispatcher(refine)
     clang = shutil.which(args.clang)
     require(clang is not None, "Clang %r is not on PATH" % args.clang)
     resource = Path(run([clang, "-print-resource-dir"]).strip())
@@ -81,7 +81,7 @@ def main():
 
     generated = output / "generated"
     include = args.sysroot / "usr/include"
-    run([refine, "bindings", "--clang=" + clang, "--target=linux-arm64",
+    run([*lane_refine.command(refine, "bindings"), "--clang=" + clang, "--target=linux-arm64",
          "--sysroot=" + str(args.sysroot),
          "--policy=" + str(inputs / "policy.json"),
          "--out-dir=" + str(generated),
@@ -103,7 +103,7 @@ def main():
         label = "bindings-%s-%s" % (optimize, specialize)
         assembly = output / (label + ".s")
         executable = output / label
-        run([refine, "compile", "--target=linux-arm64", "--root=" + str(ROOT),
+        run([compiler, "compile", "--target=linux-arm64", "--root=" + str(ROOT),
              "--optimize=" + optimize, "--specialize=" + specialize,
              "--emit=asm", "-o", assembly, generated])
         run([args.driver, "-std=c11", "-Wall", "-Wextra", "-Werror", "-pthread",

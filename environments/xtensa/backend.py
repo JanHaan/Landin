@@ -241,7 +241,9 @@ def nonterminating(run, refine, qemu, source, chip, memory_profile):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--refine', required=True, type=Path)
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'scripts'))
+    import lane_refine  # the --refine every lane takes
+    lane_refine.argument(parser)
     parser.add_argument('--qemu', type=Path)
     parser.add_argument('--tools', type=Path)
     parser.add_argument('--output', required=True, type=Path)
@@ -249,9 +251,6 @@ def main():
     parser.add_argument('--memory-profile', choices=('chip', 'sim'), default='chip')
     parser.add_argument('--control', action='append', default=[])
     args = parser.parse_args()
-    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'scripts'))
-    import refine_revision
-    refine_revision.warn(args.refine)  # is it this checkout's?
     known = {p.stem: p for p in CONTROLS.glob('*.ldn')}
     if not args.control or set(args.control) - known.keys():
         parser.error('select exact --control names: ' + ', '.join(sorted(known)))

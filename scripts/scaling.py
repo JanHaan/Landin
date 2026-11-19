@@ -536,9 +536,10 @@ def write_program(directory: str, files: dict[str, str]) -> None:
 def main(argv: list[str]) -> int:
     sys.stdout.reconfigure(line_buffering=True)
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    parser.add_argument("--refine", default=None,
-                        help="the compiler to measure (default: the"
-                             " release build)")
+    import lane_refine  # the --refine every lane takes
+    lane_refine.argument(parser, required=False,
+                         help="the compiler to measure (default: the"
+                              " release build)")
     parser.add_argument("--runs", type=int, default=RUNS)
     parser.add_argument("--limit", type=float, default=LIMIT,
                         help="maximum frontend and emission time ratio"
@@ -564,8 +565,6 @@ def main(argv: list[str]) -> int:
                         help="how many times a doubling over its limit is"
                              " measured again before it fails (default: 2)")
     arguments = parser.parse_args(argv)
-    import refine_revision
-    refine_revision.warn(arguments.refine)  # is it this checkout's?
 
     refine = os.path.abspath(arguments.refine or default_refine())
     if not os.access(refine, os.X_OK):

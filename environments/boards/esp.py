@@ -850,7 +850,7 @@ def run_board(chip, args, console_for, cycle, settle, places=()):
 
 def arguments(parser, chip):
     """The options both ESP tools take."""
-    parser.add_argument('--refine', type=Path)
+    common.refine_argument(parser)
     common.board_arguments(parser)
     parser.add_argument('--probe-rs', type=Path, default=shutil.which('probe-rs'),
                         help='a probe-rs that reaches the board\'s USB-Serial-JTAG')

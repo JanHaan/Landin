@@ -14,6 +14,8 @@ import subprocess
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
+sys.path.insert(0, str(ROOT / 'scripts'))
+import lane_refine  # noqa: E402
 SOURCE = HERE / 'panic/app/main.ldn'
 PROFILES = (('none', 'off'), ('size', 'auto'), ('size', 'all'))
 
@@ -157,7 +159,7 @@ def measure(refine, output, *, debugger=None, toolchain=None, profile=None):
             assert not re.search(r'^#7\b', stack, re.M), stack
         #  D1292: the assembly names its build on every host; the table
         #  is the executable's.
-        mapped = run(key+'-map', [refine, 'site',
+        mapped = run(key+'-map', [*lane_refine.command(refine, 'site'),
             '--map='+str(executable)+'.sources.json',
             str(executable)+'.s', site])
         assert f'main.ldn:{operation_line}:5 (overflow)' in mapped
@@ -174,13 +176,10 @@ def measure(refine, output, *, debugger=None, toolchain=None, profile=None):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--refine', type=Path, required=True)
+    lane_refine.argument(parser)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--debugger')
     parser.add_argument('--toolchain')
     parser.add_argument('--profile', choices=tuple(a+'-'+b for a,b in PROFILES))
     args = parser.parse_args()
-    sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'scripts'))
-    import refine_revision
-    refine_revision.warn(args.refine)  # is it this checkout's?
     measure(**vars(args))

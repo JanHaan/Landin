@@ -736,7 +736,7 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     commands = parser.add_subparsers(dest='command', required=True)
     made = commands.add_parser('build', help='compile every workload at every profile for each board')
-    made.add_argument('--refine', type=Path, required=True)
+    common.refine_argument(made, required=True)
     made.add_argument('--output', type=Path, required=True, help='a new directory')
     made.add_argument('--board', choices=BOARDS, action='append', help='repeat; default every board')
     made.add_argument('--workload', action='append', help='repeat; default the whole firmware set')

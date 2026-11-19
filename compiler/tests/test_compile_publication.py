@@ -405,14 +405,13 @@ def host_controls(refine, root, env, source, driver):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--refine', type=Path, required=True)
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'scripts'))
+    import lane_refine  # the --refine every lane takes
+    lane_refine.argument(parser)
     parser.add_argument('--output', type=Path)
     parser.add_argument('--case', action='append', default=[],
                         help='select an exact control; repeat for a union')
     args = parser.parse_args()
-    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'scripts'))
-    import refine_revision
-    refine_revision.warn(args.refine)  # is it this checkout's?
     refine = args.refine.resolve(strict=True)
     root = (args.output.absolute() if args.output else
             Path(tempfile.mkdtemp(prefix='landin-compile-publication-')))

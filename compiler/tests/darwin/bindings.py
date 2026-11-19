@@ -13,18 +13,18 @@ from check import ROOT, Run, hash_file, require
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--refine", type=Path, required=True)
+    sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'scripts'))
+    import lane_refine  # the --refine every lane takes
+    lane_refine.argument(parser)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--parity", action="store_true")
     args = parser.parse_args()
-    sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'scripts'))
-    import refine_revision
-    refine_revision.warn(args.refine)  # is it this checkout's?
     require(platform.system() == "Darwin" and platform.machine() == "arm64",
             "native Darwin arm64 required")
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=False)
     refine = args.refine.resolve()
+    compiler = lane_refine.dispatcher(refine)
     run = Run(output)
     summary = {"schema": 1, "status": "failed", "refine_sha256": hash_file(refine)}
     try:
@@ -41,7 +41,7 @@ def main():
         policy["abi"]["target"] = "arm64-apple-macos26.0.0"
         (inputs / "policy.json").write_text(json.dumps(policy, indent=2) + "\n")
         generated = output / "generated"
-        run.command([refine, "bindings", "--clang=/usr/bin/clang",
+        run.command([*lane_refine.command(refine, "bindings"), "--clang=/usr/bin/clang",
                      "--target=darwin-arm64", "--sysroot=" + str(sdk),
                      "--policy=" + str(inputs / "policy.json"),
                      "--out-dir=" + str(generated),
@@ -59,7 +59,7 @@ def main():
             label = 'bindings-' + optimize + '-' + specialize if args.parity else 'bindings'
             assembly = output / (label + '.s')
             executable = output / (label + '-native')
-            run.command([refine, "compile", "--target=darwin-arm64", "--root=" + str(ROOT),
+            run.command([compiler, "compile", "--target=darwin-arm64", "--root=" + str(ROOT),
                          "--optimize=" + optimize, "--specialize=" + specialize,
                          "--emit=asm", "-o", assembly, generated], label + '-emit', ROOT)
             objects = []
@@ -104,7 +104,7 @@ def main():
                             + '\nexec /usr/bin/clang "$@"\n')
         recorder.chmod(0o755)
         linked = output / "archive-native"
-        run.command([refine, "compile", "--target=darwin-arm64", "--emit=exe", "-L", libraries, source,
+        run.command([compiler, "compile", "--target=darwin-arm64", "--emit=exe", "-L", libraries, source,
                      "--toolchain=" + str(recorder), "-o", linked], "archive-link", output)
         run.command([linked], "archive-execute", output, expected=42)
         commands = [command.split("\n") for command in
@@ -119,7 +119,7 @@ def main():
         # The same program with no directory to look in: the link fails,
         # and refine names the library at its directive.
         missing = output / "missing-native"
-        _, _, diagnostic = run.command([refine, "compile", "--target=darwin-arm64", "--emit=exe",
+        _, _, diagnostic = run.command([compiler, "compile", "--target=darwin-arm64", "--emit=exe",
                                        source, "-o", missing], "archive-missing", output, expected=1)
         require(b"error[L0509]" in diagnostic and b"r530_probe" in diagnostic
                 and not missing.exists(), "a missing library was not L0509")
@@ -143,7 +143,7 @@ def main():
                             'public main: () -> (code: i32) =\n'
                             '    code = r530_probe()\nend main\n')
         native = output / "directory-native"
-        run.command([refine, "compile", "--target=darwin-arm64", "--emit=exe", directed,
+        run.command([compiler, "compile", "--target=darwin-arm64", "--emit=exe", directed,
                      "--toolchain=" + str(recorder), "-o", native], "directory-link", output)
         landin_status, _, _ = run.command([native], "directory-execute", output, expected=None)
         control = output / "control.c"

@@ -42,13 +42,12 @@ def exact_difference(name, expect, expected, actual):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--refine', type=Path, required=True)
+    sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'scripts'))
+    import lane_refine  # the --refine every lane takes
+    lane_refine.argument(parser)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--case', help='exact fixture; development only')
     args = parser.parse_args()
-    sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'scripts'))
-    import refine_revision
-    refine_revision.warn(args.refine)  # is it this checkout's?
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=False)
     run = Run(output)

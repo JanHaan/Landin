@@ -440,7 +440,9 @@ def reduce_one(refine, memory, seconds, out, text):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    parser.add_argument("--refine", required=True)
+    sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'scripts'))
+    import lane_refine  # the --refine every lane takes
+    lane_refine.argument(parser)
     parser.add_argument("--seed", type=int, default=500000)
     parser.add_argument("--rounds", type=int, default=1)
     parser.add_argument("--out", default="")
@@ -455,9 +457,6 @@ def main():
     parser.add_argument("--reduce", default="",
                         help="reduce this hit instead of fuzzing")
     arguments = parser.parse_args()
-    sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'scripts'))
-    import refine_revision
-    refine_revision.warn(arguments.refine)  # is it this checkout's?
     refine = os.path.abspath(arguments.refine)
     out = Path(arguments.out or ("/tmp/landin-fuzz-%d" % arguments.seed))
     out.mkdir(parents=True, exist_ok=True)
