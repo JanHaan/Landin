@@ -2806,6 +2806,12 @@
     "runtime/for-fallible-iteration": {
       "mode": "execute"
     },
+    "runtime/for-finished-in-outer-loop": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse"
+    },
     "runtime/for-iterable-evidence-traversal": {
       "mode": "execute"
     },

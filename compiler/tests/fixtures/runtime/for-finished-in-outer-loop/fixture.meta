@@ -1,0 +1,7 @@
+class: runtime
+profiles: standard
+summary: D1623 a finished for no longer holds its source when an outer loop goes round again
+program: main.ldn
+status: 36
+constructs: 0830, 1150, 1160, 1320
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

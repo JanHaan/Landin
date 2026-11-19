@@ -1,0 +1,43 @@
+--  D1623 leaves D1084 as it was: inside the `for`'s own body, under an
+--  outer loop, releasing the list it walks is still refused, and so is
+--  releasing it after the walk while an element is kept outside it.
+import core/mem
+import core/vec
+import hosted/heap
+
+inside: (memory: heap.heap, rounds: i32) -> (n: usize) ! mem.out_of_memory =
+    n = 0
+    mut round: i32 = 0
+    loop do
+        break when round == rounds
+        mut names := vec.new(item: utf8)
+        try vec.push(names, memory, "ab")
+        for below in vec.used(names) do
+            vec.release(names, memory) -- error: below views names
+            n += lenof below
+        end for
+        round += 1
+    end loop
+end inside
+
+kept: (memory: heap.heap, rounds: i32) -> (n: usize) ! mem.out_of_memory =
+    n = 0
+    mut round: i32 = 0
+    mut last: utf8 = ""
+    loop do
+        break when round == rounds
+        n += lenof last
+        mut names := vec.new(item: utf8)
+        try vec.push(names, memory, "ab")
+        for below in vec.used(names) do
+            last = below
+        end for
+        vec.release(names, memory) -- error: last views names
+        round += 1
+    end loop
+end kept
+
+public main: () -> (code: i32) =
+    memory := heap.new()
+    code = i32((inside(memory, 2) else 0) + (kept(memory, 2) else 0))
+end main

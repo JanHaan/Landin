@@ -3103,6 +3103,24 @@ package body Landin.Stages.Checking.References is
                        (Of_Tree, Syn.Nth_Match_Arm (Of_Tree, Match, Arm))
                      = Pattern_Block (Borrower)));
 
+         --  D1623: a `for` binds its element and index afresh on every
+         --  walk, as D1370's declaration does on every pass, so a `for`
+         --  reached from outside its body reads its own bindings, not the
+         --  one asked about, and that one has ended with its walk.  Only
+         --  its traversal bounds can read the binding asked about.
+         function Rebinds_Borrower (Node : Syn.Node_Id) return Boolean
+           is (Borrower /= Res.No_Declaration
+               and then Syn.Kind (Of_Tree, Node) = Syn.For_Statement
+               and then
+                 (Declaration_At
+                    (Of_Tree, Syn.Traversal_Element (Of_Tree, Node))
+                    = Borrower
+                  or else
+                    (Syn.Traversal_Index (Of_Tree, Node) /= Syn.No_Node
+                     and then Declaration_At
+                       (Of_Tree, Syn.Traversal_Index (Of_Tree, Node))
+                       = Borrower)));
+
          procedure Absorb (Into_Summary : in out Summary; Arm : Summary);
 
          procedure Absorb (Into_Summary : in out Summary; Arm : Summary) is
@@ -3130,6 +3148,16 @@ package body Landin.Stages.Checking.References is
                                            >= From))
             then
                return False;
+            end if;
+
+            if Rebinds_Borrower (Node)
+              --  Not the `for` the question is asked inside.
+              and then (From = 0
+                        or else Syn.Where (Of_Tree, Node).First >= From)
+            then
+               return Reads_In (Syn.Traversal_Lower (Of_Tree, Node), From)
+                 or else Reads_In
+                   (Syn.Traversal_Upper (Of_Tree, Node), From);
             end if;
 
             if Syn.Kind (Of_Tree, Node) = Syn.Assignment then
@@ -3366,6 +3394,17 @@ package body Landin.Stages.Checking.References is
 
                when Syn.Loop_Statement | Syn.While_Statement
                   | Syn.For_Statement =>
+                  if Rebinds_Borrower (Node) then
+                     --  D1623: the binding asked about ends here.
+                     if Reads_In (Syn.Traversal_Lower (Of_Tree, Node), Since)
+                       or else Reads_In
+                         (Syn.Traversal_Upper (Of_Tree, Node), Since)
+                     then
+                        return Reading;
+                     end if;
+                     Result.Falls := False;
+                     return Result;
+                  end if;
                   --  A nested loop's transfers are its own.  It is taken
                   --  to leave normally, and a replacement inside it earns
                   --  no credit: both only over-report.
