@@ -37,7 +37,10 @@ holds only GATE_VARIABLES, so nothing the shell exports reaches a test.
 A tool the host lacks is named before any test runs.  It does not make the
 host a runner: a tool a runner has and GATE_TOOLS does not name is hidden
 too, so a test that newly needs one adds it there, which is the decision
-that the gate's jobs have it.
+that the gate's jobs have it.  Nor does it change the Python: the jobs run
+the runner image's 3.12, GATE_PYTHON, and the development shell gives a
+newer one, so the mode names the one it runs under and GATE_PYTHON_ROUTE,
+which runs it under 3.12 from the flake's locked nixpkgs.
 """
 import argparse
 import concurrent.futures
@@ -100,6 +103,22 @@ GATE_TOOLS = (
     #  the binutils the packaging test splits debug information with.
     "cc", "objcopy", "readelf",
 )
+#  The Python the gate's documents and scripts jobs run, the runner image's
+#  own on ubuntu-24.04, and how a local host runs this under it.
+GATE_PYTHON = (3, 12)
+GATE_PYTHON_ROUTE = ("nix shell --inputs-from . nixpkgs#python312 -c"
+                     " python3 scripts/script_tests.py --gate-environment")
+
+
+def python_note(version=None):
+    """What --gate-environment says of the Python it runs under."""
+    version = tuple((version or sys.version_info)[:2])
+    if version == GATE_PYTHON:
+        return "Python %d.%d, the gate's jobs' own" % version
+    return ("Python %d.%d, and the gate's jobs run %d.%d; %s runs them under"
+            " it" % (version + GATE_PYTHON + (GATE_PYTHON_ROUTE,)))
+
+
 #  The variables kept from the caller's environment.  Everything else,
 #  the development shell's exports among them, is dropped.
 GATE_VARIABLES = ("HOME", "USER", "LOGNAME", "LANG", "LC_ALL", "LC_CTYPE",
@@ -217,7 +236,8 @@ def main(argv):
             except ValueError as refusal:
                 parser.error(str(refusal))
             print("== gate environment: PATH holds %d tools, %d variables"
-                  " kept" % (len(GATE_TOOLS), len(environment) - 1))
+                  " kept; %s" % (len(GATE_TOOLS), len(environment) - 1,
+                                 python_note()))
         status = run_all(work, args.jobs, environment)
     print("== %d processes at --jobs=%d in %.1f s"
           % (len(work), args.jobs, time.monotonic() - started))
