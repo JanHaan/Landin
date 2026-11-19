@@ -147,6 +147,15 @@ class Start(Clone):
         self.assertIn("item.py resume %s" % FIRST, brief)
         self.assertIn("Authority paragraph", brief)
 
+    def test_start_from_another_worktree_places_it_beside_the_main_one(self):
+        elsewhere = self.top / "elsewhere" / "checkout"
+        git(self.clone, "worktree", "add", "-q", "--detach", str(elsewhere))
+        status, out = self.item("--repo", str(elsewhere), "start", FIRST)
+        self.assertEqual(status, 0, out)
+        worktree = self.top / ("Landin-" + item.slug(FIRST))
+        self.assertTrue(worktree.is_dir(), out)
+        self.assertIn(str(worktree.resolve()), out)
+
     def test_two_items_reserve_apart_and_register_next_honours_them(self):
         self.assertEqual(self.item("start", FIRST)[0], 0)
         self.assertEqual(self.item("start", SECOND)[0], 0)

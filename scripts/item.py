@@ -366,8 +366,9 @@ def start(arguments):
     else:
         base = git("rev-parse", arguments.base or "origin/main", cwd=cwd)
         branch = arguments.branch or slug(item)
-        main_checkout = Path(git("rev-parse", "--show-toplevel", cwd=cwd))
-        worktree = Path(arguments.worktree or main_checkout.parent
+        #  Beside the clone's main checkout, whichever of its worktrees
+        #  runs this, so a checkout under /tmp does not put it there.
+        worktree = Path(arguments.worktree or main_checkout(cwd).parent
                         / ("Landin-" + slug(item))).resolve()
     items, _ = roadmap_items(roadmap_at(base, cwd))
     if item not in items:
