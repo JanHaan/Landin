@@ -88,6 +88,7 @@ flash and, directly after it, the IMAGE_DEF block refine emits and checks
 | [`notices/`](notices) | the licences the generated files are derived under |
 | [`consumers/`](consumers) | firmware that uses the generated modules |
 | [`test.py`](test.py) | the offline checks, and with `--refine` the regeneration and the vendor-header oracles |
+| [`toy/`](toy) | a toy device, its policy and what `refine svd` writes from it and reports for each fault it can be brought to, which `test.py --refine PATH` holds byte for byte offline, through `refine svd` or `refine-svd`; `--record-toy` writes them again |
 | [`check_sources.py`](check_sources.py) | the precise source refusals against the generated interface |
 
 ## Drafting and reviewing an access policy

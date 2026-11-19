@@ -47,6 +47,12 @@ does not depend on the chip:
 Nothing here touches a board unless a tool calls it, and nothing needs more
 than the standard library, so scripts/tests/test_board_common.py runs it on
 the gate's Python with no board, probe or hub.
+
+The board tools run on the rig from a prepared bundle that carries this
+directory and not scripts/: a tool here imports the standard library and
+its neighbours alone, and takes `--refine` from `refine_argument` below
+rather than from scripts/lane_refine.py, which the rig does not have.
+scripts/tests/test_board_common.py refuses such an import.
 """
 
 import argparse

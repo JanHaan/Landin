@@ -1,0 +1,5 @@
+error[L0529]: UARTA.CR.EN overlaps another of its fields
+  --> toy.svd:29:13
+   |
+29 |             <field><name>EN</name><bitRange>[1:0]</bitRange><modifiedWriteValues>oneToClear</modifiedWriteValues></field>
+   |             ^

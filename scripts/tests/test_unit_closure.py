@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""Hold what the units that find the library link, and the closure reader."""
+"""Hold what the units that find the library and the split commands link,
+and the closure reader."""
+import json
 from pathlib import Path
 import sys
 import tempfile
@@ -32,6 +34,78 @@ class LibraryClosure(unittest.TestCase):
     def test_path_text_stands_alone(self):
         self.assertEqual(self.members("Landin.Paths"),
                          {"Landin", "Landin.Paths"})
+
+
+class SplitClosures(unittest.TestCase):
+    """D1543: each split command's main links none of the front end.
+
+    A split shares `refine`'s library and is held to the units its own
+    work needs: what every split's process surface links (SURFACE), and
+    each command's own units.  A with that brings in the scanner, the
+    parser, the checker, the IR, a backend, Landin.Driver or
+    Landin.Commands, whose bodies with the whole compiler, lands here.
+    The generated Landin.Build_Identity is under the build tree, not the
+    sources this reads, and is left out.
+    """
+
+    SURFACE = {
+        "Landin",
+        "Landin.Byte_Encoding",
+        "Landin.Diagnostics",
+        "Landin.Diagnostics.Catalogue",
+        "Landin.Diagnostics.Suggestions",
+        "Landin.Diagnostics.Text",
+        "Landin.Evidence",
+        "Landin.Json",
+        "Landin.Outcomes",
+        "Landin.Platform",
+        "Landin.Platform.Native",
+        "Landin.Platform.Native.Byte_Strings",
+        "Landin.Platform.Native.Tools",
+        "Landin.Presentation",
+        "Landin.Response_Files",
+        "Landin.Source",
+        "Landin.Source.Sets",
+        "Landin.Splits",
+        "Landin.Splits.Native",
+        "Landin.Targets",
+        "Landin.Targets.Selection",
+}
+
+    OWN = {
+        "svd": {"Refine_Svd", "Landin.Splits.Svd", "Landin.Devices",
+                "Landin.Devices.Policies", "Landin.Devices.Projection",
+                "Landin.Platform.Publication", "Landin.Source.Names",
+                "Landin.Targets.Assembly", "Landin.Targets.Firmware",
+                "Landin.Targets.Levels", "Landin.Targets.RiscV_ISA",
+                "Landin.Tokens", "Landin.Xml"},
+        "bindings": {"Refine_Bindings", "Landin.Splits.Bindings",
+                     "Landin.Bindings", "Landin.Bindings.Clang",
+                     "Landin.Bindings.Generation",
+                     "Landin.Bindings.Policies", "Landin.Bindings.Texts",
+                     "Landin.Platform.Publication", "Landin.Source.Names",
+                     "Landin.Tokens", "Landin.Types"},
+        "site": {"Refine_Site", "Landin.Splits.Site"},
+    }
+
+    def test_each_listed_split_has_its_pin(self):
+        # A split command entered in the one list (D1483) is pinned here
+        # in the same change.
+        listed = json.loads((ROOT / "compiler/ada/split-commands.json")
+                            .read_text(encoding="utf-8"))["commands"]
+        for entry in listed:
+            with self.subTest(split=entry["name"]):
+                self.assertIn(entry["name"], self.OWN)
+
+    def test_each_split_links_its_own_units_and_the_surface(self):
+        units = unit_closure.read_units()
+        for name, own in self.OWN.items():
+            main = "Refine_" + name.capitalize()
+            with self.subTest(split=name):
+                self.assertEqual(
+                    {units[key].name
+                     for key in unit_closure.closure(units, [main])},
+                    self.SURFACE | own)
 
 
 class ContextClauses(unittest.TestCase):

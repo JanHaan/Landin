@@ -226,8 +226,12 @@ class SplitCommands(unittest.TestCase):
                        written=written)
 
     def test_the_real_list_and_a_split_whose_project_builds_it(self):
+        import json
+        listed = json.loads(Path(checker.ROOT, checker.SPLIT_COMMANDS)
+                            .read_text(encoding="utf-8"))["commands"]
+        projects = ["compiler/ada/" + entry["project"] for entry in listed]
         self.assertEqual(checked(checker.check_split_commands,
-                                 copied=self.COPIED), [])
+                                 copied=self.COPIED + projects), [])
         self.assertEqual(self.said(), [])
 
     def test_a_missing_list_is_reported(self):

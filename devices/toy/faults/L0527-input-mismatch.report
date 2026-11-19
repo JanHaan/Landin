@@ -1,0 +1,5 @@
+error[L0527]: the SVD's SHA-256 is ceb7df390e9f0774ee9497f25c5415a673ddcf02eebbabc2551c1f841c8cef4d, and the policy was reviewed against 2edef462f1f11e05ff529d081b5d2f51a03ff6468e68bc9e1fc8d00edb3610e9; fetch the SVD it names, or review the policy against this one and give its hash
+  --> toy.svd:1:1
+  |
+1 | <?xml version="1.0" encoding="utf-8"?>
+  | ^

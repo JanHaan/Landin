@@ -252,11 +252,14 @@ it names.
 | `refine targets` | list the described targets, their CPU feature levels and debug modes; `--json` gives structured output |
 | `refine completion bash` | print shell completion definitions; also `zsh` and `fish` |
 | `refine --help`, `refine compile --help` | every command, and one command's options |
-| `refine help compile`, `refine help reference` | the same command help, and the complete command-line reference |
+| `refine help compile`, `refine help reference` | the same command help, and the reference of every built-in command |
 | `refine NAME ...` | run `refine-NAME`, a command shipped beside `refine` or found on `PATH`; `refine help` lists them |
 
-`refine help reference` prints the complete interface, and
-[the command line](docs/capabilities.md#the-command-line) describes it.
+`refine help reference` prints the complete interface of the built-in
+commands, and [the command line](docs/capabilities.md#the-command-line)
+describes it. `svd`, `bindings` and `site` are split commands, executables
+of their own that `refine` runs from `libexec/landin`, and print their own
+help: `refine help svd` or `refine svd --help`.
 
 ## Current compiler capabilities
 

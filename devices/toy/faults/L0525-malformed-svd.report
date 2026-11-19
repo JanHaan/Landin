@@ -1,0 +1,5 @@
+error[L0525]: the SVD is not XML refine svd reads: </dev> does not close <device>, open since line 2, column 1
+  --> toy.svd:47:1
+   |
+47 | </dev>
+   | ^

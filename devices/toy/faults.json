@@ -1,0 +1,20 @@
+{
+  "about": "Each refusal of `refine svd` the toy device can be brought to, run offline through the executable by devices/test.py's ToyGoldens: the edits made to toy.svd, the edits whose SVD the policy's svd_sha256 names (the SVD's own edits when absent), edits to the policy text, or a policy text of its own; the status refine exits with; and its report, faults/NAME.report.",
+  "cases": [
+    {"name": "L0525-malformed-svd", "status": 1,
+     "svd": [["</device>", "</dev>"]]},
+    {"name": "L0526-invalid-policy", "status": 1, "policy_text": "{"},
+    {"name": "L0527-input-mismatch", "status": 1,
+     "hash": [["</device>", "</dev>"]]},
+    {"name": "L0528-unsupported-form", "status": 1,
+     "svd": [["<name>CR</name>", "<name>CR</name><dim>2</dim>"]]},
+    {"name": "L0529-inconsistent-device", "status": 1,
+     "svd": [["<bitRange>[0:0]</bitRange>", "<bitRange>[1:0]</bitRange>"]]},
+    {"name": "L0530-not-in-svd", "status": 1,
+     "policy": [["\"UARTB\": [", "\"UARTC\": ["],
+                ["\"UARTB.CR\"", "\"UARTC.CR\""]]},
+    {"name": "L0003-svd-missing", "status": 1, "absent": true},
+    {"name": "L0002-no-out-dir", "status": 2,
+     "arguments": ["--policy=toy.json", "toy.svd"]}
+  ]
+}

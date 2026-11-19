@@ -1,0 +1,11 @@
+-- Interrupts of the TOY1, from its SVD: vendor Example, version 1.0.
+-- SVD SHA-256 ceb7df390e9f0774ee9497f25c5415a673ddcf02eebbabc2551c1f841c8cef4d.
+-- Copyright the vendor.
+-- SPDX-License-Identifier: Apache-2.0
+-- Generated from the SVD; memory.ldn beside it is written by hand.
+
+compiler.device("toy1")
+compiler.core("cortex-m7")
+compiler.vectors(20)
+compiler.interrupt("UARTA_IRQ", 2)
+compiler.interrupt("UARTB_IRQ", 3)

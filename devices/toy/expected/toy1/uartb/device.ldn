@@ -1,0 +1,40 @@
+-- Toy notice.
+-- Reset metadata performs no initialization. No device RMW is implicit.
+compiler.assert(compiler.byte_order == little)
+compiler.assert(sizeof u32 == 4 and alignof u32 == 4)
+public base: usize = 0x40002000
+
+public cr_mode_off: atom
+public cr_mode_fast: atom
+public cr_mode_value: type = u2 (cr_mode_off = 0 | cr_mode_fast = 2)
+public cr_offset: usize = 0x4
+public cr_address: usize = 0x40002004
+public cr_named_mask: u32 = 0x00000007
+public cr_reset_mask: u32 = 0x00000007
+public cr_reset_value: u32 = 0x00000005
+public cr_image: type = layout(packed, u32) struct
+    f_mode: cr_mode_value at 1..2
+    f_en: u1 at 0..0
+end cr_image
+
+public cr_decode: (raw: u32) -> (image: cr_image) =
+    image = zeroed
+    bits: ptr mut u32 = ptr(usize(addr image))
+    bits.val = raw
+end cr_decode
+
+public cr_encode: (image: cr_image) -> (raw: u32) =
+    bits: ptr u32 = ptr(usize(addr image))
+    raw = bits.val
+end cr_encode
+
+public cr_read: (device_base: usize) -> (raw: u32) =
+    port: ptr u32 = ptr(device_base + cr_offset)
+    raw = compiler.volatile_load(port)
+end cr_read
+
+public cr_write: (device_base: usize, raw: u32) -> none =
+    port: ptr mut u32 = ptr(device_base + cr_offset)
+    compiler.register_write(port, raw, compiler.normal_write,
+                            compiler.preserve, 0x00000007)
+end cr_write
