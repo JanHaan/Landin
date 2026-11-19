@@ -410,6 +410,9 @@ def host_controls(refine, root, env, source, driver):
         live = work / '.refine-publication-live'
         for part in ('', 'stage', 'recovery', 'work'):
             (live / part).mkdir(exist_ok=True)
+        # What the build is staging, which only its live record explains:
+        # an inspection that missed the record would refuse it.
+        (live / 'stage' / 'other.s').write_text('staged\n')
         record = live / 'destination-1'
         record.write_text('LANDIN-PUBLICATION-1\n7\nother.s\nlogical=other.s\n'
                           'END-LANDIN-PUBLICATION-1\n')

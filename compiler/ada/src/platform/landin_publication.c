@@ -890,14 +890,15 @@ enum { LANDIN_RECORD_LIMIT = 1 << 20 };
    destination records, sealed or still being renamed into place, carries
    the write lease its producer keeps until the workspace is gone. Read
    without the root lock, as a query; a record that cannot be opened says
-   nothing either way. */
+   nothing either way. The listing is a descriptor of its own: a dup of
+   ROOT would share, and leave at the end, the offset the inspection that
+   follows reads the records from. */
 static int producer_live(int root)
 {
-    int listed = dup(root), live = 0;
+    int listed = openat(root, ".", O_RDONLY | O_DIRECTORY | O_CLOEXEC), live = 0;
     DIR *records = listed < 0 ? NULL : fdopendir(listed);
     struct dirent *record;
     if (!records) { if (listed >= 0) close(listed); return 0; }
-    rewinddir(records);
     while (!live && (record = readdir(records)) != NULL) {
         if (!numbered(record->d_name, "destination-")
             && !numbered(record->d_name, ".destination-building-")) continue;
@@ -1048,6 +1049,7 @@ static int retained_workspace(int parent, const char *parent_path,
                     if (record_fd >= 0) {
                         records = fdopendir(record_fd);
                         if (!records) close(record_fd);
+                        else rewinddir(records);
                     }
                 }
             }
