@@ -62,7 +62,7 @@ cannot ask has no pass to point at.
 
 Physical evidence is never reused.  The board jobs run on a board-scope
 event -- a push to main, the weekly schedule or a manual dispatch, in
-JanHaan/Landin -- whatever the software lanes do, and on every other event
+this repository and not a fork of it -- whatever the software lanes do, and on every other event
 they must be skipped.  On a board-scope event a skipped, cancelled or
 failed board job fails the gate: missing physical evidence is not a pass.
 """
@@ -110,7 +110,10 @@ TIMING = ("measure-time",)
 BOARD_PORTS = ("rp2040", "pico2", "stm32h753", "esp32c3", "esp32c5", "esp32",
                "esp32s3")
 #  Only this repository's rig runs boards; a fork's runs never reach it.
-BOARD_REPOSITORY = "JanHaan/Landin"
+#  The repository is known by GitHub's numeric identity, the workflow's
+#  GITHUB_REPOSITORY_ID: a fork has its own, and a transfer or a rename
+#  keeps it, so the owner's name is written nowhere here.
+BOARD_REPOSITORY_ID = "1349851794"
 
 
 def entries(rev, cwd=None):
@@ -385,7 +388,7 @@ def fetched_candidate_key(rev):
     return fetched_key(rev, content_free=())
 
 
-def scope(event_name, ref, repository, event):
+def scope(event_name, ref, repository_id, event):
     """Whether this event runs the software lanes and the physical boards.
 
     Boards run on a push to main, the weekly schedule and a manual
@@ -395,7 +398,7 @@ def scope(event_name, ref, repository, event):
     dispatch with scope `boards`; whether they may reuse a pass is
     `reuse`'s question, and neither of those events ever reuses one.
     """
-    boards = repository == BOARD_REPOSITORY and (
+    boards = repository_id == BOARD_REPOSITORY_ID and (
         (event_name == "push" and ref == "refs/heads/main")
         or event_name in ("schedule", "workflow_dispatch"))
     requested = (event.get("inputs") or {}).get("scope") or "full"
@@ -489,8 +492,9 @@ def verdict(needs, always, expected=None, evidence=None):
                                 % (name, outputs.get(name), name, flag(expected[name])))
     software, boards = expected["software"], expected["boards"]
     if not software and not boards:
-        problems.append("a boards-only event outside %s runs no board and no "
-                        "software lane, so there is nothing to pass" % BOARD_REPOSITORY)
+        problems.append("a boards-only event outside repository %s runs no board "
+                        "and no software lane, so there is nothing to pass"
+                        % BOARD_REPOSITORY_ID)
     reuse = inputs.get("result") == "success" and outputs.get("reuse") == "true"
     for name, job in sorted(needs.items()):
         if name in always:
@@ -631,7 +635,7 @@ def event_scope(environ):
     with open(environ["GITHUB_EVENT_PATH"], encoding="utf-8") as stream:
         event = json.load(stream)
     return scope(environ["GITHUB_EVENT_NAME"], environ.get("GITHUB_REF", ""),
-                 environ.get("GITHUB_REPOSITORY", ""), event)
+                 environ.get("GITHUB_REPOSITORY_ID", ""), event)
 
 
 def main(argv):

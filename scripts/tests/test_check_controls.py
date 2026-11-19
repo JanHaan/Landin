@@ -192,14 +192,16 @@ class NamedFiles(unittest.TestCase):
                             "docs/guide.md": "# Guide\n"}), [])
 
     def test_a_name_qualified_by_the_repository_is_its_file(self):
-        written = {"README.md": "```sh\ngh attestation verify a.tar.gz"
-                                " --signer-workflow JanHaan/Landin/"
-                                "docs/guide.md\n```\n",
-                   "docs/guide.md": "# Guide\n"}
-        self.assertEqual(faults(checker.check_named_files, written=written), [])
+        #  Under its owner today and under the one before the transfer.
+        for owner in ("701-dev", "JanHaan"):
+            written = {"README.md": "```sh\ngh attestation verify a.tar.gz"
+                                    " --signer-workflow %s/Landin/"
+                                    "docs/guide.md\n```\n" % owner,
+                       "docs/guide.md": "# Guide\n"}
+            self.assertEqual(faults(checker.check_named_files, written=written), [])
         said = reasons(checker.check_named_files, written={
-            "README.md": "see `JanHaan/Landin/docs/absent.md`\n"})
-        self.assertTrue(any("JanHaan/Landin/docs/absent.md" in why
+            "README.md": "see `701-dev/Landin/docs/absent.md`\n"})
+        self.assertTrue(any("701-dev/Landin/docs/absent.md" in why
                             for why in said), said)
 
     def test_a_name_that_does_not_resolve_is_reported(self):

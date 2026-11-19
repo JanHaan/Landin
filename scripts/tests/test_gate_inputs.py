@@ -173,8 +173,8 @@ class Decide(unittest.TestCase):
         self.event_name = "pull_request"
         self.event = {"pull_request": {
             "author_association": "OWNER",
-            "head": {"sha": HEAD, "repo": {"full_name": "JanHaan/Landin"}},
-            "base": {"repo": {"full_name": "JanHaan/Landin"}}}}
+            "head": {"sha": HEAD, "repo": {"full_name": "701-dev/Landin"}},
+            "base": {"repo": {"full_name": "701-dev/Landin"}}}}
         self.checked_out = (MERGE, [MAIN, HEAD])
         self.asked = []
 
@@ -534,8 +534,8 @@ class Candidate(unittest.TestCase):
         f.event_name = "pull_request"
         f.event = {"pull_request": {
             "author_association": "MEMBER",
-            "head": {"sha": HEAD, "repo": {"full_name": "JanHaan/Landin"}},
-            "base": {"repo": {"full_name": "JanHaan/Landin"}}}}
+            "head": {"sha": HEAD, "repo": {"full_name": "701-dev/Landin"}},
+            "base": {"repo": {"full_name": "701-dev/Landin"}}}}
         f.checked_out = (MERGE, [MAIN, HEAD])
         self.assertTrue(self.decide())
         f.keys["HEAD"] = "changed merge tree"
@@ -1223,11 +1223,12 @@ PASSED = {port: "passed" for port in gate_inputs.BOARD_PORTS}
 class BoardVerdict(unittest.TestCase):
     """The verdict on each event's scope, its board jobs and their outcomes."""
     ALWAYS = ("inputs", "documents", "scripts")
-    MAIN = gate_inputs.scope("push", "refs/heads/main", "JanHaan/Landin", {})
-    BRANCH = gate_inputs.scope("push", "refs/heads/topic", "JanHaan/Landin", {})
-    BOARDS = gate_inputs.scope("workflow_dispatch", "refs/heads/topic", "JanHaan/Landin",
+    OURS = gate_inputs.BOARD_REPOSITORY_ID
+    MAIN = gate_inputs.scope("push", "refs/heads/main", OURS, {})
+    BRANCH = gate_inputs.scope("push", "refs/heads/topic", OURS, {})
+    BOARDS = gate_inputs.scope("workflow_dispatch", "refs/heads/topic", OURS,
                                {"inputs": {"scope": "boards"}})
-    SCHEDULE = gate_inputs.scope("schedule", "refs/heads/main", "JanHaan/Landin", {})
+    SCHEDULE = gate_inputs.scope("schedule", "refs/heads/main", OURS, {})
 
     def needs(self, scope, lanes, boards, reuse="false", timing=None):
         outputs = {"reuse": reuse, "software": gate_inputs.flag(scope["software"]),
@@ -1296,7 +1297,7 @@ class BoardVerdict(unittest.TestCase):
         self.assertTrue(gate_inputs.verdict(needs, self.ALWAYS, self.BOARDS, PASSED))
 
     def test_a_full_dispatch_runs_both(self):
-        full = gate_inputs.scope("workflow_dispatch", "refs/heads/topic", "JanHaan/Landin",
+        full = gate_inputs.scope("workflow_dispatch", "refs/heads/topic", self.OURS,
                                  {"inputs": {"scope": "full"}})
         self.assertEqual(self.verdict(full, "success", "success"), [])
         self.assertTrue(self.verdict(full, "skipped", "success"))
@@ -1312,7 +1313,8 @@ class BoardVerdict(unittest.TestCase):
                          "inputs says boards=false, but this event's scope is boards=true")
 
     def test_a_boards_only_run_in_a_fork_has_nothing_to_pass(self):
-        fork = gate_inputs.scope("schedule", "refs/heads/main", "someone/Landin", {})
+        #  A fork has a repository identity of its own, whatever its name.
+        fork = gate_inputs.scope("schedule", "refs/heads/main", "1", {})
         self.assertTrue(self.verdict(fork, "skipped", "skipped", evidence={}))
 
     def test_the_summary_names_the_scope_and_every_leg(self):
@@ -1334,7 +1336,8 @@ class BoardVerdict(unittest.TestCase):
         needs = self.needs(self.BOARDS, "skipped", "success")
         environment = dict(os.environ, NEEDS=json.dumps(needs), GITHUB_EVENT_PATH=str(event),
                            GITHUB_EVENT_NAME="workflow_dispatch", GITHUB_REF="refs/heads/topic",
-                           GITHUB_REPOSITORY="JanHaan/Landin", GITHUB_STEP_SUMMARY=str(summary))
+                           GITHUB_REPOSITORY="701-dev/Landin",
+                           GITHUB_REPOSITORY_ID=self.OURS, GITHUB_STEP_SUMMARY=str(summary))
         evidence = directory / "evidence"
         for port in gate_inputs.BOARD_PORTS:
             leg = evidence / ("board-evidence-" + port) / port
@@ -1355,7 +1358,8 @@ class BoardVerdict(unittest.TestCase):
 
 
 class Scope(unittest.TestCase):
-    def scope(self, event_name, ref="refs/heads/main", repository="JanHaan/Landin", event=None):
+    def scope(self, event_name, ref="refs/heads/main", repository=gate_inputs.BOARD_REPOSITORY_ID,
+              event=None):
         found = gate_inputs.scope(event_name, ref, repository, event or {})
         return found["software"], found["boards"]
 
@@ -1378,8 +1382,8 @@ class Scope(unittest.TestCase):
         self.assertEqual(self.scope("schedule"), (False, True))
 
     def test_a_fork_never_reaches_the_boards(self):
-        self.assertEqual(self.scope("push", repository="someone/Landin"), (True, False))
-        self.assertEqual(self.scope("workflow_dispatch", repository="someone/Landin"),
+        self.assertEqual(self.scope("push", repository="1"), (True, False))
+        self.assertEqual(self.scope("workflow_dispatch", repository="1"),
                          (True, False))
 
     def test_dispatch_and_schedule_never_reuse(self):
@@ -1474,7 +1478,7 @@ class Bundles(unittest.TestCase):
         self.summary(rows)
         self.environ = {"GITHUB_SHA": self.commit, "GITHUB_RUN_ID": "41",
                         "GITHUB_RUN_ATTEMPT": "1", "GITHUB_EVENT_NAME": "push",
-                        "GITHUB_REF": "refs/heads/main", "GITHUB_REPOSITORY": "JanHaan/Landin"}
+                        "GITHUB_REF": "refs/heads/main", "GITHUB_REPOSITORY": "701-dev/Landin"}
 
     def manifest(self, board, mode, source, compiler):
         (self.bundles / board / mode / "bundle.json").write_text(json.dumps({

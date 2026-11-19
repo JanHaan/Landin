@@ -61,7 +61,20 @@ def ref_refused(tag, ref):
 
 
 def repository():
-    return os.environ.get("GITHUB_REPOSITORY") or "JanHaan/Landin"
+    """OWNER/NAME on GitHub: the workflow's GITHUB_REPOSITORY, or outside a
+    workflow the GitHub URL of this checkout's `origin`, so that the name
+    is written nowhere in this file and a transfer changes nothing here."""
+    if os.environ.get("GITHUB_REPOSITORY"):
+        return os.environ["GITHUB_REPOSITORY"]
+    url = subprocess.run(["git", "remote", "get-url", "origin"],
+                         cwd=Path(__file__).resolve().parent, text=True,
+                         stdout=subprocess.PIPE, stderr=subprocess.DEVNULL).stdout.strip()
+    for prefix in ("https://github.com/", "git@github.com:", "ssh://git@github.com/"):
+        if url.startswith(prefix):
+            name = url[len(prefix):]
+            return name[:-len(".git")] if name.endswith(".git") else name
+    raise SystemExit("release.py: GITHUB_REPOSITORY is unset and origin (%r) is "
+                     "not a GitHub URL; set GITHUB_REPOSITORY=OWNER/NAME" % url)
 
 
 def notes(tag):

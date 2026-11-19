@@ -2418,7 +2418,8 @@ jobs:
 
   #  The physical boards.  Never for a pull request, a branch push or a
   #  fork: only a push to main, the schedule and a manual dispatch in
-  #  JanHaan/Landin reach them (gate_inputs.py's `scope`).  That `if` is
+  #  this repository reach them (gate_inputs.py's `scope`, which knows it
+  #  by GITHUB_REPOSITORY_ID, so not by its owner's name).  That `if` is
   #  not the control, because a fork's pull request can edit this file:
   #  the runner-side job-started hook on rigpi is, refusing before any
   #  step runs a job whose repository, event, ref or workflow it does not
