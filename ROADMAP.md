@@ -585,7 +585,7 @@ uncommitted file, which `resume` now says. Whether that run is this
 item's exit evidence, with the start-to-finish run left to R16.10 and the
 R17 gate, is Q-8; the R17 gate is not claimed until R16.10 has run start
 to finish under the scripts. The manager's finding that `agent_hook.py
---check` sees only its own checkout is SR-1300.
+--check` sees only its own checkout is `SR-1300`.
 
 ### R17.50 — Gate wall time
 
