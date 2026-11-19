@@ -822,7 +822,7 @@ link can have (SR-1354, scheduled on R18.70).
 
 ### R18.60 — `refine dap`
 
-Status: planned
+Status: active
 Depends on: R18.20, R18.50
 
 The first new command: a Debug Adapter Protocol server over the GDB and
