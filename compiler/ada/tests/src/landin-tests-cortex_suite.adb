@@ -1401,10 +1401,10 @@ package body Landin.Tests.Cortex_Suite is
                                  begin
                                     Landin.Testing.Check
                                       (Item, Ada.Strings.Fixed.Index
-                                        (First_Body, "push {r4, r6, r7}" & LF)
+                                        (First_Body, "push {r4, r6}" & LF)
                                         > 0
                                         and then Ada.Strings.Fixed.Index
-                                          (Second_Body, "push {r4, r6, r7}"
+                                          (Second_Body, "push {r4, r6}"
                                            & LF) > 0
                                         and then Ada.Strings.Fixed.Index
                                           (Second_Body, "push {r5") = 0,
@@ -1420,12 +1420,12 @@ package body Landin.Tests.Cortex_Suite is
                            end;
                            Landin.Testing.Check
                              (Item, Ada.Strings.Fixed.Index
-                               (Text, ".cfi_offset r6, -8" & LF) > 0
+                               (Text, ".cfi_offset r6, -4" & LF) > 0
                                and then Ada.Strings.Fixed.Index
                                  (Text, ".cfi_offset lr") = 0
                                and then Ada.Strings.Fixed.Index
-                                 (Report, """save_bytes"":12") > 0,
-                              "leaf unwind and report use twelve save bytes");
+                                 (Report, """save_bytes"":8") > 0,
+                              "leaf unwind and report use eight save bytes");
                         when 2 =>
                            Landin.Testing.Check
                              (Item, Ada.Strings.Fixed.Index
@@ -3775,6 +3775,18 @@ package body Landin.Tests.Cortex_Suite is
         & "        seen[0] = f64(i32(seen[1]))" & LF_Text
         & "    end if" & LF_Text
         & "end start" & LF_Text;
+      --  D1570: with the unit, a block that declares d9 and d12.
+      Held_Program : constant String :=
+        Program
+        & "held: (x: u32) -> (r: u32) =" & LF_Text
+        & "    r = assembler.block(""vmov s18, {x}\nvmov s24, s18\n"
+        & "vmov {r}, s24"", out r: u32 at general, in x: u32 at general"
+        & " = x, out _ at d9, out _ at d12)" & LF_Text
+        & "end held" & LF_Text
+        & "link(vector: 15)" & LF_Text
+        & "extern(interrupt) keep: () -> none =" & LF_Text
+        & "    seen[1] = f64(held(u32(seen[0])))" & LF_Text
+        & "end keep" & LF_Text;
       Description : constant String :=
         "compiler.device(""dev"")" & LF_Text
         & "compiler.core(""cortex-m7"")" & LF_Text
@@ -3803,7 +3815,8 @@ package body Landin.Tests.Cortex_Suite is
          Host.Add_Directory ("/w/devices");
          Host.Add_Directory ("/w/devices/descriptions");
          Host.Add_Directory ("/w/devices/descriptions/dev");
-         Host.Add_File ("/w/app/main.ldn", Program);
+         Host.Add_File ("/w/app/main.ldn",
+           (if Unit then Held_Program else Program));
          Host.Add_File ("/w/devices/descriptions/dev/memory.ldn",
            (if Unit then "compiler.float_unit(""fpv5-d16"")" & LF_Text
             else "") & Description);
@@ -3833,6 +3846,7 @@ package body Landin.Tests.Cortex_Suite is
       Reset : constant Natural := Ada.Strings.Fixed.Index
         (Hard, "_landin_firmware_reset:");
       Kept_At : constant Natural := Ada.Strings.Fixed.Index (Hard, "kept:");
+      Held_At : constant Natural := Ada.Strings.Fixed.Index (Hard, "held:");
       Mix_At : constant Natural := Ada.Strings.Fixed.Index (Hard, "mix:");
       Hard_Arguments : constant Landin.Platform.Path_List :=
         Landin.Backend.Toolchain.Assemble_Arguments
@@ -3877,17 +3891,22 @@ package body Landin.Tests.Cortex_Suite is
            and then Contains (Hard, "vldr s1, [r6]" & LF & HT & "bl mix"),
          "D616: a, b and c arrive in s0, d1 and the back-filled s1, and"
          & " the call loads them there");
+      --  D1570: a framed routine keeps the run of d8-d15 its blocks
+      --  declare: d9 to d12 for d9 and d12, none for a block declaring none.
       Landin.Testing.Check
-        (Item, Kept_At > 0
-           and then Contains (Hard (Kept_At .. Hard'Last),
-                              "vstmia r6, {d8-d15}")
-           and then Contains (Hard (Kept_At .. Hard'Last),
-                              "vldmia r6, {d8-d15}")
-           and then Contains (Hard (Kept_At .. Hard'Last), ".cfi_offset d8,")
-           and then Contains (Hard (Kept_At .. Hard'Last),
-                              ".cfi_restore d15")
-           and then Ada.Strings.Fixed.Count (Hard, "vstmia r6, {d8-d15}") = 1,
-         "the routine holding an assembly block keeps d8-d15, and no other");
+        (Item, Kept_At > 0 and then Held_At > 0
+           and then Contains (Hard (Held_At .. Hard'Last),
+                              "vstmia r6, {d9-d12}")
+           and then Contains (Hard (Held_At .. Hard'Last),
+                              "vldmia r6, {d9-d12}")
+           and then Contains (Hard (Held_At .. Hard'Last), ".cfi_offset d9,")
+           and then Contains (Hard (Held_At .. Hard'Last),
+                              ".cfi_restore d12")
+           and then not Contains (Hard (Held_At .. Hard'Last),
+                                  ".cfi_offset d8,")
+           and then Ada.Strings.Fixed.Count (Hard, "vstmia") = 1,
+         "a routine keeps the run of d8-d15 its block declares, and no"
+         & " other routine keeps any");
       Landin.Testing.Check
         (Item, Reset > 0
            and then Contains (Hard (Reset .. Hard'Last),
