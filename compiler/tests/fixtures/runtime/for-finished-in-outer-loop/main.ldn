@@ -1,0 +1,81 @@
+--  D1623: a `for` binds its element afresh on every walk, so once the
+--  walk has ended its element views nothing, and an outer loop that goes
+--  round again reaches only the next walk's element.  Releasing the list
+--  after the `for` is accepted under every outer loop form, whether the
+--  list is declared inside the outer loop or outside it.
+import core/mem
+import core/vec
+import hosted/heap
+
+--  The form refine-build met: `loop`, its test after the release.
+test_last: (memory: heap.heap, rounds: i32) -> (n: usize) ! mem.out_of_memory =
+    n = 0
+    mut round: i32 = 0
+    loop do
+        mut names := vec.new(item: utf8)
+        try vec.push(names, memory, "ab")
+        for below in vec.used(names) do
+            n += lenof below
+        end for
+        vec.release(names, memory)
+        round += 1
+        break when round == rounds
+    end loop
+end test_last
+
+--  `loop` with its test first, and an index beside the element.
+test_first: (memory: heap.heap, rounds: i32) -> (n: usize) ! mem.out_of_memory =
+    n = 0
+    mut round: i32 = 0
+    loop do
+        break when round == rounds
+        mut names := vec.new(item: utf8)
+        try vec.push(names, memory, "abc")
+        try vec.push(names, memory, "d")
+        for below, at in vec.used(names) do
+            n += lenof below + at
+        end for
+        vec.release(names, memory)
+        round += 1
+    end loop
+end test_first
+
+--  `while`, the list declared outside the loop and filled on every pass.
+outside: (memory: heap.heap, rounds: i32) -> (n: usize) ! mem.out_of_memory =
+    n = 0
+    mut round: i32 = 0
+    mut names := vec.new(item: utf8)
+    while round < rounds do
+        try vec.push(names, memory, "abcd")
+        for below in vec.used(names) do
+            n += lenof below
+        end for
+        vec.release(names, memory)
+        round += 1
+    end while
+end outside
+
+--  A release deferred to the end of each pass.
+deferred: (memory: heap.heap, rounds: i32) -> (n: usize) ! mem.out_of_memory =
+    n = 0
+    mut round: i32 = 0
+    while round < rounds do
+        mut names := vec.new(item: utf8)
+        defer vec.release(names, memory)
+        try vec.push(names, memory, "abcde")
+        for below in vec.used(names) do
+            n += lenof below
+        end for
+        round += 1
+    end while
+end deferred
+
+public main: () -> (code: i32) =
+    memory := heap.new()
+    --  2 * 2 + 2 * (3 + 0 + 1 + 1) + 3 * 4 + 2 * 5 = 36
+    total: usize = (test_last(memory, 2) else 100)
+                   + (test_first(memory, 2) else 100)
+                   + (outside(memory, 3) else 100)
+                   + (deferred(memory, 2) else 100)
+    code = i32(total)
+end main
