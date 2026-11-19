@@ -1223,7 +1223,8 @@ something is held, and ends it after the grace period when never answered.
 `test_compile_publication.py`'s `host-` controls hold the native adapter's
 own rules: published modes, entries of other users, refusals in the rule's
 words, descriptor and file-size limits, a tool that writes beside itself,
-and a removed working directory.
+a removed working directory, and compiles of different outputs into one
+directory started together.
 It does not claim to reap arbitrary descendants. `--native-only` runs just
 the process adapter controls. The FreeBSD runtime guests compile and run
 the same C controls with their own compiler, without claiming a native

@@ -886,15 +886,54 @@ static int disconnected_workspace_empty(int root, int parent, const char *name)
 }
 #endif
 enum { LANDIN_RECORD_LIMIT = 1 << 20 };
-/* The shared lock of a workspace being inspected, or -1 when it stays held
-   for two seconds or the invocation is cancelled. */
-static int scan_lock(int root)
+/* Whether the workspace ROOT belongs to a build that is running: one of its
+   destination records, sealed or still being renamed into place, carries
+   the write lease its producer keeps until the workspace is gone. Read
+   without the root lock, as a query; a record that cannot be opened says
+   nothing either way. The listing is a descriptor of its own: a dup of
+   ROOT would share, and leave at the end, the offset the inspection that
+   follows reads the records from. */
+static int producer_live(int root)
 {
-    for (int attempt = 0; attempt < 100; ++attempt) {
+    int listed = openat(root, ".", O_RDONLY | O_DIRECTORY | O_CLOEXEC), live = 0;
+    DIR *records = listed < 0 ? NULL : fdopendir(listed);
+    struct dirent *record;
+    if (!records) { if (listed >= 0) close(listed); return 0; }
+    while (!live && (record = readdir(records)) != NULL) {
+        if (!numbered(record->d_name, "destination-")
+            && !numbered(record->d_name, ".destination-building-")) continue;
+        int fd = openat(root, record->d_name,
+                        O_RDONLY | O_NOFOLLOW | O_CLOEXEC | O_NONBLOCK);
+        struct stat about;
+        struct flock lease = {0};
+        lease.l_type = F_WRLCK; lease.l_whence = SEEK_SET;
+        if (fd >= 0 && fstat(fd, &about) == 0 && S_ISREG(about.st_mode)
+            && fcntl(fd, F_GETLK, &lease) == 0 && lease.l_type == F_WRLCK)
+            live = 1;
+        if (fd >= 0) close(fd);
+    }
+    closedir(records);
+    return live;
+}
+/* The shared lock of a workspace being inspected, or -1 when it stays held
+   too long or the invocation is cancelled. A running build holds it only
+   around a rename or a removal, which a loaded host can make take seconds:
+   while the workspace's producer is live it is waited for up to a minute,
+   and a lock on a workspace no running build holds for two seconds. *LIVE
+   says which bound was met. */
+enum { LANDIN_SCAN_IDLE = 100, LANDIN_SCAN_LIVE = 3000 };
+static int scan_lock(int root, int *live)
+{
+    *live = 0;
+    for (int attempt = 0; ; ++attempt) {
         const struct timespec interval = {0, 20000000};
         if (flock(root, LOCK_SH | LOCK_NB) == 0) return 0;
         if (errno != EWOULDBLOCK && errno != EINTR) return -1;
         if (landin_cancellation_requested()) { errno = EINTR; return -1; }
+        /* Once live, always live for this wait: a finishing producer
+           removes its records under the lock just before the workspace. */
+        if (!*live && attempt % 10 == 0) *live = producer_live(root);
+        if (attempt >= (*live ? LANDIN_SCAN_LIVE : LANDIN_SCAN_IDLE)) break;
         nanosleep(&interval, NULL);
     }
     errno = EWOULDBLOCK; return -1;
@@ -976,9 +1015,12 @@ static int retained_workspace(int parent, const char *parent_path,
         int live_producer = 0;
         /* Its owner holds this lock only around a rename or a removal.
            One held longer is not waited for without bound. */
-        int locked = root >= 0 ? scan_lock(root) : -1;
-        if (root >= 0 && locked != 0 && !*specific)
-            snprintf(specific, sizeof specific, "another process holds its lock; retry when that process has finished");
+        int live = 0;
+        int locked = root >= 0 ? scan_lock(root, &live) : -1;
+        if (root >= 0 && locked != 0 && !*specific && live)
+            snprintf(specific, sizeof specific, "the running build that publishes into it has held its lock for a minute; retry when that build has finished");
+        else if (root >= 0 && locked != 0 && !*specific)
+            snprintf(specific, sizeof specific, "another process holds its lock, and none of its destination records belongs to a running build; retry when that process has finished");
         if (root >= 0 && locked == 0) {
             struct stat pinned, named;
             if (fstat(root, &pinned) == 0 && S_ISDIR(pinned.st_mode)) {
@@ -1007,6 +1049,7 @@ static int retained_workspace(int parent, const char *parent_path,
                     if (record_fd >= 0) {
                         records = fdopendir(record_fd);
                         if (!records) close(record_fd);
+                        else rewinddir(records);
                     }
                 }
             }
@@ -1143,9 +1186,12 @@ static int write_journal(struct publication *p)
         result = no_replace(p->arena->root_fd, building,
                             p->arena->root_fd, p->journal, 0);
         if (result == 0) p->journal_state = 2;
-        if (result == 0 && fsync(p->arena->root_fd) != 0 && errno != EINVAL) result = -1;
         int error = errno;
         (void)flock(p->arena->root_fd, LOCK_UN); errno = error;
+        /* The lock orders the rename against an inspector's scan; the
+           record's durability is no part of that, and a directory's fsync
+           can wait seconds on a loaded host's journal. */
+        if (result == 0 && fsync(p->arena->root_fd) != 0 && errno != EINVAL) result = -1;
     }
     if (result == 0 && first) { p->arena->producer_fd = fd; fd = -1; }
     if (fd >= 0) { int error = errno; close(fd); errno = error; }

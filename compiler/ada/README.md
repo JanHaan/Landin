@@ -1371,7 +1371,8 @@ caller's umask and is the file installed (D1048).
 Stale manifest outputs use the same delete-only preparation. Native recovery
 keeps uncertain entries in a journalled `.refine-publication-...` workspace
 and diagnoses that workspace before another invocation can reuse its outputs;
-only a directory of the invoking user's is such a workspace (D1049). A tool
+only a directory of the invoking user's is such a workspace (D1049), and a
+running build's is waited for while it holds its lock (D1583). A tool
 runs in the workspace's `work` directory, beside the stage it writes into,
 and what it leaves there is deleted with the workspace (D1050).
 A public name may briefly be absent, and readers do not get an atomic group

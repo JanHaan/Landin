@@ -275,7 +275,9 @@ The README has [the commands in brief](../README.md#refine-in-brief);
   never the signal's end (D1047).
   An earlier retained publication is diagnosed before retrying; only a
   directory the invoking user owns is read as one, and another user's is
-  passed over (D1049). A published file has the mode a fresh build gives it
+  passed over (D1049). Builds of different outputs into one directory run
+  at once, each waiting while another holds its workspace's lock (D1583).
+  A published file has the mode a fresh build gives it
   under the umask, an unchanged file among them, and a replaced file's own
   mode is not carried over (D1048). An output's directory may not be a
   symbolic link, and an output replaces only a regular file; a refusal says

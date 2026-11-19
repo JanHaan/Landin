@@ -883,7 +883,7 @@ held it are re-recorded and none names a target its fixture does not. A
 fixture's `args` are `check`'s unless they name a command (D1464); the
 test program, every lane, script and the release smoke test, and the
 documents name their command. Found on the way: parallel compiles into
-one directory refuse each other with L0005 (SR-1343); `SR-1287` fixed
+one directory refuse each other with L0005 (`SR-1343`); `SR-1287` fixed
 at [1230].
 
 ### R18.50 — The dispatcher
@@ -1033,7 +1033,7 @@ through `refine` and through each split directly.
 
 ### R18.71 — Concurrent compiles into one directory
 
-Status: planned
+Status: complete
 Depends on: R18.50
 
 Two `refine compile` runs that publish into one output directory at once,
@@ -1044,13 +1044,29 @@ process holds its lock": each inspects the other's live
 share a directory cannot be built in parallel. It failed R18.10's
 concurrent measuring builds, and the harness's own runtime fixtures, which
 compile into one `bin` directory at once: `runtime/r420-vec-large-list`
-failed `compiler-3` in gate run 44424959169's first attempt. This takes on SR-1343 so that items and builds can work in
+failed `compiler-3` in gate run 44424959169's first attempt. This takes on `SR-1343` so that items and builds can work in
 parallel.
 
 Exit evidence: concurrent compiles of different outputs into one
 directory succeeding, under a control that starts them together on every
 hosted target the publication controls run; a workspace that is truly
 abandoned still recovered or refused as D1049 says.
+Done: builds of different outputs into one directory run at once. A
+build syncs its workspace directory after releasing the workspace's lock
+rather than while holding it, so the lock covers a rename or a removal
+alone, and an inspector that has waited two seconds for a lock asks
+whether the workspace's destination record carries its producer's live
+write lease; while it does, it waits on for up to a minute, and a lock no
+running build holds is refused after two seconds in words that say so
+(D1583). `compiler/tests/test_compile_publication.py`'s
+`host-concurrent-compiles`, which every hosted publication lane runs,
+holds a live producer's lock for four seconds and starts twelve compiles
+into one directory three times; at the item's base the first part failed
+with the gate's L0005, and `host-foreign-entries` still refuses a held
+lock with no producer. `scripts/measure.py` builds every configuration
+into one directory again, the workaround R18.10 added for this refusal
+having been reverted with its test. The L0005 explanation says builds may
+share a directory. `SR-1343` is settled.
 
 ### R18.72 — A contributed `refine build`
 
