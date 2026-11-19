@@ -1672,9 +1672,7 @@
       "reason": "runtime/core-io-buffered-writer flushes through core/io.memory, failing writes included, here."
     },
     "runtime/buffered-writer-format": {
-      "mode": "execute",
-      "profile_limit": "selected-image",
-      "reason": "At none/off the image needs FLASH 33144 of the 32 KiB profile, over by 376 (.isr_vector 192, .text 32848), and 32780 on the AN505's map, over by 12: D1122's copy of a builder's own bytes before a moved block is released and D1123's count of what a builder has handed on grew core/text's growth, format and truncation by about 2.7 KiB of unoptimized Cortex-M0 code, which gives every IR slot a frame home of its own. Each profile still attempts execution; size/off, size/auto and speed/auto fit in about 27.9 KiB and run, and must pass; this image limit is not runtime evidence."
+      "mode": "execute"
     },
     "runtime/by-value-records-stay-independent": {
       "mode": "execute"
@@ -2017,16 +2015,32 @@
     },
     "runtime/core-self-append": {
       "mode": "execute",
-      "profile_limit": "selected-image",
-      "reason": "A list of bytes and a growing builder appending their own bytes, with a format of two views and a conformance's nested one over a provider of the fixture's own, need 39,832 bytes of flash at size/auto, overflowing the 32 KiB profile by 7,064: the builder's growth and format are most of it, as runtime/core-text-builder's limit records. Each profile still attempts execution; runtime/core-vec-bytes grows a list of bytes through its provider and runtime/core-text-format-firmware formats into a builder within the image, and both require execution; this image limit is not runtime evidence."
+      "lanes": {
+        "esp32c3": {
+          "mode": "limit",
+          "reason": "D698: since D1567 the Cortex-M0 image fits the reference's 32 KiB at every profile, and RV32's at size and speed; at none/off RV32's needs FLASH 48484 of this lane's 32 KiB, over by 15716."
+        },
+        "sifive-e": {
+          "mode": "limit",
+          "reason": "D698: since D1567 the Cortex-M0 image fits the reference's 32 KiB at every profile, and RV32's at size and speed; at none/off RV32's needs FLASH 48228 of this lane's 32 KiB, over by 15460."
+        }
+      }
     },
     "runtime/core-sort-context": {
       "mode": "execute"
     },
     "runtime/core-spill-pointer-items": {
       "mode": "execute",
-      "profile_limit": "selected-image",
-      "reason": "Selected Cortex-M0 profile: 32 KiB flash, 16 KiB RAM with 4 KiB stack. Every profile is attempted; only actual flash/RAM overflow or a measured minimum frame/static extent outside this map is a retained limit. Larger profiles and general large-image placement remain open work."
+      "lanes": {
+        "esp32c3": {
+          "mode": "limit",
+          "reason": "D698: since D1567 the Cortex-M0 image fits the reference's 32 KiB at every profile, and RV32's at size and speed; at none/off RV32's needs FLASH 37504 of this lane's 32 KiB, over by 4736."
+        },
+        "sifive-e": {
+          "mode": "limit",
+          "reason": "D698: since D1567 the Cortex-M0 image fits the reference's 32 KiB at every profile, and RV32's at size and speed; at none/off RV32's needs FLASH 37248 of this lane's 32 KiB, over by 4480."
+        }
+      }
     },
     "runtime/core-text-builder": {
       "mode": "execute",
@@ -2072,8 +2086,16 @@
     },
     "runtime/core-text-utf8-builder": {
       "mode": "execute",
-      "profile_limit": "selected-image",
-      "reason": "Every append of the builder that holds only text at each width's extremes, every refusal and every cut, each checked as text, as bytes and by the validator, needs about 36 KiB of flash at size/auto and 41 KiB at none/off, overflowing the 32 KiB profile by 3.1 and 8.6 KiB, for the frame-home reason runtime/core-text-builder gives. Each profile still attempts execution; runtime/core-text-utf8-builder-firmware appends every width and meets both refusals, and runtime/library-shared-text appends, cuts and lends the text, each within its image, and both require execution; this image limit is not runtime evidence."
+      "lanes": {
+        "esp32c3": {
+          "mode": "limit",
+          "reason": "D698: since D1567 the Cortex-M0 image fits the reference's 32 KiB at every profile, and RV32's at size and speed; at none/off RV32's needs FLASH 44004 of this lane's 32 KiB, over by 11236."
+        },
+        "sifive-e": {
+          "mode": "limit",
+          "reason": "D698: since D1567 the Cortex-M0 image fits the reference's 32 KiB at every profile, and RV32's at size and speed; at none/off RV32's needs FLASH 43476 of this lane's 32 KiB, over by 10708."
+        }
+      }
     },
     "runtime/core-text-utf8-builder-firmware": {
       "mode": "execute"
@@ -2083,8 +2105,16 @@
     },
     "runtime/core-text-utf8-split": {
       "mode": "execute",
-      "profile_limit": "selected-image",
-      "reason": "Splitting a record at a found scalar and at every found arrow, with each part's offsets, widths and shared storage checked, fits at size/off, size/auto and speed/auto, about 30 KiB, and needs about 35 KiB at none/off, overflowing the 32 KiB profile by 2.7 KiB, for the frame-home reason runtime/core-text-builder gives. Each profile still attempts execution and the three that fit must pass; runtime/core-text-utf8-firmware splits a line at a found = and a found arrow into views of its buffer within its image at every profile and requires execution; this image limit is not runtime evidence."
+      "lanes": {
+        "esp32c3": {
+          "mode": "limit",
+          "reason": "D698: since D1567 the Cortex-M0 image fits the reference's 32 KiB at every profile, and RV32's at size and speed; at none/off RV32's needs FLASH 36964 of this lane's 32 KiB, over by 4196."
+        },
+        "sifive-e": {
+          "mode": "limit",
+          "reason": "D698: since D1567 the Cortex-M0 image fits the reference's 32 KiB at every profile, and RV32's at size and speed; at none/off RV32's needs FLASH 36708 of this lane's 32 KiB, over by 3940."
+        }
+      }
     },
     "runtime/core-tree-count-overflow": {
       "codes": [
@@ -2439,8 +2469,16 @@
     },
     "runtime/division-by-constants-agrees-with-division": {
       "mode": "execute",
-      "profile_limit": "selected-image",
-      "reason": "Selected Cortex-M0 profile: 32 KiB flash, 16 KiB RAM with 4 KiB stack. Every profile is attempted; only actual flash/RAM overflow or a measured minimum frame/static extent outside this map is a retained limit. Larger profiles and general large-image placement remain open work."
+      "lanes": {
+        "esp32c3": {
+          "mode": "limit",
+          "reason": "D698: since D1567 the Cortex-M0 image fits the reference's 32 KiB at every profile, and RV32's at size and speed; at none/off RV32's needs FLASH 42380 of this lane's 32 KiB, over by 9612."
+        },
+        "sifive-e": {
+          "mode": "limit",
+          "reason": "D698: since D1567 the Cortex-M0 image fits the reference's 32 KiB at every profile, and RV32's at size and speed; at none/off RV32's needs FLASH 41104 of this lane's 32 KiB, over by 8336."
+        }
+      }
     },
     "runtime/else-none-ignores-a-failure": {
       "mode": "execute"
@@ -3084,8 +3122,6 @@
       "reason": "Firmware has no standard output to print to. runtime/io-write-format-memory writes through write_format here."
     },
     "runtime/io-write-format-memory": {
-      "profile_limit": "selected-image",
-      "reason": "At none/off the image needs FLASH 33048 of the 32 KiB profile, over by 280 (.isr_vector 192, .text 32668): D1122's copy of a builder's own bytes before a moved block is released and D1123's count of what a builder has handed on grew core/text's growth and format by about 1.6 KiB of unoptimized Cortex-M0 code, which gives every IR slot a frame home of its own. Each profile still attempts execution; size/off, size/auto and speed/auto fit in about 28 KiB and run, and must pass, as none/off does on the AN505's map; this image limit is not runtime evidence.",
       "mode": "execute"
     },
     "runtime/kqueue-events": {
@@ -3927,8 +3963,16 @@
     },
     "runtime/r420-buffer-real-exhaustion": {
       "mode": "execute",
-      "profile_limit": "selected-image",
-      "reason": "Selected Cortex-M0 profile: 32 KiB flash, 16 KiB RAM with 4 KiB stack. Every profile is attempted; only actual flash/RAM overflow or a measured minimum frame/static extent outside this map is a retained limit. Larger profiles and general large-image placement remain open work."
+      "lanes": {
+        "esp32c3": {
+          "mode": "limit",
+          "reason": "D698: since D1567 the Cortex-M0 image fits the reference's 32 KiB at every profile, and RV32's at size and speed; at none/off RV32's needs FLASH 34896 of this lane's 32 KiB, over by 2128."
+        },
+        "sifive-e": {
+          "mode": "limit",
+          "reason": "D698: since D1567 the Cortex-M0 image fits the reference's 32 KiB at every profile, and RV32's at size and speed; at none/off RV32's needs FLASH 34640 of this lane's 32 KiB, over by 1872."
+        }
+      }
     },
     "runtime/r420-failing-providers": {
       "codes": [
@@ -3995,8 +4039,16 @@
     "runtime/r420-pool-provider": {
       "counterpart": "r420-pool-provider",
       "mode": "execute",
-      "profile_limit": "selected-image",
-      "reason": "Selected Cortex-M0 profile: 32 KiB flash, 16 KiB RAM with 4 KiB stack. Every profile is attempted; only actual flash/RAM overflow or a measured minimum frame/static extent outside this map is a retained limit. Larger profiles and general large-image placement remain open work."
+      "lanes": {
+        "esp32c3": {
+          "mode": "limit",
+          "reason": "D698: since D1567 the Cortex-M0 image fits the reference's 32 KiB at every profile, and RV32's at size and speed; at none/off RV32's needs FLASH 40136 of this lane's 32 KiB, over by 7368."
+        },
+        "sifive-e": {
+          "mode": "limit",
+          "reason": "D698: since D1567 the Cortex-M0 image fits the reference's 32 KiB at every profile, and RV32's at size and speed; at none/off RV32's needs FLASH 39880 of this lane's 32 KiB, over by 7112."
+        }
+      }
     },
     "runtime/r420-reader-cleanup": {
       "codes": [
@@ -4026,8 +4078,16 @@
     },
     "runtime/r420-small-vector": {
       "mode": "execute",
-      "profile_limit": "selected-image",
-      "reason": "Selected Cortex-M0 profile: 32 KiB flash, 16 KiB RAM with 4 KiB stack. Every profile is attempted; only actual flash/RAM overflow or a measured minimum frame/static extent outside this map is a retained limit. Larger profiles and general large-image placement remain open work."
+      "lanes": {
+        "esp32c3": {
+          "mode": "limit",
+          "reason": "D698: since D1567 the Cortex-M0 image fits the reference's 32 KiB at every profile, and RV32's at size and speed; at none/off RV32's needs FLASH 37368 of this lane's 32 KiB, over by 4600."
+        },
+        "sifive-e": {
+          "mode": "limit",
+          "reason": "D698: since D1567 the Cortex-M0 image fits the reference's 32 KiB at every profile, and RV32's at size and speed; at none/off RV32's needs FLASH 37112 of this lane's 32 KiB, over by 4344."
+        }
+      }
     },
     "runtime/r420-small-vector-providers": {
       "codes": [
@@ -4051,8 +4111,16 @@
     },
     "runtime/r420-vec-capacity-boundaries": {
       "mode": "execute",
-      "profile_limit": "selected-image",
-      "reason": "Selected Cortex-M0 profile: 32 KiB flash, 16 KiB RAM with 4 KiB stack. Every profile is attempted; only actual flash/RAM overflow or a measured minimum frame/static extent outside this map is a retained limit. Larger profiles and general large-image placement remain open work."
+      "lanes": {
+        "esp32c3": {
+          "mode": "limit",
+          "reason": "D698: since D1567 the Cortex-M0 image fits the reference's 32 KiB at every profile, and RV32's at size and speed; at none/off RV32's needs FLASH 41152 of this lane's 32 KiB, over by 8384."
+        },
+        "sifive-e": {
+          "mode": "limit",
+          "reason": "D698: since D1567 the Cortex-M0 image fits the reference's 32 KiB at every profile, and RV32's at size and speed; at none/off RV32's needs FLASH 40896 of this lane's 32 KiB, over by 8128."
+        }
+      }
     },
     "runtime/r420-vec-growth-boundary": {
       "mode": "execute"
@@ -5377,8 +5445,16 @@
     },
     "runtime/volume-directory-calls": {
       "mode": "execute",
-      "profile_limit": "selected-image",
-      "reason": "core/io's memory volume links every entry its directories and files conformances project, and with this program's oracles the image needs 33,872 to 33,968 bytes of flash at size and speed and 41,896 at none/off, overflowing the 32 KiB profile by 1,104 to 9,128. Each profile still attempts execution; runtime/file-system-firmware runs the volume's temporary names within the image; this image limit is not runtime evidence."
+      "lanes": {
+        "esp32c3": {
+          "mode": "limit",
+          "reason": "D698: since D1567 the Cortex-M0 image fits the reference's 32 KiB at every profile, and RV32's at size and speed; at none/off RV32's needs FLASH 43540 of this lane's 32 KiB, over by 10772."
+        },
+        "sifive-e": {
+          "mode": "limit",
+          "reason": "D698: since D1567 the Cortex-M0 image fits the reference's 32 KiB at every profile, and RV32's at size and speed; at none/off RV32's needs FLASH 43284 of this lane's 32 KiB, over by 10516."
+        }
+      }
     },
     "runtime/volume-links-as-systems-follow": {
       "mode": "execute",
