@@ -1,8 +1,8 @@
 {
   "status": "passed",
-  "image_sha256": "20dbfbbc59b51ee50eeb21054b548321b9ce0f2ff5cf372f09cd9c9140fb4feb",
+  "image_sha256": "f6e4b1e7de22452a9883dcbaabf71c3f6304ff9db1351ff637fc538f7296de00",
   "image_name": "board.elf.bin",
-  "elf_sha256": "fb8f697ba41f0da6f1d82bbc4cfe9ab0701ac035b3e93a8003f9613e202f2113",
+  "elf_sha256": "6e5787c4e24557a6c950979b2d8562d4b6efa2adbc04662e67363fcfe7c21440",
   "image": {
     "chip": 5,
     "revisions": [
@@ -12,11 +12,11 @@
     "entry": "0x40380000",
     "segments": [
       "0x40380000+0x180",
-      "0x40380180+0x75e0",
-      "0x40387760+0x54"
+      "0x40380180+0x5f08",
+      "0x40386088+0x54"
     ],
-    "checksum": "0x0c",
-    "sha256": "58ec044c627f6167ebe24c9d618338f5d1aa61cab57784f1cfebf45cec7f53f3"
+    "checksum": "0x57",
+    "sha256": "28d58dadf1e7678efb3ee8f59869fd13e44d8f4b115f520e2e73a9f160d2ca17"
   },
   "instructions": [],
   "flash": {
@@ -28,8 +28,8 @@
     "boot": "SPI_FAST_FLASH_BOOT",
     "loads": [
       "0x40380000+0x180",
-      "0x40380180+0x75e0",
-      "0x40387760+0x54"
+      "0x40380180+0x5f08",
+      "0x40386088+0x54"
     ],
     "entry": "0x40380000"
   },
@@ -68,8 +68,8 @@
       "timer_interrupts_meanwhile": 100
     },
     "stream": {
-      "timer_events": 3512,
-      "receive_interrupts": 4747,
+      "timer_events": 3551,
+      "receive_interrupts": 4978,
       "echoed": 3014,
       "sent": 3614
     },
@@ -88,7 +88,7 @@
     "recoveries": 2,
     "dropped": 44,
     "overflows": 1,
-    "entries": 4749,
+    "entries": 4980,
     "boot_reason": 1,
     "byte_cell": 116,
     "half_cell": 29789,
@@ -96,47 +96,47 @@
   },
   "readback": [
     "0x40380000+0x180",
-    "0x40380180+0x75e0"
+    "0x40380180+0x5f08"
   ],
-  "uart_sha256": "1270e5b6c5ee494a14e255056c28339704d45e1b6d3b1379b4f3f7e6165050f8",
+  "uart_sha256": "db37f2fda1df9d0034c046d42b71093c50bd02a2b5672401e4018a9797602713",
   "mode": "boot",
   "fixed_restore": {
     "status": "passed",
-    "sha256": "f2a4a72bcba5d087834a528f7325dfab04af20c30c7a6dec335d0210372a80a6",
+    "sha256": "ac7e8852cac4f33fa915773e97d4d36189d9443e4f459efed43545d883785543",
     "marker": {
       "symbol": "_landin_fixed_ready",
       "address": 1070202900,
       "value": 1279678513,
-      "elf_sha256": "9684a096e16bb273bc4c4021026add185116f31a5bdf1a23f6311351f676b5ae"
+      "elf_sha256": "4ddb98f1024e2773bf203ed640f9ccd9452b02fa975fcb8c550b6c1b671d4fa3"
     }
   },
-  "seconds": 27.263,
+  "seconds": 27.981,
   "kernel_usb": {
-    "since": 1794565050.1317003,
-    "until": 1794565077.3673859,
+    "since": 1795054500.6709657,
+    "until": 1795054528.6245923,
     "lines": [
       {
-        "time": 1794565054.136741,
-        "text": "rigpi kernel: usb 1-1.2.3.4.2: USB disconnect, device number 67"
+        "time": 1795054504.780703,
+        "text": "rigpi kernel: usb 1-1.2.3.4.2: USB disconnect, device number 121"
       },
       {
-        "time": 1794565057.076682,
-        "text": "rigpi kernel: usb 1-1.2.3.4.2: new full-speed USB device number 84 using xhci_hcd"
+        "time": 1795054507.796702,
+        "text": "rigpi kernel: usb 1-1.2.3.4.2: new full-speed USB device number 12 using xhci_hcd"
       },
       {
-        "time": 1794565057.179523,
+        "time": 1795054507.916695,
         "text": "rigpi kernel: cdc_acm 1-1.2.3.4.2:1.0: ttyACM4: USB ACM device"
       },
       {
-        "time": 1794565073.276702,
-        "text": "rigpi kernel: usb 1-1.2.3.4.2: USB disconnect, device number 84"
+        "time": 1795054523.936718,
+        "text": "rigpi kernel: usb 1-1.2.3.4.2: USB disconnect, device number 12"
       },
       {
-        "time": 1794565076.208691,
-        "text": "rigpi kernel: usb 1-1.2.3.4.2: new full-speed USB device number 85 using xhci_hcd"
+        "time": 1795054526.920679,
+        "text": "rigpi kernel: usb 1-1.2.3.4.2: new full-speed USB device number 13 using xhci_hcd"
       },
       {
-        "time": 1794565076.308713,
+        "time": 1795054527.044727,
         "text": "rigpi kernel: cdc_acm 1-1.2.3.4.2:1.0: ttyACM4: USB ACM device"
       }
     ],
@@ -159,8 +159,8 @@
       "tag": "t",
       "h": "00000bc7",
       "c": "00000002",
-      "i": "0000128d",
-      "m": "00000de8",
+      "i": "00001374",
+      "m": "00000e0f",
       "p": "80000001",
       "q": "80000002",
       "k": "00000064",
@@ -205,6 +205,7 @@
     "hub-wait",
     "hub-status",
     "power-on",
+    "hub-wait",
     "hub-wait",
     "resident-ready"
   ]

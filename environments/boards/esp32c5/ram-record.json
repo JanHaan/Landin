@@ -1,8 +1,8 @@
 {
   "status": "passed",
-  "image_sha256": "97c69aa46c8e639ab08d6d8551382c7ce9644c61b3250206e1840a4ead9f89f8",
+  "image_sha256": "3785419d6e3b70ca4ba79f17fa6410b40f73984f9fa13dcfc0561f26698b45d3",
   "image_name": "board.elf",
-  "elf_sha256": "97c69aa46c8e639ab08d6d8551382c7ce9644c61b3250206e1840a4ead9f89f8",
+  "elf_sha256": "3785419d6e3b70ca4ba79f17fa6410b40f73984f9fa13dcfc0561f26698b45d3",
   "instructions": [
     "amoadd.w.aqrl",
     "lr.w.aq",
@@ -52,7 +52,7 @@
       "timer_interrupts_meanwhile": 100
     },
     "stream": {
-      "timer_events": 2495,
+      "timer_events": 2500,
       "receive_interrupts": 6630,
       "echoed": 3014,
       "sent": 3614
@@ -114,16 +114,16 @@
     "recoveries": 2,
     "dropped": 44,
     "overflows": 1,
-    "entries": 7030,
+    "entries": 7047,
     "boot_reason": 1,
     "word_cell": 41,
     "byte_cell": 209
   },
   "readback": [
     "0x40800000+0x1c0",
-    "0x408001c0+0x87a8"
+    "0x408001c0+0x6e28"
   ],
-  "uart_sha256": "a5cf3a5aecc2cc1a63cded55dcc59f856d652122b6fa6cea7d55db7cc523ea8a",
+  "uart_sha256": "f23cd9e87e451fa3a1284ad2dd0537e3f3d61fb0b9eec1a93936a7ae2603170a",
   "mode": "ram",
   "warm_load": {
     "board": "esp32c5",
@@ -133,38 +133,38 @@
       "peripheral_sources_stopped": true,
       "rom_reset": false
     },
-    "elf_sha256": "97c69aa46c8e639ab08d6d8551382c7ce9644c61b3250206e1840a4ead9f89f8",
+    "elf_sha256": "3785419d6e3b70ca4ba79f17fa6410b40f73984f9fa13dcfc0561f26698b45d3",
     "entry": 1082130432,
     "flash_written": false,
     "format_version": 1,
-    "helper_source_sha256": "47d74e1639692ad1649ebc14f6b050efb10a98c93f3122e111a40397f58a22c1",
+    "helper_source_sha256": "fc2f5b5081e7f4778195e621b04081bd05ac04dee304934a44bab3475aff0880",
     "mode": "warm",
     "previous_pc": 1082131558,
     "segments": [
       {
         "address": 1082130432,
         "bytes": 448,
-        "sha256": "9b15d3cfd99f5b751c83a3028bbaf3d8dcb164091262fde8e12ea60e9054bd9b"
+        "sha256": "9b55bf14e1e37fbddafb7a323e155b39bcc58db409c7dba0e62de9131a8785fe"
       },
       {
         "address": 1082130880,
-        "bytes": 34728,
-        "sha256": "1c92c42445f466bd3363fbfa02a67e14feb2d62549c8844110087bc1853f57a4"
+        "bytes": 28200,
+        "sha256": "78b3cbc6105acbafe972695822a76462038f91ca414fe06aa3d060b84e95c420"
       },
       {
-        "address": 1082165608,
+        "address": 1082159080,
         "bytes": 104,
-        "sha256": "751dcce877120aac83391c4b272b3f98aed945a8700a9a18c1b0163047531d95"
+        "sha256": "4450496739c0909339bc08f104dca67582828ad994e0c551b5440563172923fa"
       }
     ],
     "stack": 1082449920,
     "status": "passed",
     "vector": 1082130688
   },
-  "seconds": 35.014,
+  "seconds": 31.15,
   "kernel_usb": {
-    "since": 1794565084.9478252,
-    "until": 1794565119.9350607,
+    "since": 1795054537.9955328,
+    "until": 1795054569.1185834,
     "lines": [],
     "status": "captured"
   },
@@ -192,8 +192,8 @@
       "tag": "t",
       "h": "00000c9a",
       "c": "00000002",
-      "i": "00001b76",
-      "m": "000010b9",
+      "i": "00001b87",
+      "m": "000010bf",
       "p": "b8000011",
       "q": "b8000012",
       "k": "00000064",

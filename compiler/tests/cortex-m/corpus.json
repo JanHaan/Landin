@@ -2342,7 +2342,17 @@
     "runtime/directory-memory": {
       "mode": "execute",
       "profile_limit": "selected-image",
-      "reason": "The memory world's directories with every oracle need about 43 KiB of flash at size/auto, of which the fixture's own main is 17 KiB: the Cortex-M0 backend gives every IR slot, each call's snapshot and aggregate temporary among them, a frame home of its own with no reuse and keeps no value in a register, so main's frame is 2.7 KiB and most of its code moves values between homes. That is register allocation and slot reuse, not the library. Each profile still attempts execution; runtime/directory-memory-firmware lists a directory over core/io.memory within the image and requires execution; this image limit is not runtime evidence."
+      "reason": "The memory world's directories with every oracle need about 43 KiB of flash at size/auto, of which the fixture's own main is 17 KiB: the Cortex-M0 backend gives every IR slot, each call's snapshot and aggregate temporary among them, a frame home of its own with no reuse and keeps no value in a register, so main's frame is 2.7 KiB and most of its code moves values between homes. That is register allocation and slot reuse, not the library. Each profile still attempts execution; runtime/directory-memory-firmware lists a directory over core/io.memory within the image and requires execution; this image limit is not runtime evidence.",
+      "lanes": {
+        "esp32c3": {
+          "mode": "limit",
+          "reason": "D698: since D1503 holds RV32's values in registers its images fit this lane's 32 KiB at size and speed, and at size/off and size/auto its stack then overruns the 4 KiB reservation, in memory_under called from memory_component, with 4112 and 4128 bytes in use when the guard was written; speed/auto peaks at 4008 bytes, and none/off still overflows the 32 KiB by about 27 KiB. main's 2.5 KiB frame of aggregate temporaries is most of the stack."
+        },
+        "sifive-e": {
+          "mode": "limit",
+          "reason": "D698: since D1503 holds RV32's values in registers its images fit this lane's 32 KiB at size and speed, and at size/off and size/auto its stack then overruns the 4 KiB reservation, in memory_under called from memory_component, with 4112 and 4128 bytes in use when the guard was written; speed/auto peaks at 4008 bytes, and none/off still overflows the 32 KiB by about 27 KiB. main's 2.5 KiB frame of aggregate temporaries is most of the stack."
+        }
+      }
     },
     "runtime/directory-memory-firmware": {
       "mode": "execute"
@@ -3072,16 +3082,6 @@
     "runtime/io-write-format-memory": {
       "profile_limit": "selected-image",
       "reason": "At none/off the image needs FLASH 33048 of the 32 KiB profile, over by 280 (.isr_vector 192, .text 32668): D1122's copy of a builder's own bytes before a moved block is released and D1123's count of what a builder has handed on grew core/text's growth and format by about 1.6 KiB of unoptimized Cortex-M0 code, which gives every IR slot a frame home of its own. Each profile still attempts execution; size/off, size/auto and speed/auto fit in about 28 KiB and run, and must pass, as none/off does on the AN505's map; this image limit is not runtime evidence.",
-      "lanes": {
-        "esp32c3": {
-          "mode": "limit",
-          "reason": "D698: at size/off, size/auto and speed/auto its stack overran the 4 KiB reservation, in memory_write_some called from memory_write, with 4096 to 4176 bytes in use when the guard was written; at none/off it peaks at 4004 bytes, and Cortex-M0's images peak at 3456 to 3792, so the program sits at the reservation's edge on both architectures."
-        },
-        "sifive-e": {
-          "mode": "limit",
-          "reason": "D698: at size/off, size/auto and speed/auto its stack overran the 4 KiB reservation, in memory_write_some called from memory_write, with 4096 to 4176 bytes in use when the guard was written; at none/off it peaks at 4004 bytes, and Cortex-M0's images peak at 3456 to 3792, so the program sits at the reservation's edge on both architectures."
-        }
-      },
       "mode": "execute"
     },
     "runtime/kqueue-events": {

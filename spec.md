@@ -26090,6 +26090,62 @@ registers and loses variables from the debugger outside their intervals.
 scalar homes reuse and promote`, the Darwin LLDB sessions and
 `compiler/tests/measure/baselines/`.
 
+### D1503 — RISC-V keeps values in registers its emitted text does not write
+
+**The tour said** nothing. RV64 and RV32 gave every slot and value a frame
+home at every objective; the measurement of generated code
+(`compiler/tests/measure/findings.md`) found 37.8% of RV64's instructions
+and 53.9% of RV32's to be stack loads and stores, and RV64 executing five
+to seven times arm64's instructions on the same runs.
+
+**Chosen:** at `size` and `speed` RISC-V places slots and values in
+registers over `Landin.IR.Liveness` as D1403 has each backend do. Its
+selection names nearly every integer register as scratch somewhere (x20,
+x21 and x23-x25 carry each comparison's operands and flags, x9, x18 and
+x19 form frame addresses and masks, x10-x17 carry calls), so instead of
+describing what each operation writes, a routine is emitted once with
+every value in its home while the text each position writes is recorded,
+a call writing every register the calling convention does not preserve.
+The allocator then offers x10-x17, which cost no save, and x9, x18, x19
+and x22, which every routine saves already (D678 prunes an unnamed one at
+XLEN 32, where they are offered only where enough scalar traffic pays for
+the save), to a location only where that record writes none of them over
+its interval; x20, x21, x23-x27 and the temporaries are never offered. A parameter
+takes only the argument register it arrives in, since the entry stores
+each parameter while later ones still wait in theirs. The routine is
+emitted again with that plan and its writes recorded again; if any meets a
+register a location holds there, which selection's own writes of a result
+at its operation do not, the routine keeps its first emission. The
+placement is arm64's (D1404), each eligible slot over its interval by
+weight, then each value from its definition through its last reader,
+sharing a slot's register where it is that slot's content, and at `size`
+a source variable for the whole routine; the usage both read before
+placing, the order, last readers, eligibility and weights, is one package,
+`Landin.Backend.Placement`. At XLEN 32 an eight-byte slot or value takes a
+pair, x10-x11 to x16-x17, x18-x19 or x9-x22. Held operands are read where
+they are, and an arithmetic, comparison, constant or float result is
+written to its own register directly. A narrower scalar stays
+zero-extended in its register, as a load leaves it, and RV64's debugging
+information names the register, held after the interval's last position
+through the rest of its block until something writes it, as arm64's is.
+Over the seven hosted workloads RV64's `.text` falls 15.8% at `size` and
+19.4% at `speed`, and under QEMU the instructions executed at `speed` fall
+to 0.55 of what they were for mandelbrot, 0.67 for fasta, 0.72 for
+fannkuch-redux and 0.82 for binary-trees, and at `size` to 0.56 to 0.87;
+RV32's firmware `.text` falls 17.5% at `size` and 18.4% at `speed` at
+rv32imac.
+
+**The alternatives:** a fixed set of registers selection never names,
+which would first have rewritten selection's comparisons, address forming
+and call sequences to free one; per-operation write sets written beside
+selection, as x86-64's allocator asks of each operation, which every
+change to selection would have to keep true by hand; trusting the second
+emission without checking it, which leaves a write the record missed to
+corrupt a held value silently; and homes, the measured cost above.
+
+**Pinned by** `backend/RISC-V keeps values in registers`, the RV64 GDB
+sessions, the RV32 lanes' corpus and `compiler/tests/measure/baselines/`.
+
 ### D1383 — `refine` keeps the compiler's commands and ships four of its tools beside it
 
 **The tour said** nothing; [what refine does today] listed thirteen commands of one executable.
@@ -26265,6 +26321,16 @@ scalar homes reuse and promote`, the Darwin LLDB sessions and
 **The alternatives:** answering the protocol's every request, most of which no editor sends for a program without threads of its own, and which would be presentation to keep in step with GDB's; and giving each frame column 0, which some editors take for no position at all.
 
 **Pinned by** the dap suite's `a GDB session` and `refusals say what to do`.
+
+### D1528 — A program or command a closed pipe ended ends `refine` quietly
+
+**D526 said** that `refine run` names the signal that ended its program and exits with 128 and its number, as a shell reports it, and D1384 that a dispatched command is run the same way.
+
+**Chosen:** when the signal is `SIGPIPE`, `refine` still exits with 141 and writes no line. The program or command wrote to a pipe whose reader had left, as `refine dap --help | head` leaves; that is no failure, a shell reports nothing for a pipeline member it ends, and `refine`'s own closed pipe ends it quietly (D1047). Every other signal is named as before.
+
+**The alternatives:** naming it, as `refine` did, which reads as a failure of `refine-dap` when `head` had only read what it wanted; and quieting it for dispatched commands alone, which would make `refine run PROGRAM | head` and `refine NAME | head` differ for one cause.
+
+**Pinned by** the commands suite's `run reports a signal`.
 
 ### D1463 — Every request names its command; the bare-source form is refused
 

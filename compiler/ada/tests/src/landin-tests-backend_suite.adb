@@ -9694,6 +9694,166 @@ package body Landin.Tests.Backend_Suite is
          "the bound counts an instruction at its most and refuses unknowns");
    end RV64_Jumps_Are_Near_Within_A_Routine;
 
+   --  D1503: at size and speed RISC-V holds a routine's slots and values
+   --  in registers wherever its text, emitted with every value in its
+   --  home, writes none of them.  At RV64 a loop without a call keeps all
+   --  of them out of its frame, and a routine keeps what lives across its
+   --  calls in registers they preserve; at XLEN 32 an eight-byte sum is
+   --  held in a register pair.  The build report counts the registers;
+   --  none, which gives each value a home, counts none.
+   procedure RISCV_Keeps_Values_In_Registers
+     (Item : in out Landin.Testing.Context);
+
+   procedure RISCV_Keeps_Values_In_Registers
+     (Item : in out Landin.Testing.Context)
+   is
+      Source : constant String :=
+        "mix: (n: u64, k: u64) -> (s: u64) =" & LF
+        & "    mut total: u64 = 0" & LF
+        & "    mut i: u64 = 0" & LF
+        & "    while i < n do" & LF
+        & "        total = total ^ (i + k)" & LF
+        & "        inc i" & LF
+        & "    end while" & LF
+        & "    s = total" & LF
+        & "end mix" & LF
+        & "twice: (n: u64) -> (r: u64) =" & LF
+        & "    a: u64 = mix(n, 1)" & LF
+        & "    b: u64 = mix(n, 2)" & LF
+        & "    r = a ^ b ^ n" & LF
+        & "end twice" & LF
+        & "public main: () -> (code: i32) =" & LF
+        & "    code = i32(twice(5) & 1)" & LF
+        & "end main" & LF;
+
+      function Has (Text, Part : String) return Boolean
+        is (Index (Text, Part) /= 0);
+
+      --  The routine Name's text, from its label to its size directive.
+      function Routine (Text, Name : String) return String;
+      function Routine (Text, Name : String) return String is
+         First : constant Natural := Index (Text, LF & Name & ":" & LF);
+         Last : constant Natural :=
+           (if First = 0 then 0
+            else Ada.Strings.Fixed.Index
+              (Text, HT & ".size " & Name & ",", First));
+      begin
+         return (if Last = 0 then "" else Text (First .. Last));
+      end Routine;
+
+      --  How many lines of Text reach the frame through x8, the frame
+      --  record's return address aside.
+      function Homes (Text : String) return Natural;
+      function Homes (Text : String) return Natural is
+         Start : Positive := Text'First;
+         Count : Natural := 0;
+      begin
+         for Index in Text'Range loop
+            if Text (Index) = LF then
+               declare
+                  Line : constant String := Text (Start .. Index - 1);
+               begin
+                  if Has (Line, "(x8)") and then not Has (Line, "ra, -") then
+                     Count := Count + 1;
+                  end if;
+               end;
+               Start := Index + 1;
+            end if;
+         end loop;
+         return Count;
+      end Homes;
+
+      --  Text after the last call of mix in it.
+      function After_Calls (Text : String) return String is
+        (Text (Ada.Strings.Fixed.Index
+                 (Text, "call mix", Ada.Strings.Backward) + 1 .. Text'Last));
+
+      --  The program's text for Facts at Objective, and the most
+      --  registers any routine of it holds.
+      procedure Emitted
+        (Facts : Landin.Targets.Target_Facts;
+         Objective : Landin.Optimization.Objective;
+         Text : out Ada.Strings.Unbounded.Unbounded_String;
+         Most : out Natural);
+      procedure Emitted
+        (Facts : Landin.Targets.Target_Facts;
+         Objective : Landin.Optimization.Objective;
+         Text : out Ada.Strings.Unbounded.Unbounded_String;
+         Most : out Natural)
+      is
+         Work : Landin.Stages.Compilation := Landin.Stages.Create (Facts);
+         Ran : Natural;
+         Report : Landin.Build_Reports.Report;
+      begin
+         Most := 0;
+         Lower (Work, Source, Ran);
+         Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
+         if Landin.Stages.Failed (Work) then
+            return;
+         end if;
+         Landin.Backend.RiscV.Emit
+           (Landin.Stages.Code (Work).all,
+            Landin.Stages.Meanings (Work).all,
+            Landin.Stages.Identities (Work).all, Facts,
+            (Objective, Landin.Optimization.Off), Text, Report,
+            Level => Landin.Targets.Levels.Default_Level (Facts));
+         for Index in 1 .. Landin.Build_Reports.Routine_Count (Report) loop
+            Most := Natural'Max
+              (Most, Landin.Build_Reports.Nth_Routine (Report, Index)
+                       .Register_Count);
+         end loop;
+      end Emitted;
+
+      use type Landin.Optimization.Objective;
+      type Facts_List is array (1 .. 2) of Landin.Targets.Target_Facts;
+      Walked : constant Facts_List :=
+        [Landin.Targets.Linux_RV64, Landin.Targets.RV32];
+      Unplaced : Natural := 0;
+   begin
+      for Which in Walked'Range loop
+         for Objective in Landin.Optimization.Objective loop
+            declare
+               Facts : constant Landin.Targets.Target_Facts := Walked (Which);
+               Assembly : Ada.Strings.Unbounded.Unbounded_String;
+               Most : Natural;
+               Name : constant String := Landin.Targets.Name (Facts) & " "
+                 & Landin.Optimization.Spelling (Objective);
+            begin
+               Emitted (Facts, Objective, Assembly, Most);
+               declare
+                  Text : constant String :=
+                    Ada.Strings.Unbounded.To_String (Assembly);
+                  Mix : constant String := Routine (Text, "mix");
+                  Twice : constant String := Routine (Text, "twice");
+               begin
+                  if Objective = Landin.Optimization.None then
+                     Unplaced := Homes (Mix);
+                     Landin.Testing.Check
+                       (Item, Most = 0 and then Unplaced > 0,
+                        Name & ": every value has its home");
+                  elsif Which = 1 then
+                     Landin.Testing.Check
+                       (Item, Most > 0 and then Mix /= ""
+                          and then Homes (Mix) = 0
+                          and then Twice /= ""
+                          and then Homes (After_Calls (Twice)) = 0,
+                        Name & ": the loop, and what lives across the "
+                        & "calls, are held in registers");
+                  else
+                     --  The pairs the eight-byte add does not write as
+                     --  scratch hold the loop's count and sum.
+                     Landin.Testing.Check
+                       (Item, Most >= 4 and then Mix /= ""
+                          and then Homes (Mix) * 2 < Unplaced,
+                        Name & ": the loop's eight-byte values are held "
+                        & "in register pairs");
+                  end if;
+               end;
+            end;
+         end loop;
+      end loop;
+   end RISCV_Keeps_Values_In_Registers;
+
    --  D410: a scalar in a `layout(c, packed)` record may sit at any
    --  address, and RV64 moves it one byte at a time, because a misaligned
    --  RISC-V access may trap or be emulated by the kernel.  QEMU's user
@@ -11398,6 +11558,9 @@ package body Landin.Tests.Backend_Suite is
       Landin.Testing.Register
         (Into, "backend", "RV64 jumps are near within a routine",
          RV64_Jumps_Are_Near_Within_A_Routine'Access);
+      Landin.Testing.Register
+        (Into, "backend", "RISC-V keeps values in registers",
+         RISCV_Keeps_Values_In_Registers'Access);
       Landin.Testing.Register
         (Into, "backend", "Darwin wide parts keep target offsets",
          Darwin_Wide_Parts_Keep_Target_Offsets'Access);

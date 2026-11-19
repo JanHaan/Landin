@@ -333,7 +333,7 @@ of a program's first launch failed two pairs on a single sample;
 
 ### R16.21 — RISC-V register allocation
 
-Status: planned
+Status: complete
 Depends on: R16.10
 
 RV64 and RV32 keep every value in a stack home: R16.10 measured a report
@@ -351,6 +351,36 @@ Exit evidence: RV64's instructions and both targets' sizes measured lower
 than their R16.10 baselines, RV32's cycles on the boards no slower, with
 unchanged behavior, ABI and debugger evidence and the board records made
 again.
+
+Done: D1503 holds RISC-V's slots and values in registers at `size` and
+`speed`. Selection names nearly every integer register as scratch, so a
+routine is emitted once with every value in its home while what each
+position writes is recorded; locations take x10-x17, x9, x18, x19 or x22
+only where nothing writes them over their intervals, with arm64's placement,
+and the second emission is checked against the plan, keeping the first if
+any write meets a held register. RV32 holds eight-byte values in register
+pairs, and held operands are read in place. The usage both allocators read
+is `Landin.Backend.Placement`, which answered R551-16's activation for the
+backends' shared code; arm64's output is byte-identical. Over the seven
+hosted workloads RV64's `.text` falls 15.8% at `size` and 19.4% at `speed`,
+and under QEMU speed-auto executes 0.55 of mandelbrot's instructions, 0.67
+of fasta's, 0.72 of fannkuch-redux's and 0.82 of binary-trees'; RV32's
+firmware `.text` falls 17.5% at `size` and 18.4% at `speed`. On the
+ESP32-C3, ESP32-C5 and Pico 2's Hazard3 no configuration is slower: at
+speed-auto their cycles fall to 0.56-0.82 of R16.10's for the integer
+workloads, 0.87-0.93 for SipHash and 0.97-0.98 for mandelbrot, whose
+soft-float helpers dominate. Their six records were made again on the rig.
+The RV64 GDB sessions, the RV32 lanes and RV64's fixtures pass, the build
+modes agree and the scaling bound holds on the host and on RV64. The
+candidate passed its
+[gate](https://github.com/JanHaan/Landin/actions/runs/44452396582) and
+[boards](https://github.com/JanHaan/Landin/actions/runs/44459720484).
+Findings fixed on the way: the RV64 GDB session's source still assumed a
+dead argument stays readable, and is now the LLDB lanes' source, whose
+argument is read after the call; `runtime/directory-memory` now fits the
+RV32 lanes' 32 KiB and at `size` overruns their 4 KiB stack, recorded as a
+D698 lane limit. SR-1363 files what remains largest, selection's flag
+emulation, 22% of RV64's instructions.
 
 ### R16.22 — Cortex-M register allocation
 
@@ -857,8 +887,10 @@ QEMU's stub, and over LLDB in `darwin-host-release-2` and both FreeBSD
 debugger jobs, the guest's `lldb-server` reached from the runner's
 `lldb-dap`. Found on the way: the FreeBSD arm64 lane's refusal for a
 missing UEFI firmware now says where it looked and what to install, and
-looks beside the QEMU on the search path; a dispatched command a closed
-pipe ends is reported as if it had failed (SR-1373).
+looks beside the QEMU on the search path; a program or dispatched command
+a closed pipe ends no longer reports itself as a failure (D1528); and the
+gate's `measure-time` jobs take `refine`, not the last executable the build
+names.
 
 ### R18.70 — The existing splits
 

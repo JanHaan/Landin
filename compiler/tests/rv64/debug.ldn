@@ -3,13 +3,22 @@ inner: (argument: i32) -> (result: i32) =
     result = local + 1
 end inner
 
+--  Through function values: D339 copies no routine whose address is taken,
+--  so at speed inner and outer keep their own frames for the stops.
 outer: (argument: i32) -> (result: i32) =
     local: i32 = argument + 10
-    result = inner(local)
-    ready: i32 = result
+    step := inner
+    result = step(local)
+    --  argument is read after the call, so at speed it is still live, and
+    --  described, while inner runs.
+    mut ready: i32 = result
+    if argument < 0 then
+        ready = 0
+    end if
     result = ready
 end outer
 
 public main: () -> (code: i32) =
-    code = outer(30)
+    call := outer
+    code = call(30)
 end main
