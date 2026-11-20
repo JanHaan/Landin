@@ -1254,6 +1254,18 @@ class BoardVerdict(unittest.TestCase):
         self.assertTrue(self.verdict(self.BRANCH, "success", "skipped", evidence={},
                                      timing="success"))
 
+    def test_a_timing_failure_is_not_named_a_board_failure(self):
+        problems = self.verdict(self.BOARDS, "skipped", "success", timing="failure")
+        self.assertEqual(len(problems), 1, problems)
+        self.assertIn("timing evidence, not a board failure", problems[0])
+        self.assertNotIn("physical evidence missing", problems[0])
+        summary = gate_inputs.report(
+            self.needs(self.BOARDS, "skipped", "success", timing="failure"),
+            problems, self.BOARDS, PASSED)
+        self.assertIn("- timing, judged apart from the boards: measure-time not passed",
+                      summary)
+        self.assertIn("board-pico2: passed", summary)
+
     def test_a_main_push_with_every_board_passed(self):
         self.assertEqual(self.verdict(self.MAIN, "success", "success"), [])
 

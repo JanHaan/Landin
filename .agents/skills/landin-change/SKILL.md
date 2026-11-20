@@ -47,15 +47,20 @@ what a successor needs is never only in the conversation.
    takes over ten minutes. A new script that names `ROADMAP.md`,
    `README.md` or `roadmap/` needs an entry in `scripts/tests/
    test_gate_inputs.py`'s `READERS`, or the scripts job fails.
-3. **Push** once the affected checks pass, then `item.py gate ITEM --watch`:
-   it records the head's runs and follows the gate in a detached
-   `gate_watch.py --all`. Investigate a failed job from its log; a fixed
+3. **Push** once the affected checks pass, with `item.py push ITEM
+   --watch`: it refuses a stale `citations.txt`, pushes, records the
+   head's runs and follows the gate in a detached `gate_watch.py --all`. Investigate a failed job from its log; a fixed
    push supersedes the run. Another item's gate at the same time shares
    the runners and both take longer.
 4. **Boards.** When the push gate passed, `item.py boards ITEM --watch`
    dispatches the `scope=boards` run on the same head, records it and
-   follows it. A closing commit that says `Gate: explanatory` may be
-   pushed beside it: a dispatch is not cancelled by a push.
+   follows it. It refuses while main is not an ancestor of the head:
+   merge main first (step 6). A closing commit that says
+   `Gate: explanatory` may be pushed beside it: a dispatch is not
+   cancelled by a push. A run that failed only in timing, every board leg
+   passed, is not a boards failure: read the timing log, and if it reads
+   as noise `item.py boards ITEM --rerun-failed --watch` re-runs only the
+   failed jobs instead of dispatching again.
 5. **Close** by [the checklist](../../../docs/process.md#closing-an-item):
    activations against the item's base, the passes it lists, the `Done:`
    paragraph naming the findings fixed, rows deleted or filed, the
@@ -67,8 +72,16 @@ what a successor needs is never only in the conversation.
    gate on the head passed with every job passed or skipped, a boards run
    passed on the same tree or before only explanatory commits, and the item
    is complete in the candidate (`--partial` for work short of the close).
-   If main moved, merge `origin/main`, push and gate the merged tree. An
-   item that says `Promotion: maintainer` stops at the passed candidate.
+   If main moved, `item.py merge-main ITEM`, once: it takes the
+   clone's promotion token, merges `origin/main`, and declares the merge
+   `Gate: explanatory` when everything main brings is declared and the
+   gate key is unchanged, so the pass and the boards are reused; otherwise
+   push and gate the merged tree and dispatch its boards. If another item
+   holds the token, keep working and wait with `item.py queue --wait
+   ITEM` rather than merging twice. Promotion takes the token too, and
+   main's gate ending or `finish` gives it up. An item that says
+   `Promotion: maintainer` stops at the passed candidate and gives the
+   token up with `item.py queue --release ITEM`.
 7. **Follow main**: `item.py gate ITEM --main --watch`. A failure there is
    investigated, never rerun blindly.
 8. **Finish**: `item.py finish ITEM`, from the worktree or anywhere in the
