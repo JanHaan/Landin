@@ -1313,6 +1313,8 @@ package body Landin.Backend.X86_64.Allocation is
                  Landin.IR.Result_Of (Of_Unit, Item, Value)
                    in Landin.Types.Float_Name
                  and then Op in Landin.IR.Number | Landin.IR.Load
+                   | Landin.IR.Load_Element | Landin.IR.Load_Field
+                   | Landin.IR.Load_Indirect | Landin.IR.Load_Datum
                    | Landin.IR.Add | Landin.IR.Subtract
                    | Landin.IR.Multiply | Landin.IR.Divide
                    | Landin.IR.Conversion | Landin.IR.Call
