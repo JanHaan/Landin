@@ -363,6 +363,15 @@ it there from its own executable, so a program anywhere imports it with no
 option. `.#refine-bin` fetches 0.2.10. Archives hold the library from 0.2.8
 on; an archive from 0.2.7 or earlier holds `refine` alone.
 
+Outside nix, the same archives are installed by Homebrew,
+`brew install janhaan/tap/landin` and `brew upgrade landin`, on
+`aarch64-darwin`, `aarch64-linux` and `x86_64-linux`; the formula lives in
+the maintainer's tap, outside this repository and its gate, and needs the
+Xcode command-line tools on macOS and the system's GCC driver on Linux to
+link, as an unpacked archive does. What the formula depends on in a
+release, and the step that moves it, are in
+[the gate reference](process.md#the-mechanical-gate)'s release paragraphs.
+
 The shell sets `LANDIN_BUILD_TAG=nix-${system}`: `nix-x86_64-linux`,
 `nix-aarch64-linux` or `nix-aarch64-darwin`. Shells sharing a checkout
 therefore use separate object trees and locks, apart from the other

@@ -43,11 +43,36 @@ application is at the other. This is what it is like to write:
 ## Installing
 
 `refine` is one executable, with its standard library in a directory
-beside it. There are three ways to get both: from a release, with nix, or
-from source.
+beside it. There are four ways to get both: with Homebrew, from a release,
+with nix, or from source.
 
 Use 0.2.9 or later: [the first program](#your-first-program) needs
 `refine run` and `hosted/blocking`, both newer than 0.2.8.
+
+### With Homebrew
+
+Homebrew installs `refine` on a Mac with Apple Silicon, and on Linux
+x86-64 and arm64. An Intel Mac is not covered.
+
+```sh
+brew install janhaan/tap/landin
+```
+
+`brew upgrade landin` updates it and `brew uninstall landin` removes it.
+The formula moves to a new release within a day of its publication.
+
+This installs the release archive for your platform, the one
+[From a release](#from-a-release) describes. Its `bin/refine`,
+`libexec/landin` and `lib/landin` stay together in Homebrew's own
+directory for the package, and Homebrew puts `refine` on your `PATH`.
+
+Linking, and so `refine run`, needs Xcode's command-line tools on macOS
+and the system's GCC driver on Linux. See
+[the linker on Linux and macOS](#the-linker-on-linux-and-macos).
+
+The `library: ` line of `refine version` then names the library inside
+that directory, for example
+`/opt/homebrew/Cellar/landin/VERSION/lib/landin` on a Mac.
 
 ### From a release
 
@@ -163,7 +188,8 @@ macOS links through the Xcode command-line tools.
 Run `refine version`. It names the compiler: a release, or
 `refine dev (01234567)` for a build from a clone. Its `library: ` line
 names the directory the standard library is read from: the archive's
-`lib/landin`, or the clone. The lines under it name the `citations.txt`
+`lib/landin`, the one in Homebrew's directory for the package, or the
+clone. The lines under it name the `citations.txt`
 that `refine explain` reads, say whether it can be read, and list each
 command shipped beside `refine` with its path.
 
