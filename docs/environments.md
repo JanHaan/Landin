@@ -349,11 +349,9 @@ GNAT 16.1.0 with GPRbuild 26.0.0.
 
 It is defined for the three systems the pins carry checksums for,
 `x86_64-linux`, `aarch64-linux` and `aarch64-darwin`. The prebuilt
-`.#refine-bin` exists only for a system a release has published an asset
-for, with its hash recorded in the flake, so `aarch64-linux` has the shell
-and the source build `.#refine` and gains the prebuilt compiler with the
-first release that publishes it. The aarch64-linux and aarch64-darwin
-outputs are evaluated on x86-64 by the gate's `flake` job, and only the
+`.#refine-bin` exists for a system a release has published an asset for,
+with its hash recorded in the flake; since 0.2.10 that is all three. The
+aarch64-linux and aarch64-darwin outputs are evaluated on x86-64 by the gate's `flake` job, and only the
 x86-64 ones are built there (D585); the aarch64-linux shell is not yet built
 on arm64 hardware. That job is the whole of Nix CI.
 
@@ -362,6 +360,15 @@ Both packages install the standard library beside the compiler, as
 it there from its own executable, so a program anywhere imports it with no
 option. `.#refine-bin` fetches 0.2.10. Archives hold the library from 0.2.8
 on; an archive from 0.2.7 or earlier holds `refine` alone.
+
+Outside nix, the same archives are installed by Homebrew,
+`brew install janhaan/tap/landin` and `brew upgrade landin`, on
+`aarch64-darwin`, `aarch64-linux` and `x86_64-linux`; the formula lives in
+the maintainer's tap, outside this repository and its gate, and needs the
+Xcode command-line tools on macOS and the system's GCC driver on Linux to
+link, as an unpacked archive does. What the formula depends on in a
+release, and the step that moves it, are in
+[the gate reference](process.md#the-mechanical-gate)'s release paragraphs.
 
 The shell sets `LANDIN_BUILD_TAG=nix-${system}`: `nix-x86_64-linux`,
 `nix-aarch64-linux` or `nix-aarch64-darwin`. Shells sharing a checkout

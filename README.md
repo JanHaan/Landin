@@ -43,11 +43,36 @@ application is at the other. This is what it is like to write:
 ## Installing
 
 `refine` is one executable, with its standard library in a directory
-beside it. There are three ways to get both: from a release, with nix, or
-from source.
+beside it. There are four ways to get both: with Homebrew, from a release,
+with nix, or from source.
 
 Use 0.2.9 or later: [the first program](#your-first-program) needs
 `refine run` and `hosted/blocking`, both newer than 0.2.8.
+
+### With Homebrew
+
+Homebrew installs `refine` on a Mac with Apple Silicon, and on Linux
+x86-64 and arm64. An Intel Mac is not covered.
+
+```sh
+brew install janhaan/tap/landin
+```
+
+`brew upgrade landin` updates it and `brew uninstall landin` removes it.
+The formula moves to a new release within a day of its publication.
+
+This installs the release archive for your platform, the one
+[From a release](#from-a-release) describes. Its `bin/refine`,
+`libexec/landin` and `lib/landin` stay together in Homebrew's own
+directory for the package, and Homebrew puts `refine` on your `PATH`.
+
+Linking, and so `refine run`, needs Xcode's command-line tools on macOS
+and the system's GCC driver on Linux. See
+[the linker on Linux and macOS](#the-linker-on-linux-and-macos).
+
+The `library: ` line of `refine version` then names the library inside
+that directory, for example
+`/opt/homebrew/Cellar/landin/VERSION/lib/landin` on a Mac.
 
 ### From a release
 
@@ -62,8 +87,21 @@ system's standard loader, `/lib64/ld-linux-x86-64.so.2` on x86-64 and
 `/lib/ld-linux-aarch64.so.1` on arm64. On NixOS or a musl distribution,
 install with nix or build from source.
 
-Each archive is attested: the release workflow built it from its tag. With
-the GitHub CLI, check a downloaded archive before you unpack it:
+Beside each archive is `landin-VERSION-PLATFORM.tar.gz.sha256`, one line
+in `sha256sum`'s own format: `SUM  landin-VERSION-PLATFORM.tar.gz`.
+Download it into the same directory as the archive and check the archive
+against it:
+
+```sh
+sha256sum -c landin-VERSION-PLATFORM.tar.gz.sha256        # Linux
+shasum -a 256 -c landin-VERSION-PLATFORM.tar.gz.sha256    # macOS
+```
+
+It prints `OK` after the file name when the archive arrived whole and
+unchanged. It does not say who built it.
+
+The attestation does: the release workflow built each archive from its
+tag. With the GitHub CLI, check a downloaded archive before you unpack it:
 
 ```sh
 gh attestation verify landin-VERSION-PLATFORM.tar.gz --repo 701-dev/Landin \
@@ -163,7 +201,8 @@ macOS links through the Xcode command-line tools.
 Run `refine version`. It names the compiler: a release, or
 `refine dev (01234567)` for a build from a clone. Its `library: ` line
 names the directory the standard library is read from: the archive's
-`lib/landin`, or the clone. The lines under it name the `citations.txt`
+`lib/landin`, the one in Homebrew's directory for the package, or the
+clone. The lines under it name the `citations.txt`
 that `refine explain` reads, say whether it can be read, and list each
 command shipped beside `refine` with its path.
 
