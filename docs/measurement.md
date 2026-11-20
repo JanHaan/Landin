@@ -247,7 +247,7 @@ the lanes' tools. Wall time and board cycles run on the weekly schedule
 and on a dispatch, `scope=boards` included, in timing jobs beside the
 boards. The pilot over the whole matrix, recorded in
 `compiler/tests/measure/pilot.json`, gives each job's minutes, the jobs it
-adds against the account's limit of 20 concurrent jobs and 5 macOS, and
+adds against the limit it ran under, 20 concurrent jobs and 5 macOS, and
 each class's noise, before any tolerance is enforced.
 
 ## Reports

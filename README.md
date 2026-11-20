@@ -52,7 +52,7 @@ Use 0.2.9 or later: [the first program](#your-first-program) needs
 ### From a release
 
 The archive for your platform on
-[the releases page](https://github.com/JanHaan/Landin/releases) holds
+[the releases page](https://github.com/701-dev/Landin/releases) holds
 `bin/refine`, the commands it runs from `libexec/landin` and the library
 under `lib/landin`, with no top-level directory. Unpack it into a directory of its own and put its `bin` on your
 `PATH`.
@@ -66,10 +66,15 @@ Each archive is attested: the release workflow built it from its tag. With
 the GitHub CLI, check a downloaded archive before you unpack it:
 
 ```sh
-gh attestation verify landin-VERSION-PLATFORM.tar.gz --repo JanHaan/Landin \
-  --signer-workflow JanHaan/Landin/.github/workflows/release.yml \
+gh attestation verify landin-VERSION-PLATFORM.tar.gz --repo 701-dev/Landin \
+  --signer-workflow 701-dev/Landin/.github/workflows/release.yml \
   --source-ref refs/tags/vVERSION --deny-self-hosted-runners
 ```
+
+Releases up to 0.2.10 were built before the repository moved from the
+account `JanHaan` to the organisation `701-dev`, and their attestations
+name the old owner: for those, write `JanHaan` for `701-dev` in both
+options.
 
 The archive leaves the compiler's debug information out and publishes it
 beside it as `landin-VERSION-PLATFORM-debug.tar.gz`. You need that file
@@ -82,7 +87,7 @@ first build also fetches the pinned toolchain, which takes a few minutes:
 
 ```sh
 nix --extra-experimental-features 'nix-command flakes' \
-    profile install github:JanHaan/Landin
+    profile install github:701-dev/Landin
 ```
 
 You can leave the `--extra-experimental-features` option out once
@@ -105,7 +110,7 @@ You need these tools first:
 - on a Mac, Xcode's command-line tools as well.
 
 ```sh
-git clone https://github.com/JanHaan/Landin
+git clone https://github.com/701-dev/Landin
 cd Landin
 . environments/pins.sh
 landin_install_toolchain "$HOME/landin-toolchain" x86_64-linux
@@ -344,15 +349,15 @@ run records and what the gate checks for each target.
 
 Ask questions, report bugs and friction, and propose ideas or changes to
 the language in
-[Discussions](https://github.com/JanHaan/Landin/discussions). Each
+[Discussions](https://github.com/701-dev/Landin/discussions). Each
 category's form says what a report needs.
 
 - A typo, a mistake in the documentation, a refusal that did not help or
   an idea each get a thread of their own.
 - Put suggestions for the next roadmap in
-  [its standing thread](https://github.com/JanHaan/Landin/discussions/2).
+  [its standing thread](https://github.com/701-dev/Landin/discussions/2).
 - Report a security vulnerability privately, through
-  [GitHub's private reporting](https://github.com/JanHaan/Landin/security/advisories/new),
+  [GitHub's private reporting](https://github.com/701-dev/Landin/security/advisories/new),
   and never in a discussion.
 
 The repository has no issue tracker: a discussion that leads to work

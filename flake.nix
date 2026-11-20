@@ -655,7 +655,7 @@
 
             src = pkgs.fetchurl {
               url =
-                "https://github.com/JanHaan/Landin/releases/download/"
+                "https://github.com/701-dev/Landin/releases/download/"
                 + "v${releaseVersion}/landin-${releaseVersion}-${system}.tar.gz";
               sha256 = releaseHashes.${system};
             };

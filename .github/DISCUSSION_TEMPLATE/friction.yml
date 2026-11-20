@@ -7,7 +7,7 @@ body:
         tool did nothing wrong: friction is a finding, not a complaint.
 
         A maintainer records each finding in the usability register of
-        [ROADMAP.md](https://github.com/JanHaan/Landin/blob/main/ROADMAP.md#register)
+        [ROADMAP.md](https://github.com/701-dev/Landin/blob/main/ROADMAP.md#register)
         and links the record here.
   - type: dropdown
     id: kind

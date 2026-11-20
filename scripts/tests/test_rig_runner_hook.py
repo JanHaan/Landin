@@ -16,7 +16,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'environments/rig-runner'))
 import hook  # noqa: E402
 
-REPOSITORY = 'JanHaan/Landin'
+REPOSITORY = '701-dev/Landin'
 WORKFLOW = '.github/workflows/gate.yml'
 ARGS = ['started', '--repository', REPOSITORY, '--workflow', WORKFLOW, '--actor', 'JanHaan',
         '--grace', '0']
@@ -144,7 +144,7 @@ class Started(unittest.TestCase):
         self.assertRefused(self.job(payload=[]), 'not an object')
 
     def test_a_payload_the_rules_cannot_read_is_refused_and_not_a_traceback(self):
-        payload = {'repository': 'JanHaan/Landin', 'ref': 'refs/heads/main'}
+        payload = {'repository': '701-dev/Landin', 'ref': 'refs/heads/main'}
         self.assertRefused(self.job(payload=payload), 'could not be judged')
 
     def test_a_job_the_log_cannot_record_is_refused(self):

@@ -5,14 +5,14 @@ body:
         For changes to the language itself: its syntax, its rules and what
         they mean. Library, tooling and target ideas belong in **Ideas**.
 
-        [spec.md](https://github.com/JanHaan/Landin/blob/main/spec.md) is the
+        [spec.md](https://github.com/701-dev/Landin/blob/main/spec.md) is the
         normative specification and
-        [tour.md](https://github.com/JanHaan/Landin/blob/main/tour.md)
+        [tour.md](https://github.com/701-dev/Landin/blob/main/tour.md)
         explains it by example. Several ideas have been tried and dropped
         already: see the tour's
-        [WHAT WAS TRIED AND DROPPED](https://github.com/JanHaan/Landin/blob/main/tour.md#what-was-tried-and-dropped)
+        [WHAT WAS TRIED AND DROPPED](https://github.com/701-dev/Landin/blob/main/tour.md#what-was-tried-and-dropped)
         and the roadmap's
-        [retained positions](https://github.com/JanHaan/Landin/blob/main/ROADMAP.md#retained-positions).
+        [retained positions](https://github.com/701-dev/Landin/blob/main/ROADMAP.md#retained-positions).
         A proposal that revisits one is welcome when it brings new evidence.
   - type: dropdown
     id: kind
