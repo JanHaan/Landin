@@ -1209,10 +1209,10 @@ Then check it: the tap's `main` gains the commit `Landin formula X.Y.Z`,
 and on a Mac with Apple Silicon and on Linux `brew update && brew upgrade
 landin` (or `brew install janhaan/tap/landin`) followed by `brew test
 landin` passes; the formula's test runs `refine version`, which must name
-X.Y.Z, and `refine run` of the README's first program. That test reaches
-no split command, so also run `refine svd --help` on both: it is found in
-the keg's `libexec/landin` only through `refine`'s resolved path. The tap
-is the maintainer's own repository, outside this one's gate.
+X.Y.Z, `refine svd --help`, a split command found in the keg's
+`libexec/landin` only through `refine`'s resolved path, and `refine run`
+of the README's first program. The tap is the maintainer's own
+repository, outside this one's gate.
 
 The formula depends on these properties of a release, so a change to any
 of them changes the formula first, in the tap:
