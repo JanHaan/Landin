@@ -232,7 +232,11 @@ Depends on: none
                 ("Continuous: %s" % THIRD, "malformed Continuous"),
                 ("Continuous: R%d.%d onward" % (4, 90), "unknown"),
                 ("Continuous: %s onward\nContinuous: %s onward"
-                 % (THIRD, THIRD), "at most one Continuous")):
+                 % (THIRD, THIRD), "at most one Continuous"),
+                ("Continuous: %s onward, %s onward" % (SECOND, THIRD),
+                 "names phase R%d twice" % 4),
+                ("Continuous: %s onward, " % THIRD,
+                 "malformed Continuous")):
             with self.subTest(line=line):
                 with self.assertRaisesRegex(ValueError, expected):
                     CHECK.execution_order(roadmap.replace(
@@ -243,6 +247,24 @@ Depends on: none
                 "Execution order: %s, %s" % (FIRST, SECOND),
                 "Execution order: R%d" % 4), [FIRST, SECOND, THIRD])
 
+
+    def test_the_continuous_lane_takes_a_range_from_each_phase(self):
+        #  Two phases each keep a basis in the serial lane and a range of
+        #  continuous items after it; the lane holds both ranges.
+        later = "R%d.%d" % (5, 20)
+        roadmap = BETWEEN_ITEMS + (
+            "\n### %s — Start the container program\n\n"
+            "Status: planned\nDepends on: %s\n"
+            "\n### %s — Measure the library\n\n"
+            "Status: planned\nDepends on: %s\n"
+            % (THIRD, FIRST, later, FIRST))
+        roadmap = roadmap.replace(
+            "Execution order: R%d" % 4,
+            "Execution order: %s, %s\nContinuous: %s onward, %s onward"
+            % (FIRST, SECOND, THIRD, later))
+        order = CHECK.execution_order(roadmap,
+                                      [FIRST, SECOND, THIRD, later])
+        self.assertEqual(order, [FIRST, SECOND, THIRD, later])
     def test_site_refuses_duplicate_item_identities(self):
         duplicate = BETWEEN_ITEMS + BETWEEN_ITEMS.split("\n\n", 1)[1]
         with self.assertRaisesRegex(SystemExit, "repeats"):

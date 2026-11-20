@@ -73,23 +73,26 @@ item of a serial phase whose dependencies are complete may start beside
 it, as R17.50, which depends on nothing, ran beside R17.10 to R17.30; it
 is `active` while it runs, and the pointers keep naming the serial lane's
 item. The site's front page shows that item first and every other active
-item beside it. The continuous lane holds R16's continuous items. R16's
-basis is R16.10, in the serial lane; the continuous items take the next
-ten after the last basis item and count up by one from R16.20. Each depends only
-on the basis, may run beside anything, and is never the
-next item; any number of them may be active. A phase that declares a
+item beside it. The continuous lane holds R16's and R22's continuous
+items. Each of the two phases has a basis in the serial lane, R16.10 and
+R22.80; its continuous items take the next ten after the last basis item
+and count up by one, R16.20 onward and R22.90 onward. Each depends only on
+its phase's basis, may run beside anything, and is never the next item;
+any number of them may be active. A phase that declares a
 breaking window (R19, then R20) keeps its serial items on one integration
 branch and promotes them once, at its gate; a continuous item lands on
 main meanwhile and the branch takes it.
 
 ```text
-Execution order: R17, R16.10, R18, R19, R20, R21, R22
-Continuous: R16.20 onward
+Execution order: R17, R16.10, R18, R19, R20, R21, R22.10, R22.11, R22.13, R22.20, R22.21, R22.22, R22.23, R22.30, R22.40, R22.50, R22.60, R22.61, R22.62, R22.63, R22.12, R22.14, R22.15, R22.16, R22.17, R22.18, R22.19, R22.70, R22.71, R22.72, R22.73, R22.74, R22.75, R22.76, R22.80
+Continuous: R16.20 onward, R22.90 onward
 ```
 
 **Gates.** A phase's gate cannot be claimed until all its items have their
-exit evidence. R16's gate is different: once its basis is complete it is a
-standing invariant every later push must keep, not a milestone. An item is
+exit evidence, its continuous items apart. R16's gate is different: once
+its basis is complete it is a standing invariant every later push must
+keep, not a milestone; R22's is claimed with its serial items and then
+holds the library's baselines in the same way. An item is
 complete when its exit evidence exists: the complete gate passed on the
 completing commit and, for a claim about a host the gate does not run, a
 named run recorded in the item. It then gets a short `Done:` paragraph; the
@@ -1328,38 +1331,311 @@ runners.
 
 ## R22 — Library additions
 
-What a newcomer expects to find, written against the library R20 left.
+What a newcomer expects to find, written against the library R20 left: a
+mathematical basis broad enough that people in most fields need no
+foreign library first, float text, Unicode, encodings, locale formatting
+and regular expressions, the five programs the Benchmarks Game comparison
+lacks, and at the end a measured basis for the library's optimization
+with a continuous lane, as R16 has for code generation.
+
 Placement, data and evidence for each are in `library-inventory.md`'s
 appendix B §5. A table derived from outside data (the Unicode Character
 Database, the WHATWG and IANA encodings, CLDR) comes from a generator
 program with a pinned input, its output checked in and held current by a
 check, the route `refine svd` and `scripts/linux_syscalls.py` take. No
 build tool is assumed and nothing runs at compile time. Each module has a
-consumer outside its fixtures.
+consumer outside its fixtures: a port, another module, or an example
+program in `examples.md`.
 
-### R22.10 — Math
+The mathematics is divided by subject and by what depends on what.
+R22.10 to R22.19 are the numbers and linear algebra: elementary
+functions, complex numbers, special functions, exact big numbers, fixed
+point, dense matrices, linear systems, eigenvalues, small geometry and
+sparse matrices. R22.70 to R22.76 are the numerical methods built on
+them. Coverage is broad, not complete: each item says what it covers and
+what it leaves out, and a part left out waits for a consumer. C's
+`<math.h>`, GMP, BLAS, LAPACK, Eigen, OpenFOAM and mlpack are checks of
+breadth, not interfaces to copy; nothing is bound from them and no
+C-callable BLAS or LAPACK names are offered.
+
+Every mathematical module is freestanding in `core/*`: storage is the
+caller's, scratch comes from a passed allocator or a caller buffer whose
+size the routine states, and nothing keeps global state. Each
+floating-point routine comes in `f32` and `f64` on every target, through soft float where there
+is no unit; whether it is written once over a concept both meet is R20's
+answer on `type is C`. Accuracy is stated per routine and pinned against
+an oracle computed outside the program, and each module's image size on
+Cortex-M0's soft float is measured. Everything is single-threaded.
+
+### R22.10 — Elementary functions
 
 Status: planned
 Depends on: R20
 
-`core/math`, SR-96: the elementary functions over `f32` and `f64`, written in
-Landin so results agree across targets, with `sqrt` and `fma` as
-instructions where IEEE makes them exact. From R20: the naming of its
-module and routines, and whether floats get ordering evidence.
-Exit evidence: results against a correctly rounded oracle on every
-target; image size on Cortex-M0's soft float measured.
+`core/math`, SR-96: the functions of C's `<math.h>` that most programs
+use, over `f32` and `f64`, written in Landin so that results agree across
+targets. Classification and manipulation of the representation, rounding
+and remainders; `sqrt` and `fma` as instructions where the target has
+them, since IEEE makes both exact, through a builtin, which D630 has so
+far refused, or an assembly block per target, decided here; `cbrt` and
+`hypot`; exponentials and logarithms with
+their `expm1` and `log1p` forms; powers; the trigonometric and hyperbolic
+functions and their inverses; `erf`, `erfc`, `tgamma` and `lgamma`; the
+constants. Ported from musl's and FreeBSD's msun or CORE-MATH, each
+function's error in units in the last place stated. From R20: the naming
+of its module and routines, and whether floats get ordering evidence.
+
+Leaves out: correct rounding where it is not cheap, rounding modes other
+than to nearest and the floating-point environment's flags, C23's
+pi-scaled, narrowing and decimal functions, and any other format.
+
+Exit evidence: every function within its stated error of MPFR's
+correctly rounded values, one-argument `f32` functions exhaustively and
+the rest on a random and a hard-case set, on every target; image size on
+Cortex-M0's soft float measured.
+
+### R22.11 — Complex numbers
+
+Status: planned
+Depends on: R22.10
+
+A complex number over `f32` and `f64`: arithmetic with C's Annex G
+treatment of infinities, absolute value, argument and polar form, and the
+complex elementary functions: `exp`, `log`, powers, `sqrt`, and the
+trigonometric and hyperbolic functions and their inverses. R22.17's
+eigenvalues, R22.70's polynomial roots and R22.73's transforms use it.
+
+Leaves out: complex special functions; matrices of complex elements, Q-67.
+
+Exit evidence: each function within its stated error of MPC's values,
+with branch cuts and signed zeros as Annex G gives them, on every target.
+
+### R22.12 — Special functions
+
+Status: planned
+Depends on: R22.10
+
+The functions statistics, physics and engineering reach for after the
+elementary ones: the incomplete gamma and beta functions and their
+inverses, the logarithm of the beta function, the digamma function, the
+inverse error function, the exponential integral, and the Bessel
+functions of the first and second kind and their modified forms for real
+order and argument. R22.74's distributions stand on them.
+
+Leaves out: elliptic integrals and functions, hypergeometric and Airy
+functions, the zeta function, spherical harmonics, and complex arguments.
+
+Exit evidence: each function within its stated error of MPFR's or
+another higher-precision reference's values over its stated domain, on
+every target.
+
+### R22.13 — Big integers and rationals
+
+Status: planned
+Depends on: R20
+
+Arbitrary-precision arithmetic in two layers. The lower works on
+caller-supplied limbs with no allocator, as GMP's `mpn` does, so that
+firmware and R22.20's parser can use it: addition, subtraction,
+multiplication from schoolbook through Karatsuba to Toom-3, division with
+remainder, shifts, comparison, and decimal and hexadecimal text. The
+upper is a signed integer and a rational that grow through the caller's
+allocator: arithmetic, floor and truncating division, powers, integer
+roots, the greatest common divisor, modular inverse and exponentiation,
+bit operations, and conversion to and from the machine integers and
+floats with stated rounding. Q-65 asks whether arbitrary-precision
+floating point comes too.
+
+Leaves out: arbitrary-precision floating point, FFT multiplication and
+the Toom variants above three, primality proofs and factoring, and
+constant-time operations, since Landin writes no cryptography.
+
+Exit evidence: an oracle set computed by another implementation passes
+on every target; multiplication and division timed from one limb to a
+million bits; the lower layer's image size on Cortex-M0 measured.
+
+### R22.14 — Fixed-point arithmetic
+
+Status: planned
+Depends on: R22.10
+
+For targets without a float unit, the Q15 and Q31 formats firmware signal
+processing uses: saturating and rounding arithmetic, conversion to and
+from floats, square root, reciprocal, the trigonometric functions, `exp`
+and `log`, and dot products and FIR filters, which R22.73's fixed-point
+transforms use. Q-66 asks whether this item stays.
+
+Leaves out: other Qm.n formats and fixed-point matrix factorizations.
+
+Exit evidence: each operation within its stated error of an exact or
+MPFR reference on every target; its cycles against the same routine in
+soft float recorded on Cortex-M0 on the rig.
+
+### R22.15 — Dense vectors and matrices
+
+Status: planned
+Depends on: R22.10
+
+The dense array as linear algebra sees it: a vector or matrix as a view
+over caller storage, with rows, columns and strides in either order, and
+transposed and sub-matrix views without copying; element-wise operations,
+reductions and norms; and the products everything after it stands on, in
+the breadth of the BLAS's three levels: scaled sums and dot products,
+matrix-vector products and rank-one updates, matrix products, triangular
+products and solves, and symmetric rank-k updates. The matrix product is
+blocked and packed for the cache from the start, the established
+strategy. Small fixed-size vectors are R22.18's.
+
+Leaves out: banded and packed storage, complex elements (Q-67),
+extended-precision accumulation, arrays of more than two dimensions, and
+lazily fused expressions, which need templates Landin does not have.
+
+Exit evidence: the cases of BLAS's own test programs translated as a
+fixture, every test ratio under their threshold of 16, on every target;
+the `f64` matrix product at n=1000 timed against OpenBLAS on one core.
+
+### R22.16 — Linear systems and least squares
+
+Status: planned
+Depends on: R22.15
+
+The factorizations and what they solve: LU with partial pivoting,
+Cholesky, symmetric indefinite LDLᵀ with Bunch–Kaufman pivoting, QR by
+Householder reflections with and without column pivoting, and the
+complete orthogonal factorization; solving for one or many right-hand
+sides, the determinant, the inverse and condition estimates; linear least
+squares for full-rank and rank-deficient problems, minimum-norm
+solutions included; tridiagonal systems. Blocked over R22.15's products
+as LAPACK's are.
+
+Leaves out: banded and packed forms beyond tridiagonal, constrained and
+generalized least squares, equilibration, extended-precision refinement,
+updating a factorization after a low-rank change, and complex matrices
+(Q-67).
+
+Exit evidence: LAPACK's scaled residual tests for these families, such as
+`norm(A - LU) / (n norm(A) eps)`, under its threshold of 20 over its generator's matrix
+kinds, on every target; n=1000 timed against LAPACK over OpenBLAS on one
+core.
+
+### R22.17 — Eigenvalues and singular values
+
+Status: planned
+Depends on: R22.16, R22.11
+
+The symmetric eigenproblem by tridiagonal reduction and implicit QL or
+divide and conquer; the singular value decomposition by bidiagonal
+reduction; the general eigenproblem by balancing, Hessenberg reduction
+and the shifted QR algorithm, its eigenvalues as R22.11's complex
+numbers; eigenvectors on request. On them, the functions of a matrix
+most fields use: the exponential by scaling and squaring, the square
+root, the pseudo-inverse and the rank.
+
+Leaves out: generalized problems over a pair of matrices and the
+generalized SVD, eigensolvers for banded and sparse matrices, selecting
+eigenvalues by range, reordering a Schur form, the CS decomposition,
+other functions of a matrix, and complex matrices (Q-67).
+
+Exit evidence: LAPACK's residual and orthogonality tests for its
+symmetric, general and SVD paths under its threshold, on every target;
+times at n=1000 recorded against LAPACK over OpenBLAS on one core.
+
+### R22.18 — Small vectors, rotations and transforms
+
+Status: planned
+Depends on: R22.10
+
+Vectors and matrices of two, three and four elements as plain values,
+the cross product, rotations as matrices, quaternions and axis and angle
+with their conversions and interpolation, rigid and affine transforms,
+and a perspective projection: what graphics, robotics and a firmware
+program fusing an inertial sensor's readings reach for, with no
+allocator.
+
+Leaves out: computational geometry (hulls, triangulation, intersection),
+dual quaternions and camera models beyond the perspective projection.
+
+Exit evidence: the identities pinned within stated error on every
+target, a rotation's inverse its transpose and a quaternion's round trip
+among them; image size on Cortex-M0 measured.
+
+### R22.19 — Sparse matrices and iterative solvers
+
+Status: planned
+Depends on: R22.15
+
+Sparse matrices in compressed row and column form built from triplets,
+their products with dense vectors and matrices, and the iterative
+solvers for the systems discretized fields and graphs give: conjugate
+gradients, BiCGSTAB and restarted GMRES, with Jacobi, symmetric
+Gauss–Seidel and zero-fill incomplete Cholesky and LU preconditioners.
+Q-68 asks whether direct factorizations come too.
+
+Leaves out: sparse direct factorizations and fill-reducing orderings,
+algebraic multigrid, sparse eigensolvers, and block and hierarchical
+formats.
+
+Exit evidence: each solver reaching its stated residual on a set of
+matrices from the SuiteSparse collection, fetched by hash, on the hosted
+targets, and on a small Poisson problem on Cortex-M0; iterations and
+times recorded.
 
 ### R22.20 — Float text
 
 Status: planned
-Depends on: R20
+Depends on: R22.13
 
-Shortest round-trip printing and correctly rounded parsing of `f32` and
-`f64` in `core/text`, SR-97, with floats made `formattable`; it uses hexadecimal
-float literals as R19.10 left them (SC-29). From R20: the byte-sink shape
+Shortest round-trip writing, correctly rounded fixed-precision writing
+and correctly rounded parsing of `f32` and `f64` in `core/text`, SR-97,
+with floats made `formattable`; the parser's slow path uses R22.13's
+lower layer. With them SR-285: width, padding, alignment, radix and a
+float's precision inside a template's `{}`, Rust's format specification
+the reference and the spelling decided here. It uses hexadecimal float
+literals as R19.10 left them (SC-29). From R20: the byte-sink shape
 `formattable` writes to and the names of its failures.
+
 Exit evidence: every `f32` round-tripped exhaustively and `f64` against
-an oracle; image size on Cortex-M0 measured.
+an oracle; fixed-precision output byte-equal to C's `printf` over an
+oracle set; `docs/from-c.md`'s `printf` entry written with the template;
+image size on Cortex-M0 measured.
+
+### R22.21 — n-body and spectral-norm ported
+
+Status: planned
+Depends on: R22.10, R22.20
+
+The Benchmarks Game's two numeric programs, ported beside its five
+already in the repository, with R22.10's `sqrt` and R22.20's nine-place
+writing, from the game's single-threaded programs.
+
+Exit evidence: both as runtime fixtures printing the game's small-input
+output (n-body within its `ndiff -abserr 1e-8`, held byte for byte), the
+digests pinned in `check.py`, both in `examples.md` and in
+`workloads.json`'s hosted set.
+
+### R22.22 — k-nucleotide ported
+
+Status: planned
+Depends on: R22.20
+
+Counted with `core/map`, as the game requires the library's table: the
+key type declares its own `hashable` with a cheap mixer, as the game
+allows, while the map keeps D1360's keyed SipHash; percentages written to
+three places by R22.20.
+
+Exit evidence: the game's output for its 1,000 input as a runtime
+fixture, pinned and published as R22.21's are; the time at 25,000,000
+recorded with the map's share measured.
+
+### R22.23 — pidigits ported
+
+Status: planned
+Depends on: R22.13
+
+Gibbons' spigot over R22.13's integers, with no GMP.
+
+Exit evidence: the game's output for 30 digits as a runtime fixture,
+pinned and published as R22.21's are; 10,000 digits timed.
 
 ### R22.30 — Text and Unicode
 
@@ -1393,9 +1669,10 @@ Depends on: R22.20, R22.30
 
 Numbers and text formatted for a locale, an explicit value from a BCP 47
 identifier and never global state, from generated CLDR data a program
-uses in part: SR-98's locale half, and SR-285's width, padding and radix
-in a template, whose spelling is decided here. From R20: the answer on a
-locale as an explicit value, and how formatting evidence takes one.
+uses in part: SR-98's locale half, with R22.20's template width and
+precision applied to a locale's digits and separators. From R20: the
+answer on a locale as an explicit value, and how formatting evidence
+takes one.
 Exit evidence: CLDR's own test data pass for the locales generated; a
 program that uses one locale carries only its data.
 
@@ -1404,13 +1681,25 @@ program that uses one locale carries only its data.
 Status: planned
 Depends on: R22.30
 
-`core/regex`, SR-100: patterns compiled at run time with the caller's allocator,
-matched in linear time, no backreferences; Unicode classes from R22.30's
-tables. From R20: the allocator and capability shape, and how a match
-position is named.
+`core/regex`, SR-100: patterns compiled at run time with the caller's
+allocator and matched in linear time; Unicode classes from R22.30's
+tables; a match's position and captures, iteration over the matches, and
+replacing every match from a template. Built on the established
+strategies, the basis R22.80 later measures: a literal prefilter for a
+leading byte, a substring or a small set of literals; a one-pass engine
+where the pattern allows; a lazy DFA with a bounded cache, run in reverse
+for a match's start; and a Pike VM for captures and as the fallback,
+chosen per pattern as RE2 and Rust's `regex` choose. From R20: the
+allocator and capability shape, and how a match position is named.
+
+Leaves out: backreferences and look-around, which lose linear time; a
+DFA compiled ahead of time; vectorised literal search; sets of patterns.
+
 Exit evidence: linear time pinned on adversarial patterns on a hosted
-target and on Cortex-M0; an external conformance suite passes for the
-supported syntax.
+target and on Cortex-M0; Rust's `regex` test suite passing for the
+supported syntax, regex-redux's patterns among the cases; every engine
+checked against the Pike VM on generated patterns and inputs, as RE2's
+tester does.
 
 ### R22.61 — A finished `for` no longer holds its source
 
@@ -1441,9 +1730,216 @@ still refuses the release inside the body and one while a kept element
 views the list. Gate run 44525120865 (attempt 2; attempt 1's Darwin
 artifact upload failed on DNS) and boards run 44535495255 on f968ab7f3.
 
+### R22.62 — regex-redux ported
+
+Status: planned
+Depends on: R22.60
+
+The Benchmarks Game's regex program over `core/regex`, its five
+replacements by R22.60's replace-all.
+
+Exit evidence: the game's output for its 1,000 input as a runtime
+fixture, pinned and published as R22.21's are; 5,000,000 timed.
+
+### R22.63 — The ten programs measured
+
+Status: planned
+Depends on: R22.21, R22.22, R22.23, R22.62
+
+`docs/benchmarks.md` compares all ten programs of The Computer Language
+Benchmarks Game with the same languages, single-threaded as its method
+is, from a script kept in the repository that fetches the other
+languages' programs by hash and pins their toolchains, so that one
+command reproduces the table. The repository's documents call the game
+by its own name.
+
+Exit evidence: the script, the table it wrote for the ten, and its run
+recorded.
+
+### R22.70 — Functions of one variable
+
+Status: planned
+Depends on: R22.11
+
+Roots by bisection, Brent's method and bracketed Newton; minimization by
+golden section and Brent's method; numerical differentiation;
+quadrature by Gauss–Legendre and adaptive Gauss–Kronrod rules, over
+infinite intervals by substitution; interpolation by barycentric
+polynomials, cubic and monotone splines and tables; polynomials, their
+arithmetic and all their roots as R22.11's complex numbers; Chebyshev
+approximation.
+
+Leaves out: cubature in several dimensions, rational and minimax
+approximation, and symbolic differentiation.
+
+Exit evidence: each method on test problems with known answers within
+its stated tolerance on every target, its function evaluations recorded.
+
+### R22.71 — Optimization
+
+Status: planned
+Depends on: R22.16, R22.70
+
+Minimizing a function of many variables with line searches: BFGS,
+limited-memory BFGS with bounds, and nonlinear conjugate gradients;
+Nelder–Mead without derivatives; nonlinear least squares and curve
+fitting by Gauss–Newton and Levenberg–Marquardt; systems of nonlinear
+equations by Newton's method and Powell's hybrid method; dense linear
+programs by the simplex method. Derivatives come from the caller or by
+finite differences.
+
+Leaves out: general nonlinear constraints, integer and mixed-integer
+programming, global and stochastic methods, automatic differentiation,
+and conic and semidefinite programming.
+
+Exit evidence: the Moré–Garbow–Hillstrom problems and a set of small
+linear programs solved to stated tolerances on every target, evaluations
+recorded.
+
+### R22.72 — Differential equations
+
+Status: planned
+Depends on: R22.16, R22.70
+
+Initial value problems of ordinary differential equations: fixed-step
+Runge–Kutta, adaptive embedded pairs with dense output, an implicit
+method for stiff systems over R22.16's factorizations, symplectic
+integrators for mechanics, and events located by R22.70's roots.
+
+Leaves out: boundary value problems, delay, stochastic and
+differential-algebraic equations; partial differential equations are
+R22.75's.
+
+Exit evidence: problems with known solutions within tolerance, stiff
+problems such as Robertson's and van der Pol's among them, on every
+target; steps and evaluations recorded.
+
+### R22.73 — Fourier transforms and signals
+
+Status: planned
+Depends on: R22.11, R22.14
+
+The fast Fourier transform of any length, by mixed radix and Bluestein's
+algorithm, for complex and real data in one and two dimensions, with its
+inverse and the DCT-II and DCT-III; convolution and correlation directly
+and by transform; window functions; FIR filters, IIR filters as biquad
+sections, and the design of windowed-sinc and Butterworth filters. The
+transform and filters in Q15 and Q31 through R22.14, for firmware.
+
+Leaves out: wavelets, the other DCT and DST kinds, more than two
+dimensions, number-theoretic transforms, and adaptive filters.
+
+Exit evidence: transforms against a direct transform computed in higher
+precision, error growing with log n, on every target; filters against
+reference responses; the Q15 transform's cycles on Cortex-M0 recorded on
+the rig.
+
+### R22.74 — Statistics and probability
+
+Status: planned
+Depends on: R22.12, R22.16, R22.70
+
+Descriptive statistics, streaming and stable: mean, variance and higher
+moments, quantiles, histograms, covariance and correlation. The common
+distributions' density, distribution and quantile functions and sampling
+over `core/random`'s generator: uniform, normal, log-normal, exponential,
+gamma, beta, chi-squared, Student's t, F, Weibull, binomial, Poisson,
+geometric, negative binomial and the multivariate normal. The standard
+tests with their p-values: t-tests, chi-squared, Kolmogorov–Smirnov and
+the rank tests; linear regression with its standard errors.
+
+Leaves out: generalized linear models beyond R22.76's logistic
+regression, Bayesian inference and Markov chain Monte Carlo, time-series
+models, survival analysis and data frames.
+
+Exit evidence: values against a reference computed outside the program,
+named with its version; sampling checked by goodness of fit at fixed
+seeds; streaming moments against two-pass results on ill-conditioned
+data; on every target.
+
+### R22.75 — Fields on meshes
+
+Status: planned
+Depends on: R22.19, R22.72
+
+Partial differential equations discretized: finite differences on
+structured grids, and finite volumes on unstructured polygonal and
+polyhedral meshes in OpenFOAM's form, cells and faces with an owner and a
+neighbour; gradient, divergence and Laplacian operators with upwind and
+central interpolation; fixed-value and fixed-gradient boundaries;
+assembly into R22.19's sparse matrices; time stepping by R22.72's methods
+or implicitly. Its consumer is an example program for heat conduction
+and scalar transport.
+
+Leaves out: mesh generation and mesh file formats, finite elements,
+pressure–velocity coupling for flow, turbulence models, adaptive
+refinement and parallel decomposition.
+
+Exit evidence: manufactured solutions converging at each scheme's order
+on structured and unstructured meshes on the hosted targets; the example
+program in `examples.md`.
+
+### R22.76 — Learning from data
+
+Status: planned
+Depends on: R22.17, R22.71, R22.74
+
+The methods most data work starts with: k-means clustering with
+k-means++ seeding, principal component analysis by R22.17's SVD, k
+nearest neighbours over a k-d tree, linear, ridge and logistic regression
+with regularization, naive Bayes, decision trees for classification and
+regression, and the usual scalings and cross-validation splits.
+
+Leaves out: neural networks, support vector machines, ensembles such as
+forests and boosting, Gaussian mixtures, kernel methods and
+reinforcement learning.
+
+Exit evidence: each method's results on public datasets fetched by hash
+against an established implementation's, recorded with its version; k-d
+tree queries against brute force; on every target.
+
+### R22.80 — The library measured
+
+Status: planned
+Depends on: R22.18, R22.40, R22.50, R22.63, R22.73, R22.75, R22.76
+
+The basis of R22's continuous lane, as R16.10 is of R16's: the time and
+size of the library's own code measured, held in the gate and ranked.
+Its workloads are each module's operations at stated sizes, the ten
+programs of R22.63, and the reference libraries' times on one core for
+the same operations (msun, GMP, OpenBLAS and LAPACK, FFTW, RE2 and PCRE2
+among them). It measures by R16.10's contract in `docs/measurement.md`
+and keeps its baselines beside R16's. A cost of the code the compiler
+emits goes to R16's lane; a cost of the library's algorithm, data layout
+or blocking goes to R22's.
+
+Exit evidence: the workloads and baselines on every target their
+namespaces admit, held as R16.10's are; a ranked list of each part's
+largest costs against its reference, from which R22.90 takes its scope.
+
+### R22.90 — The library's first costs
+
+Status: planned
+Depends on: R22.80
+
+The costs at the head of R22.80's ranked list.
+
+Exit evidence: each cost taken measured lower than its R22.80 baseline,
+and no other workload over its own.
+
+### The library's continuous items
+
+Numbered on from R22.90, each is added when it is taken up, or planned
+when an item splits it off, with its own status and a dependency on
+R22.80. Each takes one cost from R22.80's ranked list, in any part of the
+library. Exit evidence: the cost measured lower against its R22.80
+baseline, and no other workload over its own.
+
 ### R22 gate
 Each addition on every target its namespace admits, with its oracle; each
-generated table held by its check.
+generated table held by its check; the ten programs measured by the kept
+script. Once R22.80 is complete, the library's baselines are a standing
+invariant every push keeps, as R16's are.
 
 ## Successor families
 
