@@ -668,6 +668,16 @@ jobs:
           PATH=/usr/bin:/bin python3 scripts/outside_user.py --stock \
             --prefix "$outside/prefix" --work "$outside/work"
 
+      #  The user image a release publishes, built from the same packaged
+      #  compiler on this runner and used as the README's "In a container"
+      #  says: refine's library in /usr/local, the first program compiled
+      #  and run, and run again with `refine run` (D1667).
+      - name: The user image
+        run: |
+          set -eu
+          python3 scripts/container_image.py build user "$RUNNER_TEMP/outside/landin.tar.gz" --tag landin-user
+          python3 scripts/container_image.py check user landin-user
+
   #  The determinism manifests compare hosts with their debug compilers, but
   #  people run the release one: here both builds of this tree compile the
   #  positive and runtime corpora and the Cortex-M counterparts at the four
@@ -2048,6 +2058,13 @@ jobs:
           tar -xzf "$outside/landin.tar.gz" -C "$outside/prefix"
           python3 scripts/outside_user.py --prefix "$outside/prefix" \
             --work "$outside/work"
+
+      #  The user image of arm64, from the archive just packaged (D1667).
+      - name: The user image
+        run: |
+          set -eu
+          python3 scripts/container_image.py build user "$RUNNER_TEMP/outside/landin.tar.gz" --tag landin-user
+          python3 scripts/container_image.py check user landin-user
 
       - name: GDB source debugging
         run: |

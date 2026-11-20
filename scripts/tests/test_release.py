@@ -221,7 +221,8 @@ class Workflow(unittest.TestCase):
         text = (ROOT / ".github/workflows/release.yml").read_text()
         self.head, jobs = re.split(r"^jobs:\n", text, flags=re.M)
         self.jobs = dict(re.findall(r"^  ([\w-]+):\n((?:(?:    .*)?\n)*)", jobs, flags=re.M))
-        self.assertEqual(sorted(self.jobs), ["build", "gated", "publish"])
+        self.assertEqual(sorted(self.jobs), ["build", "contributor-image", "gated",
+                                             "images", "publish", "user-image"])
 
     def test_only_the_publishing_job_writes_or_signs(self):
         grants = ("contents: write", "id-token: write", "attestations: write")
@@ -229,10 +230,10 @@ class Workflow(unittest.TestCase):
             self.assertNotIn(grant, self.head)
         publish = self.jobs["publish"]
         self.assertRegex(publish, r"\n    environment: release\n")
-        for grant in grants:
+        for grant in grants + ("packages: write",):
             self.assertIn("\n      %s\n" % grant, publish)
-        for name in ("gated", "build"):
-            for grant in grants:
+        for name in ("gated", "build", "user-image", "contributor-image", "images"):
+            for grant in grants + ("packages: write",):
                 self.assertNotIn(grant, self.jobs[name], name)
             self.assertNotIn("environment:", self.jobs[name], name)
 
@@ -243,6 +244,23 @@ class Workflow(unittest.TestCase):
                            publish)
         self.assertIsNotNone(attest, publish)
         self.assertLess(attest.start(), publish.index("scripts/release.py publish"))
+
+    def test_a_rehearsal_publishes_nothing(self):
+        #  The publishing job, and with it every push, is skipped on a
+        #  rehearsal; the release's assets are the archives alone, never
+        #  the images kept beside them; the image lists are pushed into a
+        #  layout on the runner before the approval.
+        publish = self.jobs["publish"]
+        self.assertIn("\n    if: ${{ !inputs.rehearse }}\n", publish)
+        self.assertIn("pattern: archive-*\n", publish)
+        self.assertIn("--layout", self.jobs["images"])
+        self.assertNotIn("--layout", publish)
+
+    def test_the_images_are_pushed_after_the_release_is_public(self):
+        publish = self.jobs["publish"]
+        self.assertLess(publish.index("scripts/release.py publish"),
+                        publish.index("scripts/container_image.py publish"))
+        self.assertEqual(publish.count("push-to-registry: true"), 2)
 
     def test_the_tag_is_checked_before_anything_is_built(self):
         gated = self.jobs["gated"]

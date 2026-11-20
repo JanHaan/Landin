@@ -11,13 +11,16 @@
 
 . "$(dirname -- "$0")/env.sh"
 
-CONTAINERFILE="$LANDIN_ROOT/environments/linux-amd64/Containerfile"
+#  The contributor image's recipe (D1668), built here for linux/amd64.  It
+#  copies environments/pins.sh in, so environments/ is its context.
+CONTAINERFILE="$LANDIN_ROOT/environments/images/contributor.Containerfile"
+PINS="$LANDIN_ROOT/environments/pins.sh"
 
-#  The tag carries the Containerfile's content, so editing the recipe and
-#  running again cannot silently reuse the image built from the old one.
-#  A digest pin and a checksum check are worth nothing if the image they
-#  describe is never rebuilt.
-RECIPE_SUM="$(cksum "$CONTAINERFILE")" || exit
+#  The tag carries the content of the recipe and of the pins it reads, so
+#  editing either and running again cannot silently reuse the image built
+#  from the old one.  A digest pin and a checksum check are worth nothing
+#  if the image they describe is never rebuilt.
+RECIPE_SUM="$(cat "$CONTAINERFILE" "$PINS" | cksum)" || exit
 RECIPE_TAG="${RECIPE_SUM%% *}"
 case "$RECIPE_TAG" in
     '' | *[!0-9]*)
@@ -41,7 +44,7 @@ then
         --platform linux/amd64 \
         --file "$CONTAINERFILE" \
         --tag "$IMAGE" \
-        "$LANDIN_ROOT/environments/linux-amd64"
+        "$LANDIN_ROOT/environments"
 fi
 
 if [ "$#" -eq 0 ]; then
