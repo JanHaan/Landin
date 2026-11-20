@@ -165,7 +165,7 @@ binary-trees #1.
 The host was an AMD EPYC 7302 (Zen 2) under NixOS, Linux 6.18. Every run was
 pinned to core 15 and took a fresh copy of its image; each figure is the
 median of three runs, interleaved. The host was shared with other work: its
-load average was 10.6 before the session and 13.0 after. Landin was built
+load average was 10.6 before the session and 3.4 after. Landin was built
 with `--optimize speed` at the default x86-64-v1 level, static and without a
 C library. C was built with gcc 16.1.0, a newer compiler than the earlier
 tables used, with `-pipe -Wall -O3 -fomit-frame-pointer -march=native`, and
@@ -175,35 +175,35 @@ Time in seconds, with the multiple of C's in parentheses:
 
 | | fannkuch-redux 12 | mandelbrot 16000 | fasta 25,000,000 | reverse-complement | binary-trees 21 | geometric mean |
 |---|---|---|---|---|---|---|
-| 0.2.10 | 42.1 (1.07) | 20.1 (1.07) | 3.77 (1.23) | 1.08 (1.32) | 42.9 (2.81) | 1.39 |
-| main at 668966f97 | 41.9 (1.06) | 20.1 (1.07) | 3.66 (1.19) | 1.03 (1.27) | 43.3 (2.84) | 1.37 |
-| C | 39.3 | 18.8 | 3.07 | 0.814 | 15.2 | |
+| 0.2.10 | 41.8 (1.06) | 20.1 (1.07) | 3.74 (1.23) | 0.953 (1.26) | 42.9 (2.84) | 1.38 |
+| main at 58368d890 | 42.2 (1.07) | 20.0 (1.06) | 3.57 (1.18) | 0.946 (1.25) | 36.1 (2.39) | 1.32 |
+| C | 39.4 | 18.8 | 3.03 | 0.756 | 15.1 | |
 
-Reverse-complement read fasta 25,000,000's output. On Linux x86-64 the five
-images main produced were the same bytes as 0.2.10's: the code generation
-work between the two was on arm64, RISC-V and Cortex-M, and x86-64 at
-`speed` did not change. The differences between the first two rows are
-therefore noise, of a few per cent on this shared host.
+Reverse-complement read fasta 25,000,000's output. Binary-trees is the
+change between the first two rows: main runs it about 16% faster, after the
+heap's lock and alignment changes. The other four agree with 0.2.10 within
+a few per cent, which is the noise of this shared host.
 
 Allocated bytes of each image, with `.text` in parentheses:
 
 | | fannkuch-redux | mandelbrot | fasta | reverse-complement | binary-trees |
 |---|---|---|---|---|---|
-| 0.2.10 and main | 43,463 (29,286) | 58,865 (41,062) | 38,456 (26,150) | 63,881 (44,716) | 58,177 (40,422) |
+| 0.2.10 | 43,463 (29,286) | 58,865 (41,062) | 38,456 (26,150) | 63,881 (44,716) | 58,177 (40,422) |
+| main at 58368d890 | 43,015 (28,838) | 58,829 (41,126) | 38,456 (26,150) | 65,573 (46,508) | 58,077 (40,422) |
 | C | 4,744 (1,718) | 3,066 (745) | 5,690 (2,295) | 4,249 (1,212) | 4,789 (1,969) |
 
 C's figures leave out its C library, which it loads at run time; Landin's
 include everything the program runs.
 
-A compile took 0.51 to 0.58 seconds per program with 0.2.10, 0.52 to 0.59
+A compile took 0.51 to 0.60 seconds per program with 0.2.10, 0.52 to 0.59
 with main and 0.28 to 0.34 with gcc, each the median of five compiles after
 a warm-up on the shared host. These are not comparable with the compile-time
 table above, which used a different setup.
 
-Binary-trees took 2.8 times C's time, where the "after" table above,
-measured at `a4f9138d8` in October, had 2.22. 0.2.9, measured in the same
-session, gave 2.73, so the difference predates 0.2.10 and is not a change
-between these two rows. Its cause was not investigated.
+Binary-trees took 2.39 times C's time, where the "after" table above,
+measured at `a4f9138d8` in October, had 2.22. 0.2.9, measured on the same
+day, gave 2.73 and 0.2.10 2.84, so what widened the gap came before 0.2.9;
+its cause has not been found.
 
 #### Targets this host cannot time
 
@@ -220,10 +220,14 @@ range per workload in parentheses.
 | arm64 at `size` | about a third smaller (497,380 to 327,272 bytes at Linux armv8-a) | mandelbrot 0.30, fannkuch-redux 0.37, fasta 0.38, binary-trees 0.66 | |
 | RV64 at `speed` | 19.9% smaller from near jumps, then 19.4% from register allocation | mandelbrot 0.55, fasta 0.67, fannkuch-redux 0.72, binary-trees 0.82; geometric mean 0.62 over the seven hosted workloads | |
 | RV32 firmware | 17.5% smaller at `size`, 18.4% at `speed` | | ESP32-C3 0.72, ESP32-C5 0.72, Pico 2's Hazard3 0.82 |
-| Cortex-M firmware | 0.71 at armv6-m, 0.57 at the Thumb-2 levels | 0.28 to 0.88 at speed-auto | RP2040 0.46 (0.27 to 0.96), RP2350's Cortex-M33 0.43 (0.29 to 0.89), STM32H753 0.37 (0.23 to 0.83) |
+| Cortex-M firmware | 0.71 at armv6-m, 0.57 at the Thumb-2 levels | 0.28 to 0.88 at speed-auto | RP2040 0.43 (0.27 to 0.96), RP2350's Cortex-M33 0.42 (0.29 to 0.89), STM32H753 0.37 (0.23 to 0.83) |
 | Xtensa | unchanged | unchanged | unchanged |
 
-No board configuration got slower. Xtensa's selection is later work.
+Up to the last optimization work no board configuration got slower. With
+it the STM32H753's binary-search runs 9.7% slower at `size` (3.4% at
+`speed`, and merge-sort 2.2% at `speed`), where the RP2040 and RP2350 run
+every configuration faster; this is filed to be fixed. Xtensa's selection
+is later work.
 
 ## Peak resident memory
 
