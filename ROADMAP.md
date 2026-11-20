@@ -2013,7 +2013,7 @@ the first such item writes the whole recipe down.
 
 ### R23.10 — Container images on releases
 
-Status: planned
+Status: active
 Depends on: none
 
 Two images under `ghcr.io/701-dev`, for Linux amd64 and arm64 in one
