@@ -54,7 +54,7 @@ def read(source, name):
 
 def version(readme):
     """The one place a version is written is README.md's status line."""
-    found = re.search(r"specification (\d+\.\d+\.\d+)", readme)
+    found = re.search(r"^\*\*Status: version (\d+\.\d+\.\d+)\.", readme, re.M)
     return found.group(1) if found else "unreleased"
 
 

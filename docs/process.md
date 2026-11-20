@@ -1156,7 +1156,11 @@ A release also rests on two repository settings and an attestation
 - The ruleset `version tags`, `gh api repos/701-dev/Landin/rulesets/27105000`,
   is active on `refs/tags/v*` and refuses creating, moving, deleting and
   force-moving such a tag to everyone but the repository's
-  administrators, who bypass it. git.sr.ht has no tag protection, so a
+  administrators, who bypass it: its bypass list names the role
+  Repository admin, and the ruleset's `current_user_can_bypass` says
+  whether the account about to push can. The move to `701-dev` emptied
+  that list, and 0.2.11's tag was refused until it was restored; a
+  refused push asks no one for approval. git.sr.ht has no tag protection, so a
   `v*` tag there proves nothing: a release tag is made on GitHub, by a
   push of it or with the release, and the mirror holds it only if it was
   pushed through both URLs.
