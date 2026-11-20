@@ -310,6 +310,13 @@ package Landin.IR is
       Bitwise_And,
       Bitwise_Xor,
       Bitwise_Or,
+      --  `(x << n) | (x >> (w - n))` of an unsigned `x` of width w, 32 or
+      --  64, by a constant n in 1 .. w - 1: its second operand is that
+      --  Number.  Lowering never makes one; Landin.IR.Simplification forms
+      --  it for a target whose backend selects a rotate (x86-64 and
+      --  arm64), so no other backend meets it.  Neither shift could trap,
+      --  so neither does this.
+      Rotate_Left,
       --  [1890]: one type on both sides, and a bool back.
       Equal_To,
       Not_Equal_To,

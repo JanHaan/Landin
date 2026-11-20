@@ -5,8 +5,9 @@ package body Landin.IR.Effects is
          when Number | Truth | Atom | Empty_Slice_Base | Measurement_Kind
             | Complement | Logical_Not | Wrapping_Multiply
             | Wrapping_Add | Wrapping_Subtract | Bitwise_And | Bitwise_Xor
-            | Bitwise_Or | Equal_To | Not_Equal_To | Less_Than | Less_Or_Equal
-            | Greater_Than | Greater_Or_Equal | Choose | Failure_Test
+            | Bitwise_Or | Rotate_Left | Equal_To | Not_Equal_To | Less_Than
+            | Less_Or_Equal | Greater_Than | Greater_Or_Equal | Choose
+            | Failure_Test
             | Function_Address | Code_Address | Evidence_Address =>
             return (others => False);
          when Load =>

@@ -5575,6 +5575,10 @@ package body Landin.Backend.Cortex_M is
                      Put (Done & ":");
                      Store_Value (Value);
                   end;
+               when Landin.IR.Rotate_Left =>
+                  --  Simplification forms one only for x86-64 and arm64.
+                  raise Compiler_Defect with
+                    "a rotate on a target that selects none";
                when Landin.IR.Shift_Left | Landin.IR.Shift_Right =>
                   declare
                      Bits : constant Natural := Natural
@@ -7392,6 +7396,10 @@ package body Landin.Backend.Cortex_M is
                                 Bits, Signed_At (Value));
                         end;
 
+                     when Landin.IR.Rotate_Left =>
+                        --  Simplification forms one only in routines.
+                        raise Compiler_Defect with
+                          "a rotate in a static datum";
                      when Landin.IR.Add | Landin.IR.Subtract
                         | Landin.IR.Multiply | Landin.IR.Divide
                         | Landin.IR.Remainder
