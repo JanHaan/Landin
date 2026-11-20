@@ -171,6 +171,53 @@ class GateWatch(unittest.TestCase):
         self.assertIn("failed jobs: scripts, editor-grammar", result.stdout)
         self.assertIn("run 7: failure", result.stdout)
 
+    def test_a_timing_failure_with_every_board_passed_is_named_so(self):
+        result = self.watch([
+            state("completed", [job(1, "board-bundles"),
+                                job(2, "board-rp2040"),
+                                job(3, "measure-time-darwin-arm64",
+                                    conclusion="failure"),
+                                job(4, "gate", conclusion="failure")],
+                  conclusion="failure"),
+        ], "--run=7", "--all")
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertIn("a timing failure, not a boards one", result.stdout)
+        self.assertIn("gh run rerun 7 --failed", result.stdout)
+
+    def test_a_failed_board_leg_is_not_a_timing_failure(self):
+        result = self.watch([
+            state("completed", [job(2, "board-rp2040", conclusion="failure"),
+                                job(3, "measure-time-linux-x86-64",
+                                    conclusion="failure"),
+                                job(4, "gate", conclusion="failure")],
+                  conclusion="failure"),
+        ], "--run=7", "--all")
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertNotIn("timing failure", result.stdout)
+        self.assertNotIn("rerun", result.stdout)
+
+    def test_the_failure_kinds(self):
+        sys.path.insert(0, str(ROOT / "scripts"))
+        import gate_watch
+
+        def jobs(*pairs):
+            return [{"name": name, "conclusion": conclusion}
+                    for name, conclusion in pairs]
+        self.assertIsNone(gate_watch.failure_kind(jobs(("gate", "success"))))
+        self.assertEqual(gate_watch.failure_kind(jobs(
+            ("board-esp32", "success"), ("measure-time-linux-arm64", "failure"),
+            ("gate", "failure"))), "timing")
+        self.assertEqual(gate_watch.failure_kind(jobs(
+            ("board-esp32", "success"), ("gate", "failure"))), "aggregate")
+        self.assertEqual(gate_watch.failure_kind(jobs(
+            ("board-bundles", "failure"), ("measure-time-linux-arm64", "failure"),
+            ("gate", "failure"))), "jobs")
+        self.assertEqual(gate_watch.failure_kind(jobs(
+            ("documents", "failure"), ("measure-time-linux-arm64", "failure"))),
+            "jobs")
+        self.assertEqual(gate_watch.failure_kind(jobs(
+            ("board-esp32", "cancelled"), ("gate", "failure"))), "jobs")
+
     def test_a_run_that_succeeds_exits_zero(self):
         result = self.watch([
             state("in_progress", [job(1, "documents")]),

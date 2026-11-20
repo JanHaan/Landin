@@ -42,6 +42,14 @@ hundred-job pages of a run holding 193 jobs, and a server error is asked
 again a bounded number of times.  A request that still fails is named, with
 GitHub's answer, and ends the watch with status 3.
 
+A failed run whose board legs all passed and whose only failures are the
+timing jobs, `measure-time-*` and the aggregate after them, is named a
+timing failure rather than a boards one, with the command that re-runs only
+the failed jobs once their log reads as noise (docs/process.md, physical
+boards and promotion).  A failure of the aggregate alone, every job before
+it passed, is its verdict or its cycles comparison: re-running it would
+judge the same figures again.
+
 The exit status is 0 when the run succeeded, 1 when a job failed, and 2
 when the run ended otherwise, for instance cancelled by a newer push, and
 3 when GitHub could not be asked.
@@ -184,6 +192,32 @@ def jobs_of(run):
             [shown(job) for job in replaced])
 
 
+TIMING_PREFIX = "measure-time-"
+BOARD_JOBS = ("board-bundles", "board-")
+
+
+def failure_kind(jobs):
+    """What failed among JOBS, each name's latest attempt: None when nothing
+    did, `timing` when only timing jobs (and the aggregate after them)
+    failed while every board job passed, `aggregate` when only the
+    aggregate `gate` failed, and `jobs` otherwise."""
+    #  A cancelled job is missing evidence too: a cancelled leg makes the
+    #  run a boards failure, and a cancelled timing job a timing one.
+    failed = [job["name"] for job in jobs
+              if job["conclusion"] in FAILED + ("cancelled",)]
+    if not failed:
+        return None
+    boards_passed = all(job["conclusion"] in ("success", "skipped")
+                        for job in jobs
+                        if job["name"].startswith(BOARD_JOBS))
+    timing = [name for name in failed if name.startswith(TIMING_PREFIX)]
+    if boards_passed and timing and set(failed) <= set(timing) | {"gate"}:
+        return "timing"
+    if failed == ["gate"]:
+        return "aggregate"
+    return "jobs"
+
+
 def minutes(job):
     started, completed = job.get("startedAt"), job.get("completedAt")
     if not started or not completed or started.startswith("0001"):
@@ -267,6 +301,16 @@ def watch(run, interval, every=False):
                       "not part of the verdict: %s" % ", ".join(earlier))
             if failed:
                 print("failed jobs: %s" % ", ".join(failed))
+                kind = failure_kind(jobs)
+                if kind == "timing":
+                    print("a timing failure, not a boards one: every board "
+                          "leg passed.  Read the failed timing log; if it "
+                          "reads as noise, re-run only the failed jobs: "
+                          "gh run rerun %s --failed" % run)
+                elif kind == "aggregate":
+                    print("only the aggregate failed: read its log (the "
+                          "verdict or the cycles comparison); a rerun "
+                          "judges the same figures again")
                 return 1
             return 0 if view["conclusion"] == "success" else 2
         time.sleep(interval)

@@ -509,7 +509,11 @@ def verdict(needs, always, expected=None, evidence=None):
         if result == wanted:
             continue
         problem = "%s is %s, not %s" % (name, result, wanted)
-        if name in PHYSICAL and boards:
+        if name in TIMING and wanted == "success":
+            problem += (": timing evidence, not a board failure; when every"
+                        " board leg passed and its log reads as noise,"
+                        " re-run only the failed jobs")
+        elif name in PHYSICAL and boards:
             problem += ": physical evidence missing is not a pass"
         elif name in PHYSICAL:
             problem += ": a board job ran for an event outside board scope"
@@ -540,6 +544,12 @@ def report(needs, problems, expected, evidence):
         lines.append("- physical boards, never reused:")
         for port in BOARD_PORTS:
             lines.append("  - board-%s: %s" % (port, (evidence or {}).get(port, "not read")))
+    timing = sorted(name for name in needs if name in TIMING)
+    if expected.get("timing") and timing:
+        failed = [name for name in timing
+                  if needs[name].get("result") != "success"]
+        lines.append("- timing, judged apart from the boards: %s" % (
+            "%s not passed" % ", ".join(failed) if failed else "passed"))
     lines.append("")
     lines.extend("- %s: %s" % (name, job.get("result")) for name, job in sorted(needs.items()))
     if problems:

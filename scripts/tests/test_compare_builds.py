@@ -345,7 +345,15 @@ class DarwinWorkflow(unittest.TestCase):
         self.assertIn("./scripts/build.sh -j3 &&", main)
         self.assertIn("ZERO_AR_DATE: '1'", main)
         self.assertNotIn("dev-build", main)
-        self.assertNotIn("actions/cache/restore", main)
+        #  main restores nothing: it only asks whether its tree's entry
+        #  exists, and builds and saves only when it does not.
+        self.assertIn("lookup-only: true", main)
+        self.assertIn('tree="$(python3 scripts/gate_inputs.py key)"', main)
+        self.assertRegex(main, r"key=darwin-arm64-release-objects-\$ImageOS-"
+                         r"\$headers-\$\{\{ hashFiles\('environments/pins.sh'\) \}\}"
+                         r"-main-\$tree")
+        self.assertEqual(main.count("if: steps.probe.outputs.cache-hit != 'true'"), 2)
+        self.assertLess(main.index("lookup-only: true"), main.index("./scripts/build.sh"))
         for name in ("darwin-release-build", "darwin-release-main-cache"):
             self.assertIn('headers="$(python3 scripts/release_cache_key.py darwin)"',
                           self.jobs[name], name)

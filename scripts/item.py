@@ -5,8 +5,12 @@
     python3 scripts/item.py resume [ITEM]       # where a reopened session stands
     python3 scripts/item.py note ITEM TEXT      # one line in the item's journal
     python3 scripts/item.py run ITEM NAME --limit S [--cwd DIR] -- COMMAND ...
+    python3 scripts/item.py push ITEM [--watch] # check the citations, push, gate
     python3 scripts/item.py gate ITEM [--watch] # the gate runs of the branch head
-    python3 scripts/item.py boards ITEM [--watch]  # dispatch scope=boards
+    python3 scripts/item.py boards ITEM [--watch] [--rerun-failed]
+                                                # dispatch scope=boards
+    python3 scripts/item.py merge-main ITEM     # take the queue, merge main once
+    python3 scripts/item.py queue [--wait ITEM | --release ITEM]
     python3 scripts/item.py promote ITEM        # check the evidence, push to main
     python3 scripts/item.py finish ITEM         # remove worktree and branches
     python3 scripts/item.py status              # every item this clone runs
@@ -37,10 +41,35 @@ job of its listing passed or skipped, and a boards dispatch passed on the
 same tree, or on an earlier commit from which every later commit says
 `Gate: explanatory`.  It does not follow main's gate: `gate --main --watch`
 does, and `finish` refuses until main's gate on the promoted commit passed.
+
+Promotions queue, so that an item merges main once rather than once for
+every item that lands before it.  The clone holds one promotion token,
+`landin-items/queue.json`.  `merge-main` takes it before the item's final
+merge and `promote` takes it before pushing; the holder keeps it until
+main's gate on its promoted commit has ended, which `gate --main` and
+`finish` see, or until `queue --release` gives it up.  An item that finds
+it held is put in line and told the wait command; `queue --wait ITEM`
+returns once the token is the item's, taking it.  A holder whose state is
+gone, or whose main gate has ended, holds nothing.
+
+`merge-main` merges `origin/main`.  When every commit it brings says
+`Gate: explanatory` and the merged tree has the candidate's gate key
+(`scripts/gate_inputs.py key`), the merge says `Gate: explanatory` too, and
+the gate reuses the candidate's pass and the boards dispatch still counts,
+as the reuse rule already allows; otherwise it says which commits or paths
+make the merged tree new.  `boards` refuses to dispatch on a head main is
+not an ancestor of, since promotion would refuse that tree; `--unmerged`
+dispatches anyway, for board feedback before the final merge.  After a
+boards run whose board legs passed and whose only failures were timing
+jobs, `boards --rerun-failed` re-runs only the failed jobs of that run.
+`push` refuses a stale `citations.txt` before pushing.
+
 Releases and versions are never this script's.
 """
 import argparse
+import contextlib
 import datetime
+import fcntl
 import json
 import os
 import re
@@ -65,6 +94,11 @@ CURRENT = "**Current roadmap work: %s — %s.**"
 NEXT = "**Next roadmap item: %s — %s (planned).**"
 POINTER_FILES = ("README.md", "handoff.md")
 EXPLANATORY = "Gate: explanatory"
+QUEUE = "queue.json"
+#  Seconds between looks while `queue --wait` waits, and between asking
+#  GitHub whether the holder's main gate has ended.
+QUEUE_POLL = 15
+QUEUE_ASK = 60
 #  An item nothing has moved for this long is reported as stalled.
 STALL_MINUTES = 60
 PHASES = ("started", "pushed", "gate-passed", "boards-passed", "promoted",
@@ -498,17 +532,55 @@ def record_gates(state, commit):
             entry = {"run": found["databaseId"], "commit": commit,
                      "tree": tree, "kind": kind_of(found)}
             state["gates"].append(entry)
+        attempt = found.get("attempt") or 1
+        if (entry.get("attempt"), entry.get("conclusion")) != (
+                attempt, found.get("conclusion") or ""):
+            entry.pop("failed", None)
         entry["status"] = found["status"]
         entry["conclusion"] = found.get("conclusion") or ""
-        entry["attempt"] = found.get("attempt") or 1
+        entry["attempt"] = attempt
+        if entry["kind"] == "boards" and entry["conclusion"] == "failure" \
+                and entry.get("failed", "unknown") == "unknown":
+            entry["failed"] = failure_of(entry["run"])
     return state
+
+
+def failure_of(run_number):
+    """What failed in a boards run: `timing` when only timing jobs (and
+    the aggregate after them) failed and every board leg passed,
+    `aggregate` when only the aggregate did, `jobs` otherwise, or
+    `unknown` when GitHub could not list its jobs."""
+    try:
+        gate_watch = gate_module("gate_watch")
+        jobs, _ = gate_watch.jobs_of(run_number)
+        return gate_watch.failure_kind(jobs) or "unknown"
+    except Exception:  # noqa: BLE001 -- a listing GitHub did not give
+        return "unknown"
+
+
+FAILURE_TEXT = {
+    "timing": "timing only, every board leg passed: read the timing log,"
+              " and if it reads as noise `item.py boards %s --rerun-failed`",
+    "aggregate": "the aggregate alone, every job before it passed: its"
+                 " verdict or the cycles comparison; read its log",
+    "jobs": "board or other jobs failed: read their logs",
+    "unknown": "its jobs could not be listed: `item.py gate %s` again",
+}
+
+
+def gate_text(entry, item):
+    """A gate entry's status and conclusion, with what a failure was."""
+    text = "%s %s" % (entry.get("status", ""), entry.get("conclusion", ""))
+    if entry.get("failed"):
+        explained = FAILURE_TEXT.get(entry["failed"], entry["failed"])
+        text += " (%s)" % (explained % item if "%s" in explained
+                           else explained)
+    return text
 
 
 def complete_listing(run_number):
     """None when RUN's every job passed or was skipped, else what did not."""
-    sys.path.insert(0, str(ROOT / "scripts"))
-    import gate_watch
-    jobs, _ = gate_watch.jobs_of(run_number)
+    jobs, _ = gate_module("gate_watch").jobs_of(run_number)
     bad = [job["name"] for job in jobs
            if job["conclusion"] not in ("success", "skipped")]
     if not any(job["name"] == "gate" and job["conclusion"] == "success"
@@ -541,9 +613,14 @@ def gate(arguments):
     advance(state, commit, arguments.main)
     save(state)
     shown = [entry for entry in state["gates"] if entry["commit"] == commit]
+    if arguments.main and any(entry["kind"] == "main"
+                              and entry["status"] == "completed"
+                              for entry in shown):
+        if release(item, "main's gate on %s has ended" % commit[:12]):
+            print("main's gate has ended: the promotion token is released")
     for entry in shown:
-        print("run %s  %-8s %s %s" % (entry["run"], entry["kind"],
-                                      entry["status"], entry["conclusion"]))
+        print("run %s  %-8s %s" % (entry["run"], entry["kind"],
+                                   gate_text(entry, item)))
     if not shown:
         print("no gate run for %s yet" % commit[:12])
     if arguments.watch:
@@ -616,6 +693,19 @@ def boards(arguments):
     if pushed != commit:
         raise Refused("push the head first: the dispatch runs the branch as"
                       " GitHub holds it")
+    if arguments.rerun_failed:
+        return rerun_boards(arguments, state, commit)
+    git("fetch", "-q", "origin", "main", cwd=state["worktree"])
+    if not arguments.unmerged and git(
+            "merge-base", "--is-ancestor", "origin/main", commit,
+            cwd=state["worktree"], check=False) is None:
+        raise Refused("main has moved past %s, so promotion would refuse"
+                      " this tree and its boards would be dispatched again:"
+                      " merge main first (`item.py merge-main %s`), or"
+                      " --unmerged for board feedback before the final merge"
+                      % (commit[:12], item))
+    if arguments.unmerged:
+        journal(item, "boards dispatched with --unmerged")
     before = {found["databaseId"] for found in runs_of(commit)}
     result = subprocess.run(["gh", "workflow", "run", "gate.yml", "--ref",
                              state["branch"], "-f", "scope=boards"],
@@ -634,17 +724,378 @@ def boards(arguments):
                     % (new[0]["databaseId"], commit[:12]))
             print("boards run %s on %s" % (new[0]["databaseId"], commit[:12]))
             if arguments.watch:
-                arguments.name = "boards-%s" % new[0]["databaseId"]
-                arguments.limit = 7200
-                arguments.command = ["python3",
-                                     str(ROOT / "scripts/gate_watch.py"),
-                                     "--all", "--run",
-                                     str(new[0]["databaseId"])]
-                return run(arguments)
+                return watch_boards(arguments, new[0]["databaseId"], 1)
             return 0
         time.sleep(4)
     raise Refused("the dispatch was accepted but GitHub lists no run yet;"
                   " `item.py gate %s` records it once it does" % item)
+
+
+def watch_boards(arguments, run_number, attempt):
+    arguments.name = "boards-%s" % run_number + (
+        "-attempt%d" % attempt if attempt > 1 else "")
+    arguments.limit = 7200
+    arguments.command = ["python3", str(ROOT / "scripts/gate_watch.py"),
+                         "--all", "--run", str(run_number)]
+    return run(arguments)
+
+
+def rerun_failed_jobs(run_number):
+    """Ask GitHub to re-run RUN's failed jobs and the jobs that need them,
+    the aggregate among them, as the run's next attempt."""
+    result = subprocess.run(["gh", "run", "rerun", str(run_number),
+                             "--failed"], cwd=repository(), text=True,
+                            stderr=subprocess.PIPE)
+    if result.returncode != 0:
+        raise Refused("the re-run failed: %s" % result.stderr.strip())
+
+
+def rerun_boards(arguments, state, commit):
+    """Re-run only the failed jobs of the head's newest boards run, when
+    every board leg passed and only timing jobs failed."""
+    item = arguments.item
+    record_gates(state, commit)
+    save(state)
+    boards_runs = [entry for entry in state["gates"]
+                   if entry["commit"] == commit and entry["kind"] == "boards"]
+    if not boards_runs:
+        raise Refused("no boards run on %s to re-run: `item.py boards %s`"
+                      % (commit[:12], item))
+    newest = max(boards_runs, key=lambda entry: entry["run"])
+    if newest.get("status") != "completed":
+        raise Refused("boards run %s has not ended" % newest["run"])
+    if newest.get("conclusion") != "failure":
+        raise Refused("boards run %s ended %s, not failed: nothing to re-run"
+                      % (newest["run"], newest.get("conclusion")))
+    kind = failure_of(newest["run"])
+    newest["failed"] = kind
+    save(state)
+    if kind != "timing":
+        raise Refused("boards run %s did not fail in timing alone (%s):"
+                      " re-running its failed jobs would not give the"
+                      " missing evidence" % (newest["run"], gate_text(
+                          newest, item)))
+    rerun_failed_jobs(newest["run"])
+    attempt = newest.get("attempt", 1) + 1
+    journal(item, "boards run %s: failed timing jobs re-run as attempt %d"
+            % (newest["run"], attempt))
+    print("boards run %s: its failed jobs re-run as attempt %d"
+          % (newest["run"], attempt))
+    if arguments.watch:
+        return watch_boards(arguments, newest["run"], attempt)
+    return 0
+
+
+# ------------------------------------------------------- the promotion queue
+
+def gate_module(name):
+    """One of this script's sibling modules, gate_inputs or gate_watch."""
+    if str(ROOT / "scripts") not in sys.path:
+        sys.path.insert(0, str(ROOT / "scripts"))
+    return __import__(name)
+
+
+@contextlib.contextmanager
+def queue_locked(cwd=None):
+    """The clone's promotion queue, read and written under one lock:
+    {"holder": {"item", "why", "taken"} or None, "waiting": [ITEM, ...]}."""
+    root = state_root(cwd)
+    root.mkdir(parents=True, exist_ok=True)
+    with open(root / (QUEUE + ".lock"), "a", encoding="utf-8") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        path = root / QUEUE
+        data = (json.loads(path.read_text(encoding="utf-8"))
+                if path.exists() else {})
+        data.setdefault("holder", None)
+        data.setdefault("waiting", [])
+        before = json.dumps(data, sort_keys=True)
+        yield data
+        if json.dumps(data, sort_keys=True) != before:
+            temporary = root / (QUEUE + ".tmp")
+            temporary.write_text(json.dumps(data, indent=2) + "\n",
+                                 encoding="utf-8")
+            os.replace(temporary, path)
+
+
+def alive(item, cwd=None):
+    """Whether this clone still runs ITEM: its state exists, unfinished."""
+    path = item_directory(item, cwd) / "state.json"
+    if not path.exists():
+        return False
+    return json.loads(path.read_text(encoding="utf-8"))["phase"] != "finished"
+
+
+def main_gate_ended(item, commit):
+    """Whether main's gate on COMMIT, which ITEM promoted while holding the
+    token, has ended, as GitHub lists it now; False when GitHub cannot
+    say.  An earlier promotion of the same item, a --partial one, is not
+    asked about: its gate ended before this hold began."""
+    try:
+        state = load(item)
+        record_gates(state, commit)
+        save(state)
+    except (Refused, OSError, ValueError):
+        return False
+    return any(entry["kind"] == "main" and entry.get("status") == "completed"
+               for entry in state["gates"] if entry["commit"] == commit)
+
+
+def settle(data, ask):
+    """Drop a holder or waiter this clone no longer runs, and, when ASK,
+    a holder whose main gate has ended."""
+    holder = data["holder"]
+    if holder and not alive(holder["item"]):
+        data["holder"] = None
+    elif holder and ask and holder.get("promoted") and \
+            main_gate_ended(holder["item"], holder["promoted"]):
+        journal(holder["item"], "promotion token released: main's gate on"
+                " the promoted commit has ended")
+        data["holder"] = None
+    data["waiting"] = [waiting for waiting in data["waiting"]
+                       if alive(waiting)]
+
+
+def wait_command(item):
+    return ("python3 scripts/item.py run %s queue-wait --limit 7200 --"
+            " python3 scripts/item.py queue --wait %s --timeout 7000, then"
+            " wait on the run it names; or python3 scripts/item.py queue"
+            " --wait %s, again on exit 124" % (item, item, item))
+
+
+def take(item, why, ask=True):
+    """(True, None) when ITEM holds the promotion token, taking it if it is
+    free and nobody waits before ITEM; else (False, why not), with ITEM
+    put in line."""
+    with queue_locked() as data:
+        settle(data, ask)
+        holder = data["holder"]
+        if holder and holder["item"] == item:
+            return True, None
+        if holder:
+            if item not in data["waiting"]:
+                data["waiting"].append(item)
+            return False, (
+                "%s holds the promotion token since %s (%s), until main's"
+                " gate on its promotion ends; %s is number %d in line. A"
+                " merge or promotion now would be gated again once it lands."
+                " Wait: %s" % (holder["item"], holder["taken"], holder["why"],
+                               item, data["waiting"].index(item) + 1,
+                               wait_command(item)))
+        ahead = (data["waiting"][:data["waiting"].index(item)]
+                 if item in data["waiting"] else list(data["waiting"]))
+        if ahead:
+            if item not in data["waiting"]:
+                data["waiting"].append(item)
+            return False, ("%s waits for the promotion token before %s."
+                           " Wait: %s" % (", ".join(ahead), item,
+                                          wait_command(item)))
+        data["waiting"] = [other for other in data["waiting"]
+                           if other != item]
+        data["holder"] = {"item": item, "why": why, "taken": stamp()}
+    journal(item, "promotion token taken (%s)" % why)
+    return True, None
+
+
+def mark_promoted(item, commit):
+    """Record on ITEM's hold the commit it promoted, whose main gate
+    ending ends the hold."""
+    with queue_locked() as data:
+        if data["holder"] and data["holder"]["item"] == item:
+            data["holder"]["promoted"] = commit
+
+
+def release(item, why):
+    """Give up ITEM's token or place in line; whether it held the token."""
+    with queue_locked() as data:
+        held = bool(data["holder"]) and data["holder"]["item"] == item
+        if held:
+            data["holder"] = None
+        data["waiting"] = [other for other in data["waiting"]
+                           if other != item]
+    if held:
+        journal(item, "promotion token released: %s" % why)
+    return held
+
+
+def queue(arguments):
+    if arguments.release:
+        held = release(arguments.release, "given up with `queue --release`")
+        print("%s %s" % (arguments.release, "released the promotion token"
+                         if held else "holds no token; left the line"))
+        return 0
+    if arguments.wait:
+        load(arguments.wait)
+        deadline = time.monotonic() + arguments.timeout
+        asked = 0.0
+        while True:
+            ask = time.monotonic() - asked >= QUEUE_ASK
+            if ask:
+                asked = time.monotonic()
+            taken, why = take(arguments.wait, "waited in line", ask=ask)
+            if taken:
+                print("%s holds the promotion token: merge main"
+                      " (`item.py merge-main %s`) or promote"
+                      % (arguments.wait, arguments.wait))
+                return 0
+            if time.monotonic() >= deadline:
+                print(why.split(" Wait: ")[0])
+                return 124
+            time.sleep(min(QUEUE_POLL, max(0.0, deadline - time.monotonic())))
+    with queue_locked() as data:
+        settle(data, ask=True)
+        holder, waiting = data["holder"], list(data["waiting"])
+    print("promotion token: %s" % (
+        "%s since %s (%s)" % (holder["item"], holder["taken"], holder["why"])
+        if holder else "free"))
+    print("waiting: %s" % (", ".join(waiting) or "nobody"))
+    return 0
+
+
+def queue_line():
+    """The token's holder and line, for `status`, without asking GitHub."""
+    path = state_root() / QUEUE
+    if not path.exists():
+        return None
+    data = json.loads(path.read_text(encoding="utf-8"))
+    holder = data.get("holder")
+    if not holder and not data.get("waiting"):
+        return None
+    return "promotion token: %s; waiting: %s" % (
+        "%s since %s" % (holder["item"], holder["taken"]) if holder
+        else "free", ", ".join(data.get("waiting") or []) or "nobody")
+
+
+# ------------------------------------------------------- merging and pushing
+
+def citations_problem(worktree):
+    """Why the worktree's citations.txt is stale, or None.  It names the
+    compiler sources' digest, so a merge that brings a compiler change
+    leaves it stale, and the documents job fails minutes into the gate."""
+    worktree = Path(worktree)
+    if not (worktree / "check.py").exists() or \
+            not (worktree / "citations.txt").exists():
+        return None
+    probe = ("import sys\nsys.path.insert(0, '.')\nimport check\n"
+             "fresh = check.citations_dump()\n"
+             "held = open('citations.txt', encoding='utf-8').read()\n"
+             "if fresh is not None and fresh != held:\n"
+             "    print(check.regenerating('citations.txt'))\n"
+             "    sys.exit(1)\n")
+    result = subprocess.run([sys.executable, "-B", "-c", probe],
+                            cwd=worktree, text=True, stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE)
+    if result.returncode == 0:
+        return None
+    if result.returncode == 1 and result.stdout.strip():
+        return ("citations.txt is stale over this tree: regenerate it with"
+                " %s, commit it, then push" % result.stdout.strip())
+    return "the citations check could not run: %s" % (
+        result.stderr.strip().splitlines() or ["no output"])[-1]
+
+
+def merge_main(arguments):
+    item = arguments.item
+    state = load(item)
+    worktree = state["worktree"]
+    git("fetch", "-q", "origin", cwd=worktree)
+    if git("status", "--porcelain", cwd=worktree):
+        raise Refused("the worktree has uncommitted changes: commit them"
+                      " first")
+    head = git("rev-parse", "HEAD", cwd=worktree)
+    if git("merge-base", "--is-ancestor", "origin/main", head, cwd=worktree,
+           check=False) is not None:
+        print("origin/main is already in %s: nothing to merge" % head[:12])
+        return 0
+    if not arguments.no_queue:
+        taken, why = take(item, "final merge of main")
+        if not taken:
+            raise Refused(why)
+    gate_inputs = gate_module("gate_inputs")
+    log = git("log", "--format=%H%x00%B%x01", "HEAD..origin/main",
+              cwd=worktree)
+    brought = [entry.strip("\n").split("\0", 1)
+               for entry in log.split("\x01") if entry.strip()]
+    undeclared = [sha[:12] for sha, body in brought
+                  if not gate_inputs.DECLARATION.search(body)]
+    merged = subprocess.run(["git", "merge", "--no-ff", "--no-commit",
+                             "origin/main"], cwd=worktree, text=True,
+                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    if merged.returncode != 0:
+        conflicted = git("diff", "--name-only", "--diff-filter=U",
+                         cwd=worktree, check=False) or ""
+        journal(item, "merge of origin/main stopped on conflicts: %s"
+                % " ".join(conflicted.split()))
+        raise Refused(
+            "the merge stopped on conflicts in %s: resolve them and commit."
+            " A merge with resolved conflicts is a new tree: push it"
+            " (`item.py push %s --watch`), then its boards. The promotion"
+            " token stays %s's until main's gate on its promotion ends"
+            % (", ".join(conflicted.split()) or "the files git names", item,
+               item))
+    tree = git("write-tree", cwd=worktree)
+    same = gate_inputs.key(tree, cwd=worktree) == \
+        gate_inputs.key(head, cwd=worktree)
+    declare = same and not undeclared
+    message = "Merge origin/main into %s" % state["branch"]
+    if declare:
+        message += ("\n\nEvery commit it brings says it is explanatory, and"
+                    " the merged tree has the candidate's gate key.\n\n"
+                    + EXPLANATORY)
+    git("commit", "-q", "-m", message, cwd=worktree)
+    merge = git("rev-parse", "HEAD", cwd=worktree)
+    journal(item, "merged origin/main as %s%s" % (
+        merge[:12], ", declared explanatory" if declare else ""))
+    print("merged origin/main as %s" % merge[:12])
+    if declare:
+        print("it says `%s`: the gate reuses the candidate's pass, and a"
+              " boards dispatch that passed on %s still counts; push it"
+              " (`item.py push %s --watch`) and promote once its gate"
+              " passes" % (EXPLANATORY, head[:12], item))
+    else:
+        reasons = []
+        if undeclared:
+            reasons.append("commits from main without `%s`: %s" % (
+                EXPLANATORY, ", ".join(undeclared[:8])
+                + (" and %d more" % (len(undeclared) - 8)
+                   if len(undeclared) > 8 else "")))
+        if not same:
+            changed = [path for path in (git(
+                "diff", "--name-only", head, tree, cwd=worktree) or ""
+            ).splitlines() if path not in gate_inputs.CONTENT_FREE
+                and not path.startswith(gate_inputs.CONTENT_FREE_TREES)]
+            reasons.append("paths outside the explanatory set differ: %s" % (
+                ", ".join(changed[:8]) + (" and %d more" % (len(changed) - 8)
+                                          if len(changed) > 8 else "")
+                if changed else "modes or paths of the explanatory files"))
+        print("the merged tree is new (%s): push it (`item.py push %s"
+              " --watch`), and once its gate passes dispatch its boards"
+              % ("; ".join(reasons), item))
+    stale = citations_problem(worktree)
+    if stale:
+        print(stale)
+    return 0
+
+
+def push(arguments):
+    item = arguments.item
+    state = load(item)
+    worktree = state["worktree"]
+    if git("status", "--porcelain", cwd=worktree):
+        raise Refused("the worktree has uncommitted changes: commit them"
+                      " first")
+    if git("rev-parse", "-q", "--verify", "MERGE_HEAD", cwd=worktree,
+           check=False):
+        raise Refused("a merge is in progress: commit it first")
+    stale = citations_problem(worktree)
+    if stale:
+        raise Refused(stale)
+    git("push", "-q", "-u", "origin", "HEAD:refs/heads/%s" % state["branch"],
+        cwd=worktree)
+    head = git("rev-parse", "HEAD", cwd=worktree)
+    journal(item, "pushed %s" % head[:12])
+    print("pushed %s to %s" % (head[:12], state["branch"]))
+    arguments.main = False
+    return gate(arguments)
 
 
 # ---------------------------------------------------------------- promotion
@@ -654,7 +1105,10 @@ def explanatory_since(worktree, older, newer):
     messages = git("log", "--format=%B%x00", "%s..%s" % (older, newer),
                    cwd=worktree)
     bodies = [body for body in messages.split("\0") if body.strip()]
-    return all(EXPLANATORY in body for body in bodies)
+    #  The gate's own reading: the declaration on a line of its own, not a
+    #  sentence that mentions it.
+    declaration = gate_module("gate_inputs").DECLARATION
+    return all(declaration.search(body) for body in bodies)
 
 
 def evidence(state, commit):
@@ -713,8 +1167,10 @@ def promote(arguments):
         raise Refused("HEAD is not the branch's pushed head")
     if git("merge-base", "--is-ancestor", "origin/main", commit, cwd=worktree,
            check=False) is None:
-        raise Refused("main has moved past the candidate's base: merge"
-                      " origin/main, push, and gate the merged tree")
+        raise Refused("main has moved past the candidate's base: `item.py"
+                      " merge-main %s` takes the promotion token, merges"
+                      " origin/main and says whether the merged tree reuses"
+                      " the pass; push it and gate it" % item)
     record_gates(state, commit)
     for older in {entry["commit"] for entry in state["gates"]} - {commit}:
         record_gates(state, older)
@@ -734,9 +1190,21 @@ def promote(arguments):
         print("note: gates running now share the runners: %s" % ", ".join(
             "%s (%s)" % (o["databaseId"], o["headBranch"]) for o in others))
     if arguments.dry_run:
-        print("would push %s to main" % commit[:12])
+        with queue_locked() as data:
+            settle(data, ask=True)
+            holder = data["holder"]
+        print("would push %s to main; the promotion token is %s" % (
+            commit[:12], "free" if not holder else "%s's" % holder["item"]))
         return 0
-    git("push", "origin", "%s:refs/heads/main" % commit, cwd=worktree)
+    taken, why = take(item, "promotion of %s" % commit[:12])
+    if not taken:
+        raise Refused(why)
+    try:
+        git("push", "origin", "%s:refs/heads/main" % commit, cwd=worktree)
+    except Refused:
+        release(item, "the push to main failed")
+        raise
+    mark_promoted(item, commit)
     state["promoted"] = commit
     state["phase"] = "promoted"
     save(state)
@@ -782,6 +1250,7 @@ def finish(arguments):
                  check=False)
     if remote:
         git("push", "-q", "origin", "--delete", state["branch"], check=False)
+    release(item, "finished")
     state["phase"] = "finished"
     save(state)
     journal(item, "finished: worktree and branch %s removed" % state["branch"])
@@ -842,9 +1311,9 @@ def describe(state, full=False):
             "" if entry.get("cwd", str(worktree)) == str(worktree)
             else ", in " + entry["cwd"]))
     for entry in state["gates"]:
-        out.append("  gate run %s %s on %s: %s %s" % (
+        out.append("  gate run %s %s on %s: %s" % (
             entry["run"], entry["kind"], entry["commit"][:12],
-            entry.get("status", ""), entry.get("conclusion", "")))
+            gate_text(entry, state["item"])))
     return out
 
 
@@ -884,7 +1353,8 @@ def phase_step(state):
     if phase in ("pushed", "gate-passed", "boards-passed"):
         return ("`item.py gate %s` for the head's runs; when the push gate"
                 " passed, `item.py boards %s`, then the closing checklist and"
-                " `item.py promote %s`" % (item, item, item))
+                " `item.py promote %s`; if main has moved, `item.py merge-main"
+                " %s` first, once" % (item, item, item, item))
     if phase == "promoted":
         return "`item.py gate %s --main --watch`, then `item.py finish %s`" \
             % (item, item)
@@ -900,6 +1370,9 @@ def status(arguments):
         print("this clone runs no item")
     for state in states:
         print("\n".join(describe(state)))
+    line = queue_line()
+    if line:
+        print(line)
     return 0
 
 
@@ -1090,6 +1563,32 @@ def main(argv=None):
                      " worktree)")
     sub.set_defaults(handler=run)
 
+    sub = commands.add_parser("push", help="refuse stale citations, push the"
+                              " head, record its gate runs")
+    sub.add_argument("item")
+    sub.add_argument("--watch", action="store_true", help="follow the gate"
+                     " to its end in a detached gate_watch.py --all run")
+    sub.set_defaults(handler=push)
+
+    sub = commands.add_parser("merge-main", help="take the promotion token,"
+                              " merge origin/main, and declare the merge"
+                              " explanatory when the reuse rule allows it")
+    sub.add_argument("item")
+    sub.add_argument("--no-queue", action="store_true", help="a merge to"
+                     " pick up main while work goes on, without the token;"
+                     " the final merge still takes it")
+    sub.set_defaults(handler=merge_main)
+
+    sub = commands.add_parser("queue", help="the promotion token's holder"
+                              " and line")
+    which = sub.add_mutually_exclusive_group()
+    which.add_argument("--wait", metavar="ITEM", help="return 0 once ITEM"
+                       " holds the token, taking it; 124 at the timeout")
+    which.add_argument("--release", metavar="ITEM", help="give up ITEM's"
+                       " token or place in line")
+    sub.add_argument("--timeout", type=float, default=270)
+    sub.set_defaults(handler=queue)
+
     sub = commands.add_parser("gate", help="record and show the gate runs of"
                               " the pushed head, or of main after promotion")
     sub.add_argument("item")
@@ -1104,6 +1603,11 @@ def main(argv=None):
     sub.add_argument("item")
     sub.add_argument("--watch", action="store_true", help="follow it to its"
                      " end in a detached gate_watch.py --all run")
+    sub.add_argument("--unmerged", action="store_true", help="dispatch"
+                     " although main is not an ancestor of the head")
+    sub.add_argument("--rerun-failed", action="store_true", help="re-run"
+                     " only the failed jobs of the head's boards run that"
+                     " failed in timing alone")
     sub.set_defaults(handler=boards)
 
     sub = commands.add_parser("promote", help="check the evidence and push"
