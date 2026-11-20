@@ -1186,6 +1186,46 @@ A tag on a commit older than these steps runs that commit's workflow,
 which has neither the environment nor the attestation; the ruleset leaves
 making one to an administrator.
 
+Two installers follow a published release, and neither is moved by the
+release workflow. The flake's `releaseVersion` and `releaseHashes` are
+written by hand from the publishing job's log, as `flake.nix` says beside
+them. The Homebrew formula, `Formula/landin.rb` in
+<https://github.com/JanHaan/homebrew-tap>, is moved by that tap's
+`bump-landin` workflow, which runs daily and points the formula at
+GitHub's latest release. Right after publishing, run it at once rather
+than waiting for the schedule:
+
+```sh
+gh workflow run bump-landin.yml --repo JanHaan/homebrew-tap -f version=X.Y.Z
+```
+
+Then check it: the tap's `main` gains the commit `Landin formula X.Y.Z`,
+and on a Mac with Apple Silicon and on Linux `brew update && brew upgrade
+landin` (or `brew install janhaan/tap/landin`) followed by `brew test
+landin` passes; the formula's test runs `refine version`, which must name
+X.Y.Z, and `refine run` of the README's first program. That test reaches
+no split command, so also run `refine svd --help` on both: it is found in
+the keg's `libexec/landin` only through `refine`'s resolved path. The tap
+is the maintainer's own repository, outside this one's gate.
+
+The formula depends on these properties of a release, so a change to any
+of them changes the formula first, in the tap:
+
+- the assets are `landin-X.Y.Z-PLATFORM.tar.gz` under the tag `vX.Y.Z` of
+  `701-dev/Landin`, for exactly the platforms `aarch64-darwin`,
+  `aarch64-linux` and `x86_64-linux`, which the tap's
+  `scripts/bump-landin.py` lists and the formula names one by one;
+- beside each archive a `.sha256` file whose first field is the archive's
+  SHA-256 sum; the bump reads those and downloads nothing else;
+- the archive is an installed prefix with no top-level directory —
+  `bin/refine`, `libexec/landin/refine-NAME` and `lib/landin` — which the
+  formula installs whole into its keg;
+- `refine` finds `lib/landin` and `libexec/landin` from its own resolved
+  executable, because Homebrew links the keg's `bin` and `lib` into its
+  prefix but not its `libexec`;
+- the release is GitHub's latest one, which a draft or a prerelease is
+  not, and the formula's test program still compiles and runs.
+
 The repository submits no build manifests. GitHub is canonical and takes
 pushes directly; git.sr.ht is a mirror, kept in step by a second push URL on
 the same remote rather than by a job. The mirror therefore holds only what a

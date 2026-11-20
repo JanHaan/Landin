@@ -395,8 +395,8 @@ def index(pages, site_url, release, sizes, programs):
                  "contracts, module overviews and executable examples. "
                  "The searchable inventory is [library-index.json](%s/library-index.json)."
                  % (site_url, site_url)),
-            ("", "- [Installing](%s/readme.html#installing): the nix "
-                 "routes, where a release archive unpacks and what "
+            ("", "- [Installing](%s/readme.html#installing): Homebrew and "
+                 "the nix routes, where a release archive unpacks and what "
                  "`refine version` prints." % site_url),
             ("", "- [The primer](%s/llms-primer.txt): start here. Generated "
                  "from the compiler's own tables — how to install, compile "
