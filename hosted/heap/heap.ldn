@@ -104,10 +104,11 @@ mut free_slots: [8]usize
 --  creation orders everything this thread did to the lists before.
 mut class_lock: lock.lock = zeroed
 
---  Take the classes' lock if a thread has started, and say whether it was
---  taken, for `give_classes` to give it back alike.
-take_classes: () -> (locked: bool) =
-    locked = lock.threads_started()
+--  Take the classes' lock when `locked`, which the caller read from
+--  `lock.threads_started` itself, for `give_classes` to give it back
+--  alike: D339 copies one level, so the caller's copy of the read is a
+--  load and a branch only when the caller makes the call.
+take_classes: (locked: bool) -> none =
     if locked then
         lock.take(addr class_lock)
     end if
@@ -167,14 +168,21 @@ end take_slot
 --  Slots and mappings start at multiples of the smallest class, so a unit
 --  that divides the header has the block a header past the start aligned
 --  already; any other unit may need up to unit - 1 bytes more.
+--  Every unit an allocation asks for in practice is a power of two,
+--  which a mask aligns without the division `align_up` makes.
 host_alloc: (size: usize, unit: usize) -> (block: usize) =
-    slack: usize = if header % unit == 0 then 0 else unit - 1 end if
+    low: usize = unit -% 1
+    power: bool = unit & low == 0
+    slack: usize = if power and unit <= header then 0
+                   elsif not power and header % unit == 0 then 0
+                   else low end if
     extent: usize = size + slack + header
     mut origin: usize = 0
     mut held: usize = 0
     if extent <= largest_class then
         (index, size: class_size) := class_of(extent)
-        locked: bool = take_classes()
+        locked: bool = lock.threads_started()
+        take_classes(locked)
         origin = take_slot(index, class_size)
         give_classes(locked)
         held = class_size
@@ -187,7 +195,8 @@ host_alloc: (size: usize, unit: usize) -> (block: usize) =
         block = 0
         return
     end if
-    block = align_up(origin + header, unit)
+    block = if power then (origin + header + low) & (0 -% unit)
+            else align_up(origin + header, unit) end if
     at: usize = header_at(block)
     store_word(at, origin)
     store_word(at + word, held)
@@ -199,7 +208,8 @@ host_free: (block: usize) -> none =
     held: usize = load_word(at + word)
     if held <= largest_class then
         (index, size: _) := class_of(held)
-        locked: bool = take_classes()
+        locked: bool = lock.threads_started()
+        take_classes(locked)
         link: ptr mut usize = ptr(origin)
         link.val = free_slots[index]
         free_slots[index] = origin
