@@ -461,7 +461,7 @@ measurement.
 
 ### R16.24 — The hosted backends' remaining costs
 
-Status: planned
+Status: active
 Depends on: R16.10
 
 R16.10 ranked x86-64's costs as mostly not register allocation's: floats
