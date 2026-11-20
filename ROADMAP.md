@@ -1419,7 +1419,8 @@ complex elementary functions: `exp`, `log`, powers, `sqrt`, and the
 trigonometric and hyperbolic functions and their inverses. R22.17's
 eigenvalues, R22.70's polynomial roots and R22.73's transforms use it.
 
-Leaves out: complex special functions; matrices of complex elements, Q-67.
+Leaves out: complex special functions; matrices of complex elements, a
+later addition by Q-67's answer.
 
 Exit evidence: each function within its stated error of MPC's values,
 with branch cuts and signed zeros as Annex G gives them, on every target.
@@ -1457,8 +1458,9 @@ upper is a signed integer and a rational that grow through the caller's
 allocator: arithmetic, floor and truncating division, powers, integer
 roots, the greatest common divisor, modular inverse and exponentiation,
 bit operations, and conversion to and from the machine integers and
-floats with stated rounding. Q-69 asks whether arbitrary-precision
-floating point comes too.
+floats with stated rounding. By Q-69's answer, arbitrary-precision
+floating point is a later addition, and the two layers are designed so
+that it can stand on them.
 
 Leaves out: arbitrary-precision floating point, FFT multiplication and
 the Toom variants above three, primality proofs and factoring, and
@@ -1477,7 +1479,7 @@ For targets without a float unit, the Q15 and Q31 formats firmware signal
 processing uses: saturating and rounding arithmetic, conversion to and
 from floats, square root, reciprocal, the trigonometric functions, `exp`
 and `log`, and dot products and FIR filters, which R22.73's fixed-point
-transforms use. Q-70 asks whether this item stays.
+transforms use. It stays by Q-70's answer.
 
 Leaves out: other Qm.n formats and fixed-point matrix factorizations.
 
@@ -1498,9 +1500,11 @@ the breadth of the BLAS's three levels: scaled sums and dot products,
 matrix-vector products and rank-one updates, matrix products, triangular
 products and solves, and symmetric rank-k updates. The matrix product is
 blocked and packed for the cache from the start, the established
-strategy. Small fixed-size vectors are R22.18's.
+strategy. Small fixed-size vectors are R22.18's. By Q-67's answer the
+elements are real, and the matrix's design leaves room for complex
+elements as a later addition.
 
-Leaves out: banded and packed storage, complex elements (Q-67),
+Leaves out: banded and packed storage, complex elements,
 extended-precision accumulation, arrays of more than two dimensions, and
 lazily fused expressions, which need templates Landin does not have.
 
@@ -1525,7 +1529,7 @@ as LAPACK's are.
 Leaves out: banded and packed forms beyond tridiagonal, constrained and
 generalized least squares, equilibration, extended-precision refinement,
 updating a factorization after a low-rank change, and complex matrices
-(Q-67).
+(Q-67's answer).
 
 Exit evidence: LAPACK's scaled residual tests for these families, such as
 `norm(A - LU) / (n norm(A) eps)`, under its threshold of 20 over its generator's matrix
@@ -1548,7 +1552,7 @@ root, the pseudo-inverse and the rank.
 Leaves out: generalized problems over a pair of matrices and the
 generalized SVD, eigensolvers for banded and sparse matrices, selecting
 eigenvalues by range, reordering a Schur form, the CS decomposition,
-other functions of a matrix, and complex matrices (Q-67).
+other functions of a matrix, and complex matrices (Q-67's answer).
 
 Exit evidence: LAPACK's residual and orthogonality tests for its
 symmetric, general and SVD paths under its threshold, on every target;
@@ -1583,7 +1587,8 @@ their products with dense vectors and matrices, and the iterative
 solvers for the systems discretized fields and graphs give: conjugate
 gradients, BiCGSTAB and restarted GMRES, with Jacobi, symmetric
 Gauss–Seidel and zero-fill incomplete Cholesky and LU preconditioners.
-Q-68 asks whether direct factorizations come too.
+By Q-68's answer the solvers are iterative, and the format is chosen so
+that sparse direct factorizations fit as a later addition.
 
 Leaves out: sparse direct factorizations and fill-reducing orderings,
 algebraic multigrid, sparse eigensolvers, and block and hierarchical
