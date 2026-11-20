@@ -24,11 +24,13 @@ the image.  `build contributor` builds from `environments/`, whose
 image with the release and the commit, and the source label names the
 repository, which links a published package to it.
 
-`check user` runs, as an unprivileged user in a fresh container each time,
-what the README's "In a container" section tells a reader to: `refine
-version`, which must name the library in `/usr/local/lib/landin`, then the
-first program compiled with `refine compile` and run, and run again with
-`refine run`, each printing exactly its fixture's output.  With
+`check user` runs what the README's "In a container" section tells a
+reader to, in a fresh container each time, with a directory of the
+reader's mounted at `/work` and the container run as the reader's own
+user: `refine version`, which must name the library in
+`/usr/local/lib/landin`, then the first program compiled with `refine
+compile`, owned by the reader, and run, and run again with `refine run`,
+each printing exactly its fixture's output.  With
 `--debugger` it also installs Debian's GDB in a container and stops the
 first program at `main`, with and without `--cap-add=SYS_PTRACE`, and
 requires the run the README gives to stop there.
@@ -69,8 +71,6 @@ REGISTRY = "ghcr.io"
 NAMES = {"user": "landin", "contributor": "landin-contributor"}
 ARCHITECTURES = ("amd64", "arm64")
 LIBRARY = "/usr/local/lib/landin"
-#  The unprivileged user each check runs as, and where it works.
-USER = ["--user", "1000:1000", "--env", "HOME=/tmp", "--workdir", "/tmp"]
 
 
 class Refused(Exception):
@@ -150,30 +150,41 @@ def expect(failures, what, status, printed, said, wanted):
 
 
 def check_user(engine, tag, debugger):
+    """The README's commands, as it gives them: the reader's directory
+    mounted at /work and the container run as the reader's own user."""
     failures = []
     source, wanted = first_program()
-    status, printed, said = capture([engine, "run", "--rm", *USER, tag,
-                                     "refine", "version"])
-    lines = printed.decode("utf-8", "replace").splitlines()
-    if status != 0 or len(lines) < 2 or not lines[0].startswith("refine ") \
-            or lines[1] != "library: " + LIBRARY:
-        failures.append("refine version did not name %s as its library\n%s%s"
-                        % (LIBRARY, printed.decode("utf-8", "replace"),
-                           said.decode("utf-8", "replace")))
-    else:
-        print("ok   refine version: %s, %s" % (lines[0], lines[1]), flush=True)
-    #  The source arrives on standard input, the compiler's own words go to
-    #  standard error, and what is left is the program's.
-    status, printed, said = capture(
-        [engine, "run", "--rm", "--interactive", *USER, tag, "sh", "-c",
-         "set -e; cat > main.ldn; refine compile main.ldn -o main >&2; "
-         "./main < /dev/null"], source)
-    expect(failures, "refine compile, then the program", status, printed,
-           said, wanted)
-    status, printed, said = capture(
-        [engine, "run", "--rm", "--interactive", *USER, tag, "sh", "-c",
-         "set -e; cat > main.ldn; refine run main.ldn < /dev/null"], source)
-    expect(failures, "refine run", status, printed, said, wanted)
+    with tempfile.TemporaryDirectory(prefix="landin-user-check-") as work:
+        (Path(work) / "main.ldn").write_bytes(source)
+        os.chmod(work, 0o755)
+        reader = [engine, "run", "--rm", "--volume", "%s:/work" % work,
+                  "--user", "%d:%d" % (os.getuid(), os.getgid()), tag]
+        status, printed, said = capture(reader + ["refine", "version"])
+        lines = printed.decode("utf-8", "replace").splitlines()
+        if status != 0 or len(lines) < 2 or not lines[0].startswith("refine ") \
+                or lines[1] != "library: " + LIBRARY:
+            failures.append("refine version did not name %s as its library\n%s%s"
+                            % (LIBRARY, printed.decode("utf-8", "replace"),
+                               said.decode("utf-8", "replace")))
+        else:
+            print("ok   refine version: %s, %s" % (lines[0], lines[1]),
+                  flush=True)
+        status, printed, said = capture(reader + ["refine", "compile",
+                                                  "main.ldn", "-o", "main"])
+        if status != 0:
+            failures.append("refine compile ended with status %d\n%s%s" % (
+                status, printed.decode("utf-8", "replace"),
+                said.decode("utf-8", "replace")))
+        else:
+            status, printed, said = capture(reader + ["./main"])
+            expect(failures, "refine compile, then the program", status,
+                   printed, said, wanted)
+            owner_id = (Path(work) / "main").stat().st_uid
+            if owner_id != os.getuid():
+                failures.append("the program belongs to user %d, not to the "
+                                "reader, %d" % (owner_id, os.getuid()))
+        status, printed, said = capture(reader + ["refine", "run", "main.ldn"])
+        expect(failures, "refine run", status, printed, said, wanted)
     if debugger:
         failures += check_debugger(engine, tag, source)
     return failures

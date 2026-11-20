@@ -40273,6 +40273,108 @@ refuse a run off its tag, and whose notes case holds the release to the
 verify command. The ruleset and the environment are repository settings
 that `gh api` reads; no case runs the workflow.
 
+### D1667 — A release publishes a user image built from its Linux archives over Debian's own GCC
+
+**The tour said** nothing. A release published archives for Linux,
+macOS and nix; a reader who wanted `refine` in a container, or on a host
+whose loader the Linux archive does not find, had to assemble one.
+
+**Chosen:** the release workflow builds `ghcr.io/OWNER/landin` from the
+two Linux archives without compiling: each archive's prefix, `bin/refine`,
+`libexec/landin` and `lib/landin`, unpacked into `/usr/local` of the
+Debian 13 image `environments/pins.sh` pins by digest, with Debian's
+`gcc` and `libc6-dev`. Debian installs its driver as
+`x86_64-linux-gnu-gcc` and `aarch64-linux-gnu-gcc`, names `refine`
+already asks for (D364), so nothing is linked under the name the flake's
+`refine-bin` makes. No firmware or cross toolchain is in it; the README
+says which Debian packages add one, and that GDB needs
+`--cap-add=SYS_PTRACE`. Each platform's image is built and checked on its
+own runner, `scripts/container_image.py check user` running the README's
+commands with a directory of the reader's mounted at `/work` as the
+reader's own user, and is kept as an archive so the publishing job pushes
+what was checked: one manifest list of linux/amd64 and linux/arm64,
+tagged with the version alone, after the release's archives are public,
+and attested in the registry. A tag the registry already holds is never
+replaced. The gate builds the same image from its own packaged compiler
+on amd64 and arm64 and runs the first program in it, so a release finds
+no new fault there.
+
+**The alternatives:** an image that compiles `refine` itself, which is
+the contributor image's work and would publish a compiler other than the
+archive's; a scratch or distroless image with a static `refine`, which
+needs a linker and C library all the same and waits on a static build; a
+`latest` tag that every release moves, which is the maintainer's question
+and defaults to no; and images from `main` or each commit, which the
+maintainer declined: an image is a release's.
+
+**Pinned by** `scripts/tests/test_container_image.py`, whose cases hold
+the build context to the archive and the recipe, the check to the
+README's commands, and the publication to both platforms and to never
+replacing a tag; `scripts/tests/test_release.py`'s `Workflow` cases, which
+hold the push to after the release is public and to the publishing job
+alone; `check.py`'s pin agreement, which holds the recipe's base image to
+`environments/pins.sh`; and the gate's `outside-user-stock` and
+`arm64-release` steps that build and run it.
+
+### D1668 — The contributor image is the pinned environment for both Linux architectures, read from pins.sh
+
+**The tour said** nothing. `environments/linux-amd64/Containerfile`
+was the local loop's image: amd64 only, with GNAT and GPRbuild's versions
+and checksums written again as build arguments that `check.py` compared
+with the pins.
+
+**Chosen:** the recipe moves to
+`environments/images/contributor.Containerfile`, builds from
+`environments/` and copies `pins.sh` in, installing the toolchain with its
+`landin_install_toolchain` for the platform the builder names, amd64 or
+arm64, behind versionless links, so it writes no version or checksum and
+`check.py` holds it to reading the pins rather than to repeating them. It
+adds `git`, which the build's identity reads. The release workflow builds
+it for both platforms from the tagged tree, builds that tree's compiler
+inside it as the invoking user under the build tag `image` and runs the
+first program, and publishes it as `ghcr.io/OWNER/landin-contributor`
+beside the user image, by the same steps. `scripts/linux-loop.sh` builds
+the same recipe for its Rosetta loop, its image tag carrying the recipe
+and the pins.
+
+**The alternatives:** a second recipe for arm64, which is a second place
+to keep in step; building it in the gate on every push, which fetches the
+toolchain and builds the compiler again on two more runners for an image
+published only at a release, so the release workflow and its rehearsal
+build it instead; and keeping the build arguments beside a copy of the
+pins, which is two places a version is written.
+
+**Pinned by** `check.py`'s pin agreement and its controls in
+`scripts/tests/test_check_controls.py`, which refuse a recipe naming a
+version, not copying `pins.sh` or not calling `landin_install_toolchain`;
+`scripts/tests/test_build_inventory.py`'s recipe checksum case; and the
+release workflow's `contributor-image` job.
+
+### D1669 — The release workflow rehearses on any ref and publishes nothing
+
+**The tour said** nothing. The release workflow ran only on a `v*` tag,
+so its builds and checks were first seen working on the run that
+publishes, after the tag that cannot be taken back.
+
+**Chosen:** a dispatch with `rehearse` runs on any ref. The tag and gate
+checks and the publishing job are skipped, and the environment would
+refuse a branch in any case; the archives' version is not compared with a
+tag; the three builds, both images' builds and checks, and the assembly of
+each image's two platforms into one list are run, the lists pushed into
+an OCI layout on the runner. The release recipe in `docs/process.md` runs
+one on `main` before the tag. The archives' artifacts are named apart from
+the images', so the publishing job uploads the archives alone as the
+release's assets.
+
+**The alternatives:** a separate workflow for the images, which would
+build from something other than the release's own run; and testing the
+publication against a registry of the project's, which publishes.
+
+**Pinned by** `scripts/tests/test_release.py`'s `Workflow` cases, which
+hold the publishing job to being skipped on a rehearsal, to taking the
+archives' artifacts alone and to pushing nowhere but the registry, and the
+`images` job to the layout.
+
 ### D571 — A round's yield calls nothing beneath it but its sweep, its idler and its switch
 
 **The tour said** nothing. `core/fibre/stacks`' round of turns is the one

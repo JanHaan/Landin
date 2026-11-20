@@ -35,11 +35,14 @@ if tool == "docker" and argv[0] == "build":
     print(json.dumps(sorted(p.name for p in Path(argv[-1]).iterdir())),
           file=sys.stderr)
 elif tool == "docker" and argv[0] == "run":
+    work = Path(argv[argv.index("--volume") + 1].split(":")[0]) \
+        if "--volume" in argv else None
     if argv[-2:] == ["refine", "version"]:
         print("refine 0.2.11")
         print("library: " + os.environ.get("FAKE_LIBRARY", "/usr/local/lib/landin"))
-    else:
-        sys.stdin.read()
+    elif "compile" in argv:
+        (work / argv[argv.index("-o") + 1]).write_text("program")
+    elif argv[-1] == "./main" or argv[-2:] == ["run", "main.ldn"]:
         sys.stdout.write(Path(os.environ["FAKE_OUTPUT"]).read_text())
 elif tool == "podman" and argv[0] == "load":
     print("Loaded image: localhost/" + Path(argv[-1]).stem)
@@ -120,9 +123,11 @@ class Check(Stand):
     def test_an_image_that_answers_as_the_readme_says_passes(self):
         done, calls = self.run_script("check", "user", "t")
         self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
-        self.assertEqual(len(calls), 3)
+        self.assertEqual([call[-1] for call in calls],
+                         ["version", "main", "./main", "main.ldn"])
         for call in calls:
             self.assertIn("--user", call)
+            self.assertTrue(call[call.index("--volume") + 1].endswith(":/work"))
 
     def test_a_library_elsewhere_or_another_output_fails(self):
         done, _ = self.run_script("check", "user", "t", FAKE_LIBRARY="/opt/lib")

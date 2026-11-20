@@ -190,17 +190,25 @@ jobs:
           "$binary" --identify
           #  The first line is the release; the second the library the
           #  compiler found beside itself, here the checkout it was built in.
+          #  A rehearsal's commit carries no v tag, so its compiler names
+          #  itself a development build, refine dev (REVISION).
+          named="refine $version"
+          expected="$version"
+          if [ "$REHEARSE" = true ]; then
+            named="refine dev ($(git rev-parse HEAD | cut -c1-8))"
+            expected=""
+          fi
           for asked in --version version; do
-            test "$("$binary" $asked | sed -n 1p)" = "refine $version"
+            test "$("$binary" $asked | sed -n 1p)" = "$named"
             test "$("$binary" $asked | sed -n 2p)" = "library: $(pwd -P)"
           done
           "$binary" version --json > "$RUNNER_TEMP/version.json"
-          python3 - "$version" "$(git rev-parse HEAD)" "$RUNNER_TEMP/version.json" <<'PY'
+          python3 - "$expected" "$(git rev-parse HEAD)" "$RUNNER_TEMP/version.json" <<'PY'
           import json, re, sys
           from pathlib import Path
           version, revision, path = sys.argv[1:]
           identity = json.loads(Path(path).read_text())
-          assert identity["version"] == version, identity
+          assert identity["version"] == (version or None), identity
           assert identity["revision"] == revision, identity
           assert identity["dirty"] is False, identity
           assert identity["mode"] == "release", identity
