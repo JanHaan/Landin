@@ -154,7 +154,7 @@ The measurements were taken again on 20 November 2026 with
 environment:
 
 ```sh
-python3 scripts/benchmarks.py --refine 0.2.10=PATH --refine candidate=PATH --core N --output DIR
+python3 scripts/benchmarks.py --compiler 0.2.10=PATH --compiler candidate=PATH --core N --output DIR
 ```
 
 The C programs are pinned by their SHA-256 in

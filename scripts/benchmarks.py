@@ -4,13 +4,13 @@
 docs/benchmarks.md describes the method this carries out;
 compiler/tests/measure/benchmarks.json names each port, the size it is
 timed at and the C program it is compared with.  Each compiler given with
---refine builds every port at `--optimize speed` with its own library, the
+--compiler builds every port at `--optimize speed` with its own library, the
 C compiler builds the Benchmark Game's C programs, and every image is then
 run interleaved with the others, a fresh copy each time, pinned to one core.
 
-    benchmarks.py --refine 0.2.10=PATH --refine candidate=PATH --output DIR
-    benchmarks.py --refine candidate=PATH --size timing --runs 5 --output DIR
-    benchmarks.py --refine candidate=PATH --no-c --only fasta --output DIR
+    benchmarks.py --compiler 0.2.10=PATH --compiler candidate=PATH --output DIR
+    benchmarks.py --compiler candidate=PATH --size timing --runs 5 --output DIR
+    benchmarks.py --compiler candidate=PATH --no-c --only fasta --output DIR
 
 `--size performance` (the default) runs the Benchmark Game's performance
 sizes, which take minutes each; `--size timing` runs the smaller timing
@@ -22,7 +22,7 @@ time, its multiple of C's, the geometric mean of those multiples, peak
 resident memory, the image's allocated bytes and `.text`, and each
 compile's median wall time over --compile-runs compiles after one more
 that warms the caches.  Every output must be the reference's, byte for
-byte: C's, or without C the first --refine's.
+byte: C's, or without C the first --compiler's.
 
 The C sources are not in this tree.  The Benchmark Game serves them in one
 archive that changes when its programs do, so the archive is not pinned and
@@ -323,7 +323,7 @@ def main(argv=None) -> int:
         description=__doc__.split("\n\n")[0],
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="See the module's own text for the method.")
-    parser.add_argument("--refine", action="append", default=[], metavar="LABEL=PATH",
+    parser.add_argument("--compiler", action="append", default=[], metavar="LABEL=PATH",
                         help="a compiler to measure, under LABEL; repeatable")
     parser.add_argument("--library", action="append", default=[], metavar="LABEL=DIR",
                         help="the library LABEL's compiler uses, when not its own")
@@ -340,10 +340,10 @@ def main(argv=None) -> int:
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args(argv)
     try:
-        require(args.refine, "give at least one --refine LABEL=PATH")
-        compilers = dict(item.split("=", 1) for item in args.refine)
+        require(args.compiler, "give at least one --compiler LABEL=PATH")
+        compilers = dict(item.split("=", 1) for item in args.compiler)
         libraries = dict(item.split("=", 1) for item in args.library)
-        require(len(compilers) == len(args.refine), "each --refine needs its own LABEL")
+        require(len(compilers) == len(args.compiler), "each --compiler needs its own LABEL")
         require("C" not in compilers, "C is the label of the C programs")
         chosen = programs(args.size, args.only)
         sources = {} if args.no_c else c_sources(chosen, args.c_archive)
@@ -437,6 +437,11 @@ def main(argv=None) -> int:
         return 0
     except Failure as failure:
         print(f"benchmarks.py: {failure}", file=sys.stderr)
+        return 1
+    except OSError as error:
+        print(f"benchmarks.py: {error.filename or ''} cannot be run: {error.strerror};"
+              f" give each --compiler and --cc as a path to an executable",
+              file=sys.stderr)
         return 1
 
 
