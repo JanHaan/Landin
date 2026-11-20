@@ -761,6 +761,15 @@ python3 check.py prototype-2-parser.md
 # The options and every suite name, without a build or Python.
 ./scripts/dev-test.sh --help
 
+# How often each construct an audit of the language weighs is written, on
+# checked trees: every corpus program checked as the language server
+# checks it, each file counted once, split into library, examples/ and the
+# rest of the corpus, with the library's and the examples' uses listed by
+# line, and how many library files the corpus reached.  It sees what grep cannot, an operator on whole arrays or an
+# aggregate assigned to a place it reads, and passes or fails nothing.
+# About eight minutes.
+./scripts/dev-test.sh --census
+
 # An experiment in a build tree of its own, which nix develop leaves alone.
 LANDIN_BUILD_VARIANT=inliner ./scripts/dev-build.sh
 

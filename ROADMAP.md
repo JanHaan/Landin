@@ -1181,11 +1181,14 @@ on labels, `break with` and `complete` (SC-01, SC-02) settle E1.
 It takes on SR-1288: the answer on SC-24 either folds the
 value-model decisions or marks each boundary a later decision lifted, so
 that a superseded boundary no longer reads as a live rule. SC-27 is
-decided on a count, not an estimate, so R19.10 takes on SR-1286 and counts
-the constructs over the library, the examples and the corpus first.
+decided on a count, not an estimate: R19.10 counted the constructs over
+the library, the examples and the corpus on checked trees with
+`./scripts/dev-test.sh --census`, which completed `SR-1286`.
 R19.10 also decides SR-1237 itself, whether a type application's fixed
 actual folds compiler facts and `sizeof` as an array length does or D135
 stands, rather than leave it to R19.20, which runs only if SC-24 is taken.
+Its answers are asked as Q-80 (the candidates and their groups), Q-81
+(the value-model fold) and Q-82 (fixed actuals).
 
 ### R19.20 — How far the checker folds
 
@@ -1194,7 +1197,8 @@ Depends on: R19.10
 
 Taken only if the value-model fold (SC-24) is accepted. It reads the
 checker and lowering against D24-D109 and says which per-slice paths
-collapse into one rule and which stay. The fold's item takes its scope
+collapse into one rule and which stay, starting from R19.10's sampled
+reading, [`roadmap/inputs/value-model-reading.md`](roadmap/inputs/value-model-reading.md). The fold's item takes its scope
 from this reading.
 
 ### R19.30 — One write order for an aggregate assignment

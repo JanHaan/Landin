@@ -15,6 +15,7 @@ with Ada.Text_IO;
 with Landin.Diagnostics.Checking;
 with Landin.Platform;
 with Landin.Testing;
+with Landin.Testing.Census;
 with Landin.Testing.Lanes;
 with Landin.Tests.Arm64_Selection_Suite;
 with Landin.Tests.Array_Layout_Suite;
@@ -75,7 +76,7 @@ procedure Landin_Tests is
 
    type Requested_Mode is
      (Run_All, Run_Host, Record_Artefacts, Run_Suite, Run_Case,
-      Run_Fixture, List_Cases, Misuse);
+      Run_Fixture, List_Cases, Count_Constructs, Misuse);
 
    Mode         : Requested_Mode := Run_All;
    Host_Only    : Boolean := False;
@@ -227,6 +228,10 @@ procedure Landin_Tests is
       Text_IO.Put_Line
         (Text_IO.Standard_Error,
          "       and, with no selection or --host alone, --shard=I/N");
+      Text_IO.Put_Line
+        (Text_IO.Standard_Error,
+         "       landin_tests --census   counts constructs over the checked"
+         & " corpus, examples and library");
    end Print_Usage;
 
    --  The lane's own options may accompany any selection, each once; what
@@ -341,6 +346,13 @@ procedure Landin_Tests is
               and then Argument'Length > 9
             then
                Recordings.Append (Value (Argument, "--record="));
+            elsif Argument = "--census" then
+               if Ada.Command_Line.Argument_Count /= 1 then
+                  Mode := Misuse;
+               else
+                  Mode := Count_Constructs;
+               end if;
+               return;
             elsif Argument = "--cases" then
                Listing.Append ("");
             elsif Starts_With (Argument, "--cases=")
@@ -456,6 +468,16 @@ begin
    --  defect in this program and nowhere else, in either build mode.
    Landin.Diagnostics.Checking.Refuse_Repeated_Places (True);
    Read_Arguments;
+
+   if Mode = Count_Constructs then
+      declare
+         Ok : Boolean;
+      begin
+         Landin.Testing.Census.Run (Ok);
+         Ada.Command_Line.Set_Exit_Status (if Ok then 0 else 2);
+      end;
+      return;
+   end if;
 
    if Mode = Misuse then
       Print_Usage;
@@ -831,7 +853,7 @@ begin
             Record_Timings =>
               Ada.Environment_Variables.Exists ("LANDIN_TEST_TIMINGS"),
             Progress       => Landin.Testing.Write_Progress'Access);
-      when Record_Artefacts | List_Cases | Misuse =>
+      when Record_Artefacts | List_Cases | Count_Constructs | Misuse =>
          raise Landin.Compiler_Defect with "test mode reached the runner";
    end case;
 
