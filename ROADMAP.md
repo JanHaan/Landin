@@ -496,8 +496,8 @@ fixed on the way: a lane's relative `--refine` was run from another
 directory, so `measure.py size` failed with a traceback; it is now made
 absolute where it is given; and the parser suite gave its one-file host
 the firmware library only for Cortex-M. The candidate passed its
-[gate](https://github.com/701-dev/Landin/actions/runs/44798445992) and
-[boards](https://github.com/701-dev/Landin/actions/runs/44804053168).
+[gate](https://github.com/701-dev/Landin/actions/runs/44819967946) and
+[boards](https://github.com/701-dev/Landin/actions/runs/44824460389).
 
 ### R16.24 — The hosted backends' remaining costs
 
