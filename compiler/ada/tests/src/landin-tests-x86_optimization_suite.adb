@@ -204,6 +204,7 @@ package body Landin.Tests.X86_Optimization_Suite is
    procedure Slice_Elements_Check_Once
      (Item : in out Landin.Testing.Context);
    procedure Arithmetic_Shapes (Item : in out Landin.Testing.Context);
+   procedure Shifts_Rotate (Item : in out Landin.Testing.Context);
    procedure Element_Addressing (Item : in out Landin.Testing.Context);
    function Merging_Moves (Text : String) return Natural;
    procedure Reciprocals_Divide_Exactly
@@ -762,6 +763,8 @@ package body Landin.Tests.X86_Optimization_Suite is
          Calling : constant Alloc.Plan := Alloc.Make (Code, 2, Facts, Speed);
          Compact : constant Alloc.Plan := Alloc.Make
            (Code, 1, Facts, Opt.Default_Options);
+         Plain : constant Alloc.Plan := Alloc.Make
+           (Code, 1, Facts, (Opt.None, Opt.Off));
          Slots, Values : Natural := 0;
 
          --  SysV preserves no XMM register across a call, so no value
@@ -828,8 +831,10 @@ package body Landin.Tests.X86_Optimization_Suite is
             and then Plan.Used_SSE = Again.Used_SSE
             and then Alloc.SSE_Count (Calling) > 0
             and then not Spans_Call (Calling, 2)
-            and then Alloc.SSE_Count (Compact) = 0,
-            "speed floats use repeatable XMM locations no call clobbers");
+            and then Alloc.SSE_Count (Compact) > 0
+            and then Alloc.SSE_Count (Plain) = 0,
+            "size and speed floats use repeatable XMM locations no call"
+            & " clobbers, and none uses none (D1625)");
          X86.Emit
            (Code, Landin.Stages.Meanings (Work).all,
             Landin.Stages.Identities (Work).all, Facts,
@@ -1047,23 +1052,26 @@ package body Landin.Tests.X86_Optimization_Suite is
         (Item, Work,
          "first: (x: i32) -> (r: i32) = r = x end first "
          & "second: (x: u32) -> (r: u32) = r = x end second "
-         & "public visible: (x: i32) -> (r: i32) = r = x end visible");
+         & "public visible: (x: i32) -> (r: i32) = r = x end visible "
+         & "public extern(c) exported: (x: i32) -> (r: i32) = r = x "
+         & "end exported");
       declare
          Text : constant String := Emitted (Work);
          Reference : constant String := Emitted (Work, Opt.Reference_Options);
       begin
+         --  D415: an export keeps its own entry; `public` alone does not.
          Check_Assembly
            (Item,
             Labelled ("default", Text)
             & Labelled ("reference", Reference),
             Contains (Text, ".set ")
             and then not Contains (Reference, ".set ")
-            and then Contains (Text, "visible:")
-            and then not Contains (Text, ".set visible,")
+            and then Contains (Text, "exported:")
+            and then not Contains (Text, ".set exported,")
             and then not Contains (Text, "%rbx")
             and then Text = Emitted (Work),
-            "ordinary final bodies fold without merging public entry identity"
-            & " or charging a tiny leaf for callee saves");
+            "ordinary final bodies fold without merging an export's entry"
+            & " identity or charging a tiny leaf for callee saves");
       end;
       Lower
         (Item, Observed,
@@ -1689,6 +1697,51 @@ package body Landin.Tests.X86_Optimization_Suite is
          end;
       end loop;
    end Arithmetic_Shapes;
+
+   --  D1624: two shifts of one unsigned value by constants that sum to its
+   --  width, joined by `|`, `^` or `+%`, are one rotate at size and speed;
+   --  a pair that does not sum to the width, and a signed value, keep their
+   --  shifts, and none forms no rotate at all.
+   procedure Shifts_Rotate (Item : in out Landin.Testing.Context) is
+      use type Opt.Objective;
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      HT : constant Character := Character'Val (9);
+   begin
+      Lower
+        (Item, Work,
+         "public turns: (a: u32, b: u64, c: u64) -> (r: u32, s: u64, t: u64) ="
+         & " r = (a << 13) | (a >> 19) s = (b >> 51) ^ (b << 13)"
+         & " t = (c << 32) +% (c >> 32) end turns "
+         & "public misses: (a: u32, b: i32) -> (r: u32, s: i32) ="
+         & " r = (a << 5) | (a >> 26) s = (b << 3) | (b >> 29) end misses");
+      for Objective in Opt.Objective loop
+         declare
+            Text : constant String := Emitted (Work, (Objective, Opt.Off));
+            Turns : constant Natural :=
+              Ada.Strings.Fixed.Count (Text, HT & "roll $13, %")
+              + Ada.Strings.Fixed.Count (Text, HT & "rolq $13, %")
+              + Ada.Strings.Fixed.Count (Text, HT & "rolq $32, %");
+         begin
+            if Objective = Opt.None then
+               Check_Assembly
+                 (Item, Text,
+                  Turns = 0 and then not Contains (Text, HT & "rol"),
+                  "none keeps every shift");
+            else
+               Check_Assembly
+                 (Item, Text,
+                  Turns = 3
+                  and then Ada.Strings.Fixed.Count (Text, HT & "rol") = 3
+                  and then Contains (Text, HT & "shll $5, %")
+                  and then Contains (Text, HT & "shrl $26, %")
+                  and then Contains (Text, HT & "sarl $29, %"),
+                  "size and speed rotate each pair that sums to the width"
+                  & " and keep the shifts of the rest");
+            end if;
+         end;
+      end loop;
+   end Shifts_Rotate;
 
    --  Size and speed reach an element as one indexed memory operand
    --  after its bounds check: a frame array from %rbp, a slice element
@@ -2357,6 +2410,8 @@ package body Landin.Tests.X86_Optimization_Suite is
         (Into, "x86 opt", "conditions jump", Conditions_Jump'Access);
       Landin.Testing.Register
         (Into, "x86 opt", "arithmetic shapes", Arithmetic_Shapes'Access);
+      Landin.Testing.Register
+        (Into, "x86 opt", "shifts that rotate", Shifts_Rotate'Access);
       Landin.Testing.Register
         (Into, "x86 opt", "element addressing", Element_Addressing'Access);
       Landin.Testing.Register

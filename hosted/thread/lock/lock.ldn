@@ -82,7 +82,10 @@ end give
 --  Whether the program has started a thread: zero until `note_start`, and
 --  one for the rest of the process.  Relaxed, since the thread's creation
 --  orders what the program did before it, and nothing is ever unwritten.
-mut started: atomic.cell(u32) = zeroed
+--  A plain word under the builtins rather than an `atomic.cell`, whose
+--  operations are evidence entries D339 never copies: the heap's copy of
+--  `threads_started` is then one load and a comparison.
+mut started: u32 = 0
 
 --- Record that the program is about to start a thread. The thread facility
 --- calls it before it starts its first thread, on the thread that starts
@@ -90,7 +93,7 @@ mut started: atomic.cell(u32) = zeroed
 --- record. State that is shared only once there are threads, the heap's
 --- among it, takes its lock from then on and skips it until then.
 public note_start: () -> none =
-    atomic.store_relaxed(addr started, 1)
+    compiler.atomic_store(addr started, 1, compiler.relaxed)
 end note_start
 
 --- Whether `note_start` has been called: whether a thread other than the
@@ -98,5 +101,5 @@ end note_start
 --- Landin under `--link=libc` is none of the program's and is not
 --- counted.
 public threads_started: () -> (yes: bool) =
-    yes = atomic.load_relaxed(addr started) <> 0
+    yes = compiler.atomic_load(addr started, compiler.relaxed) <> 0
 end threads_started

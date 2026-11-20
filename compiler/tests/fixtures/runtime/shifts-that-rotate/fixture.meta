@@ -1,0 +1,7 @@
+class: runtime
+profiles: standard
+summary: two shifts of one unsigned value whose amounts sum to its width are a rotation, joined by or, xor or a wrapping add, and a pair that does not sum to the width stays two shifts
+constructs: 0320, 1770, 1890
+program: main.ldn
+status: 42
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

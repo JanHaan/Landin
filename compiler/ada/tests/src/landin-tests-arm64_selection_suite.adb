@@ -61,6 +61,7 @@ package body Landin.Tests.Arm64_Selection_Suite is
    procedure Reciprocals_Select_Exactly
      (Item : in out Landin.Testing.Context);
    procedure Arithmetic_Shapes (Item : in out Landin.Testing.Context);
+   procedure Shifts_Rotate (Item : in out Landin.Testing.Context);
    procedure Speed_Multiplies_Known_Divisors
      (Item : in out Landin.Testing.Context);
    procedure Comparisons_Branch_On_Flags
@@ -1069,6 +1070,43 @@ package body Landin.Tests.Arm64_Selection_Suite is
    --  D338: a choice is csel or fcsel on the flags of the comparison right
    --  before it, or on a stored bool; fcmp leaves an unordered pair's
    --  flags so that `mi` is false for it, choosing the second value.
+   --  D1624: two shifts of one unsigned value whose constant amounts sum
+   --  to its width are one `ror` by the width less the left amount, at
+   --  size and speed; a pair that does not sum to it keeps its shifts.
+   procedure Shifts_Rotate (Item : in out Landin.Testing.Context) is
+      Source : constant String :=
+        "public turns: (a: u32, b: u64) -> (r: u32, s: u64) = "
+        & "r = (a << 13) | (a >> 19) s = (b >> 51) ^ (b << 13) end turns "
+        & "public misses: (a: u32) -> (r: u32) = "
+        & "r = (a << 5) | (a >> 26) end misses";
+   begin
+      for Objective in Opt.Size .. Opt.Speed loop
+         declare
+            Text : constant String := Converted (Item, Source, Objective);
+            Turns : constant String := Routine (Text, "turns");
+            Misses : constant String := Routine (Text, "misses");
+            Where : constant String :=
+              " at " & Opt.Objective'Image (Objective);
+         begin
+            Landin.Testing.Check
+              (Item, Contains (Turns, ", #19" & LF)
+                     and then Contains (Turns, ", #51" & LF)
+                     and then Ada.Strings.Fixed.Count (Turns, HT & "ror ") = 2
+                     and then not Contains (Turns, HT & "lsl ")
+                     and then not Contains (Turns, HT & "lsr "),
+               "each pair that sums to the width is one ror" & Where);
+            Landin.Testing.Check
+              (Item, Contains (Misses, HT & "lsl ")
+                     and then Contains (Misses, HT & "lsr ")
+                     and then not Contains (Misses, HT & "ror "),
+               "a pair that does not keeps its shifts" & Where);
+         end;
+      end loop;
+      Landin.Testing.Check
+        (Item, not Contains (Converted (Item, Source, Opt.None), "ror "),
+         "none keeps every shift");
+   end Shifts_Rotate;
+
    procedure Choices_Select_Conditionally
      (Item : in out Landin.Testing.Context)
    is
@@ -1123,6 +1161,9 @@ package body Landin.Tests.Arm64_Selection_Suite is
       Landin.Testing.Register
         (Into, "arm64 selection", "arithmetic shapes",
          Arithmetic_Shapes'Access);
+      Landin.Testing.Register
+        (Into, "arm64 selection", "shifts that rotate",
+         Shifts_Rotate'Access);
       Landin.Testing.Register
         (Into, "arm64 selection", "speed multiplies by known divisors",
          Speed_Multiplies_Known_Divisors'Access);

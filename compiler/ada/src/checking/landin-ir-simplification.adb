@@ -252,6 +252,18 @@ package body Landin.IR.Simplification is
                end if;
                Known := True;
             end if;
+         when Rotate_Left =>
+            if B in 1 .. Integer_Value (Width) - 1 then
+               declare
+                  X : constant Bits := Pattern (A) and Mask (Width);
+               begin
+                  Result := Signed_Value
+                    (Interfaces.Shift_Left (X, Natural (B))
+                       or Interfaces.Shift_Right (X, Width - Natural (B)),
+                     Width, Landin.Types.Is_Signed (Into_Kind));
+                  Known := True;
+               end;
+            end if;
          when Conversion =>
             Result := A;
             if Code.Unchecked then
@@ -852,6 +864,67 @@ package body Landin.IR.Simplification is
             end if;
          end Apply_Identity;
 
+         --  `(x << n) | (x >> (w - n))`, or the two shifts the other way
+         --  round, or joined by `^` or `+%`, which agree with `|` on bits
+         --  no two of them share: x rotated left by n, for an unsigned x
+         --  of 32 or 64 bits and a constant n in 1 .. w - 1, on a target
+         --  whose backend selects a rotate.  The shifts are left to
+         --  removal when nothing else reads them.
+         procedure Form_Rotate (Code : in out Instruction);
+         procedure Form_Rotate (Code : in out Instruction) is
+            Width : Natural;
+            Left, Right, Turned : Value_Id;
+         begin
+            if Landin.Targets.Architecture_Of (Facts)
+                 not in Landin.Targets.X86_64 | Landin.Targets.Arm64
+              or else Code.Op not in Bitwise_Or | Bitwise_Xor | Wrapping_Add
+              or else not Plain (Code) or else Code.Args /= 2
+              or else Code.Result not in Landin.Types.Integer_Name
+              or else Landin.Types.Is_Signed
+                (Landin.Types.Integer_Name (Code.Result))
+            then
+               return;
+            end if;
+            Width := Natural (Landin.Types.Width
+              (Landin.Types.Integer_Name (Code.Result), Facts));
+            if Width not in 32 | 64 then
+               return;
+            end if;
+            Left := Operand (Code, 1);
+            Right := Operand (Code, 2);
+            if Code_At (Left).Op = Shift_Right then
+               Turned := Left;
+               Left := Right;
+               Right := Turned;
+            end if;
+            declare
+               Up : constant Instruction := Code_At (Left);
+               Down : constant Instruction := Code_At (Right);
+            begin
+               if Up.Op /= Shift_Left or else Down.Op /= Shift_Right
+                 or else not Plain (Up) or else not Plain (Down)
+                 or else Up.Args /= 2 or else Down.Args /= 2
+                 or else Up.Result /= Code.Result
+                 or else Down.Result /= Code.Result
+                 or else Class (Positive (Operand (Up, 1)))
+                   /= Class (Positive (Operand (Down, 1)))
+                 or else not Integer_Constant (Operand (Up, 2))
+                 or else not Integer_Constant (Operand (Down, 2))
+                 or else Numeric (Operand (Up, 2)) not in
+                   1 .. Integer_Value (Width) - 1
+                 or else Numeric (Operand (Up, 2))
+                   + Numeric (Operand (Down, 2)) /= Integer_Value (Width)
+               then
+                  return;
+               end if;
+               Into.Operands.Replace_Element
+                 (Code.First_Arg + 1, Operand (Up, 1));
+               Into.Operands.Replace_Element
+                 (Code.First_Arg + 2, Operand (Up, 2));
+               Code.Op := Rotate_Left;
+            end;
+         end Form_Rotate;
+
          --  A storage reached through an address slot is the same place
          --  only while that slot keeps its address, which only a direct
          --  write changes when nothing else can reach the slot.
@@ -988,6 +1061,18 @@ package body Landin.IR.Simplification is
          begin
             if Code.Op = Load then
                return Eligible (Positive (Code.Slot));
+            end if;
+            --  A shift traps only on a negative amount, which an unsigned
+            --  amount or a constant one past zero cannot be ([1950]).
+            if Code.Op in Shift_Left | Shift_Right and then Plain (Code)
+              and then Code.Args = 2
+              and then Code.Result in Landin.Types.Integer_Name
+              and then (not Landin.Types.Is_Signed
+                          (Landin.Types.Integer_Name (Code.Result))
+                        or else (Integer_Constant (Operand (Code, 2))
+                                 and then Numeric (Operand (Code, 2)) >= 0))
+            then
+               return True;
             end if;
             return not Effect.Reads and then not Effect.Writes
               and then not Effect.Calls and then not Effect.Traps
@@ -1136,6 +1221,9 @@ package body Landin.IR.Simplification is
                         Same_As : Value_Id;
                      begin
                         Apply_Identity (Code, Same_As);
+                        if Same_As = No_Value then
+                           Form_Rotate (Code);
+                        end if;
                         if Same_As = No_Value and then Numbered (Code) then
                            Same_As := Earlier_Same (V, Code);
                         end if;

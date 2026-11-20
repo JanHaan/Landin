@@ -596,7 +596,12 @@ same only while no store has changed that slot and nothing else can reach
 it. Loads, stores and calls are never replaced this way. Integer identities
 such as `x + 0`, `x * 1`, `x & x` and `x == x` reduce to their operand or
 answer; none is applied to a float, where `-0.0 + 0.0` and a NaN's
-comparison with itself say otherwise.
+comparison with itself say otherwise. On x86-64 and arm64 an `|`, `^` or
+`+%` of `x << n` and `x >> (w - n)`, for one unsigned value x of 32 or 64
+bits and a constant n, becomes `Rotate_Left`, an operation lowering never
+makes, which those backends select as `rol` and `ror` (D1624); a shift
+nothing reads is then removed, since a shift traps only on a negative
+amount.
 
 A check can also be proved across blocks. A comparison whose branch is the
 only way into a block bounds there the slots it compared: `at` in
@@ -752,8 +757,9 @@ register. In a routine without assembly, values and compiler temporaries'
 single-block spans may also take rsi, rdi, r8 and r9 wherever no call, copy,
 clear, fill, leave or fail lies in their interval, and for r8 and r9 no
 conversion or field or element operation either; selection uses those
-registers only there. With the speed objective, eligible float slots and
-values in routines without inline assembly use XMM8..XMM15 wherever no call
+registers only there. At size and speed (D1625), eligible float slots and
+values in routines without inline assembly, among them a float an element,
+field, indirect or datum load produces, use XMM8..XMM15 wherever no call
 falls inside their interval, since SysV preserves no XMM register across
 one; XMM0 remains instruction scratch. A slot loaded and stored in one block
 only, which stores it before reading it, and not given a register for its

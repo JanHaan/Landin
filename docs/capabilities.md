@@ -1014,10 +1014,12 @@ process ignores SIGPIPE and gives its children the default back.
   writes that cannot reach it and computes identical operations and checks
   within a block once. Immutable module values fold, a check a dominating
   comparison proves is removed, and a callee reads an aggregate argument
-  where its caller keeps it when nothing can change it.
+  where its caller keeps it when nothing can change it. On x86-64 and arm64
+  two shifts that rotate a value are one rotate instruction (D1624).
 - **Register allocation.** The x86-64 and arm64 allocators give slots
   registers over their live intervals, small routines' among them in
-  caller-saved registers, floating-point values included. Both keep each
+  caller-saved registers, floating-point values included, at size as at
+  speed (D1625). Both keep each
   routine's traps after its body, compute into a result's own register with
   immediate operands, fuse comparisons with their branches and fold indexed
   accesses into scaled operands. RISC-V, RV64 and RV32, places slots and
@@ -1026,8 +1028,9 @@ process ignores SIGPIPE and gives its children the default back.
   checking its second emission against the plan; RV32 holds eight-byte
   values in register pairs (D1503). Cortex-M does the same over r4-r7, r3
   and r1 at every level, eight-byte values and VFP floats keeping their
-  homes (D1567), and at the Thumb-2 levels branches directly and builds
-  constants with MOVW and MOVT (D1564).
+  homes (D1567), at the Thumb-2 levels branches directly and builds
+  constants with MOVW and MOVT (D1564), and divides by a constant power of
+  two with shifts (D1626).
 - **At speed** a direct call to a small routine becomes a copy of its body,
   which the debuggers show as an inlined frame of that routine (D339);
   slices and small structs split into scalars; and a branch whose arms only

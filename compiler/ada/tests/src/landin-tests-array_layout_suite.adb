@@ -223,8 +223,9 @@ package body Landin.Tests.Array_Layout_Suite is
       end loop;
       Landin.Testing.Check
         (Item, Seen = [2, 1, 1] and then IR.Loop_Depth (Unit.all, 2) = 0
-         and then IR.Has_Address_Exposure (Unit.all, 2),
-         "nested calls snapshot depth, restore it and expose public entries");
+         and then not IR.Has_Address_Exposure (Unit.all, 2),
+         "nested calls snapshot depth, restore it, and a public routine"
+         & " alone exposes nothing (D415)");
    end Source_Loops;
 
    procedure Source_Evidence (Item : in out Landin.Testing.Context) is

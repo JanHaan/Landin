@@ -1,0 +1,25 @@
+--  An unsigned division by a constant power of two, and its remainder, at
+--  every unsigned width Cortex-M0 holds in one register: Cortex-M selects
+--  shifts for them rather than its division helpers (D1626).  The operands
+--  are module variables, so nothing folds.
+mut word: u32 = 0xdeadbeef
+mut byte: u8 = 200
+mut half: u16 = 51234
+
+public main: () -> (code: i32) =
+    if word % 8 == 7
+      and word / 16 == 233495534
+      and word % 2147483648 == 1588444911
+      and word / 2147483648 == 1
+      and word % 2 == 1
+      and word / 2 == 1867964279
+      and byte % 4 == 0
+      and byte / 64 == 3
+      and half % 1024 == 34
+      and half / 256 == 200
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main

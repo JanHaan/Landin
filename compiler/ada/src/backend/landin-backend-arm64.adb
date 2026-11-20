@@ -4674,6 +4674,15 @@ package body Landin.Backend.Arm64 is
                            Deliver (Value, Into, Extended => not Signed);
                         end if;
                      end;
+                  when Landin.IR.Rotate_Left =>
+                     --  Left by n is right by the width less n; the 32-bit
+                     --  view zero-extends what it writes.
+                     Left := Unbounded.To_Unbounded_String
+                       (Read (Left_Value, "x9"));
+                     Emit ("ror " & View (Into) & ", " & L & ", #"
+                           & Trimmed (Pattern'Image
+                               (Pattern (Bits) - Right_Bits)));
+                     Deliver (Value, Into, Extended => True);
                   when Landin.IR.Shift_Left | Landin.IR.Shift_Right =>
                      if not Known or else Right_Bits >= Pattern (Bits) then
                         Done := False;
@@ -5659,7 +5668,8 @@ package body Landin.Backend.Arm64 is
                   | Landin.IR.Wrapping_Add | Landin.IR.Wrapping_Subtract
                   | Landin.IR.Wrapping_Multiply | Landin.IR.Bitwise_And
                   | Landin.IR.Bitwise_Or | Landin.IR.Bitwise_Xor
-                  | Landin.IR.Shift_Left | Landin.IR.Shift_Right =>
+                  | Landin.IR.Shift_Left | Landin.IR.Shift_Right
+                  | Landin.IR.Rotate_Left =>
                   if Kind (Value) in Landin.Types.Float_Name then
                      declare
                         Left : constant String := FP_Operand (1, "16");
@@ -7095,6 +7105,10 @@ package body Landin.Backend.Arm64 is
                                 Bits, Signed_At (Value));
                         end;
 
+                     when Landin.IR.Rotate_Left =>
+                        --  Simplification forms one only in routines.
+                        raise Compiler_Defect with
+                          "a rotate in a static datum";
                      when Landin.IR.Add | Landin.IR.Subtract
                         | Landin.IR.Multiply | Landin.IR.Divide
                         | Landin.IR.Remainder

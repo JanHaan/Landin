@@ -1,0 +1,35 @@
+--  Two shifts of one unsigned value by constants that sum to its width,
+--  joined by `|`, `^` or `+%`, are a rotate, which x86-64 and arm64 select
+--  as one instruction at size and speed (D1624); every other pair stays
+--  two shifts.  The operands are read from module variables, so nothing
+--  folds, into locals, so that both shifts of a pair read one value.
+mut word: u32 = 0x80000001
+mut wide: u64 = 0x0123456789abcdef
+mut pattern: u32 = 0xdeadbeef
+
+public main: () -> (code: i32) =
+    word: u32 = word
+    wide: u64 = wide
+    pattern: u32 = pattern
+    up_13: u32 = (word << 13) | (word >> 19)
+    down_first: u32 = (word >> 25) | (word << 7)
+    by_xor: u64 = (wide << 13) ^ (wide >> 51)
+    by_add: u64 = (wide >> 32) +% (wide << 32)
+    halves: u32 = (pattern << 16) | (pattern >> 16)
+    near_miss: u32 = (pattern << 5) | (pattern >> 26)
+    turned: u64 = (wide << 21) | (wide >> 43)
+    chained: u64 = (turned << 43) | (turned >> 21)
+
+    if up_13 == 12288
+      and down_first == 192
+      and by_xor == 7542668687916785700
+      and by_add == 9920249030613615975
+      and halves == 3203391149
+      and near_miss == 3585596919
+      and chained == 81985529216486895
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main

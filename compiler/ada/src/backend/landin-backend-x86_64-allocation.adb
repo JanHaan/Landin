@@ -367,6 +367,8 @@ package body Landin.Backend.X86_64.Allocation is
                 (Landin.Types.Integer_Name (Kind));
          when Landin.IR.Wrapping_Multiply =>
             return Position = 2 and then Wide;
+         when Landin.IR.Rotate_Left =>
+            return Position = 2;
          when Landin.IR.Shift_Left | Landin.IR.Shift_Right =>
             declare
                Amount : constant Landin.IR.Value_Id :=
@@ -587,9 +589,10 @@ package body Landin.Backend.X86_64.Allocation is
            Landin.IR.Signature_Of (Of_Unit, Item) /= Landin.IR.No_Signature
            and then Landin.IR.Signature_Uses_C_ABI
              (Of_Unit, Landin.IR.Signature_Of (Of_Unit, Item));
-         Allocate_SSE : Boolean :=
-           Options.Optimize = Landin.Optimization.Speed
-           and then not C_Entry;
+         --  Size too: SysV saves no XMM register, so holding a float in
+         --  one costs no prologue, and its operations are shorter than
+         --  their frame forms.
+         Allocate_SSE : Boolean := not C_Entry;
          --  Speed ranks slots by references weighted with the loop nesting
          --  of their blocks, and lets a source variable's register hold it
          --  only over its live interval.  Size keeps the static count, and
@@ -664,8 +667,8 @@ package body Landin.Backend.X86_64.Allocation is
               | Landin.IR.Bitwise_Xor | Landin.IR.Bitwise_Or
               | Landin.IR.Negation | Landin.IR.Complement
               | Landin.IR.Logical_Not | Landin.IR.Shift_Left
-              | Landin.IR.Shift_Right | Landin.IR.Pointer_Address
-              | Landin.IR.Conversion
+              | Landin.IR.Shift_Right | Landin.IR.Rotate_Left
+              | Landin.IR.Pointer_Address | Landin.IR.Conversion
             then
                declare
                   Left : constant Positive := Positive
@@ -1310,6 +1313,8 @@ package body Landin.Backend.X86_64.Allocation is
                  Landin.IR.Result_Of (Of_Unit, Item, Value)
                    in Landin.Types.Float_Name
                  and then Op in Landin.IR.Number | Landin.IR.Load
+                   | Landin.IR.Load_Element | Landin.IR.Load_Field
+                   | Landin.IR.Load_Indirect | Landin.IR.Load_Datum
                    | Landin.IR.Add | Landin.IR.Subtract
                    | Landin.IR.Multiply | Landin.IR.Divide
                    | Landin.IR.Conversion | Landin.IR.Call

@@ -1278,7 +1278,7 @@ package body Landin.Tests.IR_Optimization_Suite is
    is
       Source : constant String :=
         "callback: type = () -> none "
-        & "public exported: () -> none = end exported "
+        & "link(symbol: ""exported"") exported: () -> none = end exported "
         & "plain: () -> none = end plain "
         & "static_target: () -> none = end static_target "
         & "aggregate_target: () -> none = end aggregate_target "
@@ -1316,7 +1316,7 @@ package body Landin.Tests.IR_Optimization_Suite is
             begin
                IR.Visit_Address_Exposures (Code, Note'Access);
                Landin.Testing.Check_Equal
-                 (Item, Total, (if Wide then 8 else 7),
+                 (Item, Total, (if Wide then 7 else 6),
                   "one callback per retained reference or explicit marker");
                for Index in Visits'Range loop
                   declare
@@ -1331,7 +1331,8 @@ package body Landin.Tests.IR_Optimization_Suite is
                                   (Landin.Stages.Meanings (Work).all,
                                    IR.Declares (Code, Target)));
                            Expected : constant Natural :=
-                             (if Name = "plain" then 0
+                             --  D415: `run` is public and no export.
+                             (if Name in "plain" | "run" then 0
                               elsif Name in "addressed" | "static_target"
                               then 2 else 1);
                         begin

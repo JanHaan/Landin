@@ -16310,18 +16310,11 @@ package body Landin.Stages.Lowering is
             elsif Owner = Res.No_Declaration
             then Anonymous_Item (Of_Tree, Node)
             else IR.Item_For (Unit.all, Owner));
-         --  A public routine is an export.  A generic instance is not,
-         --  whatever its template says: it has no declaration of its own,
-         --  so no symbol, link name or other program names it, and its
-         --  address escapes only as a function value, an image or an
-         --  evidence entry, which IR.Visit_Address_Exposures finds itself.
-         if Syn.Kind (Of_Tree, Node) = Syn.Function_Declaration
-           and then Syn.Is_Public (Of_Tree, Node)
-           and then IR.Generic_Template_Of (Unit.all, Filling)
-             = Res.No_Declaration
-         then
-            IR.Mark_Address_Exposed (Unit.all, Filling);
-         end if;
+         --  D415: `public` alone exposes nothing.  The declaration's own
+         --  item was marked where it was made when it is an export, and a
+         --  routine's address otherwise escapes only as a function value,
+         --  an image or an evidence entry, which IR.Visit_Address_Exposures
+         --  finds itself.
          Slots := No_Slots;
          Evidence_Slots.Clear;
          if Landin.Checking.Current_Routine_View (Types.all)

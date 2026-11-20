@@ -4976,6 +4976,15 @@ package body Landin.Backend.X86_64 is
                             Source_Operand (Operand (1)), Slot_Cell (Slot));
                   end;
 
+               when Landin.IR.Rotate_Left =>
+                  --  Simplification formed it from two shifts by constants
+                  --  that sum to the width, so the amount is in range.
+                  Integer_Unary
+                    ("rol" & Suffix (Size_Of_Value (Value)) & " $"
+                     & Trimmed (Landin.Types.Magnitude'Image
+                         (Landin.IR.Number_Of (Of_Unit, Item, Operand (2))))
+                     & ", ",
+                     Check => "");
                when Landin.IR.Shift_Left | Landin.IR.Shift_Right =>
                   --  Two rules the hardware does not give.  [0320] fills with
                   --  zeros beyond the width for any amount, and x86-64 masks
@@ -7908,6 +7917,10 @@ package body Landin.Backend.X86_64 is
                                 Bits, Signed_At (Value));
                         end;
 
+                     when Landin.IR.Rotate_Left =>
+                        --  Simplification forms one only in routines.
+                        raise Compiler_Defect with
+                          "a rotate in a static datum";
                      when Landin.IR.Add | Landin.IR.Subtract
                         | Landin.IR.Multiply | Landin.IR.Divide
                         | Landin.IR.Remainder

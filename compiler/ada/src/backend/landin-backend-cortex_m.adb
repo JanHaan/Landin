@@ -5098,196 +5098,232 @@ package body Landin.Backend.Cortex_M is
                      Checked : constant Boolean :=
                        Op = Landin.IR.Multiply and then not Unchecked;
                      Done : constant String := Fresh;
+                     --  An unsigned divisor that is a constant power of
+                     --  two, 2 ** Power, is a shift: the quotient the bits
+                     --  above Power, the remainder those below.  Zero
+                     --  otherwise.
+                     Power : Natural := 0;
                   begin
-                     Load_Value (Operand (1));
-                     Load_Value (Operand (2), "r2");
-                     Extend ("r0", Kind (Value));
-                     Extend ("r2", Kind (Value));
-                     if Float then
-                        if not Wide then
-                           Emit ("mov r1, r2");
-                        end if;
-                        Emit ("bl __aeabi_" & (if Wide then "d" else "f")
-                          & (if Multiply then "mul" else "div"));
-                     elsif Op = Landin.IR.Wrapping_Multiply
-                       and then not Wide
+                     if not Float and then not Signed and then not Wide
+                       and then Op in Landin.IR.Divide | Landin.IR.Remainder
+                       and then Landin.IR.Op_Of (Of_Unit, Item, Operand (2))
+                         = Landin.IR.Number
+                       and then not Landin.IR.Is_Negated
+                         (Of_Unit, Item, Operand (2))
                      then
-                        --  The low word is the whole wrapping result.  Thumb
-                        --  MULS uses only low registers and writes that word.
-                        Emit ("muls r0, r2, r0");
-                     elsif Multiply and then not Wide
-                       and then Has_Long_Multiply
-                     then
-                        --  D605: the whole 64-bit product of the extended
-                        --  operands in r1:r0, as the helper returned it.
-                        Emit ((if Signed then "smull" else "umull")
-                              & " r0, r1, r0, r2");
-                        if Checked then
-                           if Signed then
-                              Emit ("asrs r4, r0, #31");
-                           else
-                              Emit ("movs r4, #0");
+                        for Bit in 1 .. 31 loop
+                           if Landin.Types."="
+                             (Landin.IR.Number_Of (Of_Unit, Item, Operand (2)),
+                              Landin.Types."**" (2, Bit))
+                           then
+                              Power := Bit;
                            end if;
-                           Emit ("cmp r1, r4");
-                           Branch ("ne", Trap);
-                           Check_Fit (Kind (Value));
-                        end if;
-                     elsif Multiply then
-                        if not Wide then
-                           if Signed then
-                              Emit ("asrs r1, r0, #31");
-                              Emit ("asrs r3, r2, #31");
-                           else
-                              Emit ("movs r1, #0");
-                              Emit ("movs r3, #0");
-                           end if;
-                        elsif Checked then
-                           --  Compare magnitudes against floor(limit / rhs)
-                           --  before multiplying; the helper's quotient is
-                           --  an ordinary unsigned 64-bit AAPCS result.
-                           Emit ("mov r4, r2");
-                           Emit ("orrs r4, r3");
-                           Emit ("cmp r4, #0");
-                           Branch ("eq", Done & "_multiply");
-                           Emit ("push {r0, r1, r2, r3}");
-                           Sp_Depth := Sp_Depth + 16;
-                           Deepest_Below :=
-                             Landin.Targets.Byte_Count'Max
-                               (Deepest_Below, Sp_Depth);
-                           if Signed then
-                              Emit ("cmp r1, #0");
-                              Branch ("ge", Done & "_left");
-                              Emit ("movs r4, #0");
-                              Emit ("rsbs r0, r0, #0");
-                              Emit ("sbcs r4, r1");
-                              Emit ("mov r1, r4");
-                              Put (Done & "_left:");
-                              Emit ("cmp r3, #0");
-                              Branch ("ge", Done & "_right");
-                              Emit ("movs r4, #0");
-                              Emit ("rsbs r2, r2, #0");
-                              Emit ("sbcs r4, r3");
-                              Emit ("mov r3, r4");
-                              Put (Done & "_right:");
-                           end if;
-                           Emit ("mov r4, r0");
-                           Emit ("mov r5, r1");
-                           Immediate ("r0", 16#FFFF_FFFF#);
-                           Immediate ("r1", (if Signed then 16#7FFF_FFFF#
-                             else 16#FFFF_FFFF#));
-                           if Signed then
-                              Emit ("ldr r6, [sp, #4]");
-                              Emit ("ldr r7, [sp, #12]");
-                              Emit ("eors r6, r7");
-                              Emit ("cmp r6, #0");
-                              Branch ("ge", Done & "_limit");
-                              Emit ("movs r0, #0");
-                              Immediate ("r1", 16#8000_0000#);
-                              Put (Done & "_limit:");
-                           end if;
-                           Emit ("bl __aeabi_uldivmod");
-                           Emit ("cmp r5, r1");
-                           Branch ("hi", Trap);
-                           Branch ("cc", Done & "_fits");
-                           Emit ("cmp r4, r0");
-                           Branch ("hi", Trap);
-                           Put (Done & "_fits:");
-                           Emit ("pop {r0, r1, r2, r3}");
-                           Sp_Depth := Sp_Depth - 16;
-                           Put (Done & "_multiply:");
-                        end if;
-                        if Has_Long_Multiply then
-                           --  D605: the low 64 bits of r1:r0 times r3:r2
-                           --  are the low halves' whole product, with
-                           --  each cross product added to its high word.
-                           Emit ("mul r3, r0, r3");
-                           Emit ("mla r3, r1, r2, r3");
-                           Emit ("umull r0, r1, r0, r2");
-                           Emit ("add r1, r1, r3");
-                        else
-                           Emit ("bl __aeabi_lmul");
-                        end if;
-                        if Checked and then not Wide then
-                           if Signed then
-                              Emit ("asrs r4, r0, #31");
-                           else
-                              Emit ("movs r4, #0");
-                           end if;
-                           Emit ("cmp r1, r4");
-                           Branch ("ne", Trap);
-                           Check_Fit (Kind (Value));
-                        end if;
-                     else
-                        if Wide then
-                           Emit ("mov r4, r2");
-                           Emit ("orrs r4, r3");
-                        else
-                           Emit ("mov r4, r2");
-                        end if;
-                        Emit ("cmp r4, #0");
-                        Branch ("eq", Trap);
-                        if Signed then
-                           declare
-                              Bits : constant Natural := Natural
-                                (Landin.Types.Width (Kind (Value), Facts));
-                           begin
-                              Immediate ("r4", 16#FFFF_FFFF#);
-                              Emit ("cmp r2, r4");
-                              Branch ("ne", Done & "_divide");
-                              if Wide then
-                                 Emit ("cmp r3, r4");
-                                 Branch ("ne", Done & "_divide");
-                                 Immediate ("r4", 16#8000_0000#);
-                                 Emit ("cmp r1, r4");
-                                 Branch ("ne", Done & "_divide");
-                                 Emit ("cmp r0, #0");
-                              else
-                                 Immediate ("r4", (0 - 2 ** (Bits - 1))
-                                   and 16#FFFF_FFFF#);
-                                 Emit ("cmp r0, r4");
-                              end if;
-                              if Op = Landin.IR.Divide then
-                                 Branch ("eq", Trap);
-                              else
-                                 Branch ("ne", Done & "_divide");
-                                 Emit ("movs r0, #0");
-                                 Emit ("movs r1, #0");
-                                 Jump (Done);
-                              end if;
-                           end;
-                        end if;
-                        Put (Done & "_divide:");
-                        if Wide then
-                           Emit ("bl __aeabi_"
-                             & (if Signed then "ldivmod" else "uldivmod"));
-                           if Op = Landin.IR.Remainder then
-                              Emit ("mov r0, r2");
-                              Emit ("mov r1, r3");
-                           end if;
-                        elsif Has_Divide then
-                           --  The guards above have already refused a zero
-                           --  divisor and settled the minimum over -1, so
-                           --  what reaches here divides as the helper did:
-                           --  the quotient rounds toward zero, and the
-                           --  remainder is the dividend less its product.
-                           Emit ((if Signed then "sdiv" else "udiv")
-                                 & " r1, r0, r2");
-                           if Op = Landin.IR.Remainder then
-                              Emit ("mls r0, r1, r2, r0");
-                           else
-                              Emit ("mov r0, r1");
-                           end if;
-                        else
-                           Emit ("mov r1, r2");
-                           Emit ("bl __aeabi_"
-                             & (if Signed then "idivmod" else "uidivmod"));
-                           if Op = Landin.IR.Remainder then
-                              Emit ("mov r0, r1");
-                           end if;
-                        end if;
+                        end loop;
                      end if;
-                     Put (Done & ":");
-                     Store_Value (Value);
+                     if Power > 0 then
+                        Load_Value (Operand (1));
+                        Extend ("r0", Kind (Value));
+                        if Op = Landin.IR.Divide then
+                           Emit ("lsrs r0, r0, #" & Trimmed (Power'Image));
+                        else
+                           Emit ("lsls r0, r0, #"
+                                 & Trimmed (Natural'Image (32 - Power)));
+                           Emit ("lsrs r0, r0, #"
+                                 & Trimmed (Natural'Image (32 - Power)));
+                        end if;
+                        Store_Value (Value);
+                     else
+                        Load_Value (Operand (1));
+                        Load_Value (Operand (2), "r2");
+                        Extend ("r0", Kind (Value));
+                        Extend ("r2", Kind (Value));
+                        if Float then
+                           if not Wide then
+                              Emit ("mov r1, r2");
+                           end if;
+                           Emit ("bl __aeabi_" & (if Wide then "d" else "f")
+                             & (if Multiply then "mul" else "div"));
+                        elsif Op = Landin.IR.Wrapping_Multiply
+                          and then not Wide
+                        then
+                           --  The low word is the whole wrapping result.
+                           --  Thumb MULS uses only low registers and writes
+                           --  that word.
+                           Emit ("muls r0, r2, r0");
+                        elsif Multiply and then not Wide
+                          and then Has_Long_Multiply
+                        then
+                           --  D605: the whole 64-bit product of the extended
+                           --  operands in r1:r0, as the helper returned it.
+                           Emit ((if Signed then "smull" else "umull")
+                                 & " r0, r1, r0, r2");
+                           if Checked then
+                              if Signed then
+                                 Emit ("asrs r4, r0, #31");
+                              else
+                                 Emit ("movs r4, #0");
+                              end if;
+                              Emit ("cmp r1, r4");
+                              Branch ("ne", Trap);
+                              Check_Fit (Kind (Value));
+                           end if;
+                        elsif Multiply then
+                           if not Wide then
+                              if Signed then
+                                 Emit ("asrs r1, r0, #31");
+                                 Emit ("asrs r3, r2, #31");
+                              else
+                                 Emit ("movs r1, #0");
+                                 Emit ("movs r3, #0");
+                              end if;
+                           elsif Checked then
+                              --  Compare magnitudes against floor(limit / rhs)
+                              --  before multiplying; the helper's quotient is
+                              --  an ordinary unsigned 64-bit AAPCS result.
+                              Emit ("mov r4, r2");
+                              Emit ("orrs r4, r3");
+                              Emit ("cmp r4, #0");
+                              Branch ("eq", Done & "_multiply");
+                              Emit ("push {r0, r1, r2, r3}");
+                              Sp_Depth := Sp_Depth + 16;
+                              Deepest_Below :=
+                                Landin.Targets.Byte_Count'Max
+                                  (Deepest_Below, Sp_Depth);
+                              if Signed then
+                                 Emit ("cmp r1, #0");
+                                 Branch ("ge", Done & "_left");
+                                 Emit ("movs r4, #0");
+                                 Emit ("rsbs r0, r0, #0");
+                                 Emit ("sbcs r4, r1");
+                                 Emit ("mov r1, r4");
+                                 Put (Done & "_left:");
+                                 Emit ("cmp r3, #0");
+                                 Branch ("ge", Done & "_right");
+                                 Emit ("movs r4, #0");
+                                 Emit ("rsbs r2, r2, #0");
+                                 Emit ("sbcs r4, r3");
+                                 Emit ("mov r3, r4");
+                                 Put (Done & "_right:");
+                              end if;
+                              Emit ("mov r4, r0");
+                              Emit ("mov r5, r1");
+                              Immediate ("r0", 16#FFFF_FFFF#);
+                              Immediate ("r1", (if Signed then 16#7FFF_FFFF#
+                                else 16#FFFF_FFFF#));
+                              if Signed then
+                                 Emit ("ldr r6, [sp, #4]");
+                                 Emit ("ldr r7, [sp, #12]");
+                                 Emit ("eors r6, r7");
+                                 Emit ("cmp r6, #0");
+                                 Branch ("ge", Done & "_limit");
+                                 Emit ("movs r0, #0");
+                                 Immediate ("r1", 16#8000_0000#);
+                                 Put (Done & "_limit:");
+                              end if;
+                              Emit ("bl __aeabi_uldivmod");
+                              Emit ("cmp r5, r1");
+                              Branch ("hi", Trap);
+                              Branch ("cc", Done & "_fits");
+                              Emit ("cmp r4, r0");
+                              Branch ("hi", Trap);
+                              Put (Done & "_fits:");
+                              Emit ("pop {r0, r1, r2, r3}");
+                              Sp_Depth := Sp_Depth - 16;
+                              Put (Done & "_multiply:");
+                           end if;
+                           if Has_Long_Multiply then
+                              --  D605: the low 64 bits of r1:r0 times r3:r2
+                              --  are the low halves' whole product, with
+                              --  each cross product added to its high word.
+                              Emit ("mul r3, r0, r3");
+                              Emit ("mla r3, r1, r2, r3");
+                              Emit ("umull r0, r1, r0, r2");
+                              Emit ("add r1, r1, r3");
+                           else
+                              Emit ("bl __aeabi_lmul");
+                           end if;
+                           if Checked and then not Wide then
+                              if Signed then
+                                 Emit ("asrs r4, r0, #31");
+                              else
+                                 Emit ("movs r4, #0");
+                              end if;
+                              Emit ("cmp r1, r4");
+                              Branch ("ne", Trap);
+                              Check_Fit (Kind (Value));
+                           end if;
+                        else
+                           if Wide then
+                              Emit ("mov r4, r2");
+                              Emit ("orrs r4, r3");
+                           else
+                              Emit ("mov r4, r2");
+                           end if;
+                           Emit ("cmp r4, #0");
+                           Branch ("eq", Trap);
+                           if Signed then
+                              declare
+                                 Bits : constant Natural := Natural
+                                   (Landin.Types.Width (Kind (Value), Facts));
+                              begin
+                                 Immediate ("r4", 16#FFFF_FFFF#);
+                                 Emit ("cmp r2, r4");
+                                 Branch ("ne", Done & "_divide");
+                                 if Wide then
+                                    Emit ("cmp r3, r4");
+                                    Branch ("ne", Done & "_divide");
+                                    Immediate ("r4", 16#8000_0000#);
+                                    Emit ("cmp r1, r4");
+                                    Branch ("ne", Done & "_divide");
+                                    Emit ("cmp r0, #0");
+                                 else
+                                    Immediate ("r4", (0 - 2 ** (Bits - 1))
+                                      and 16#FFFF_FFFF#);
+                                    Emit ("cmp r0, r4");
+                                 end if;
+                                 if Op = Landin.IR.Divide then
+                                    Branch ("eq", Trap);
+                                 else
+                                    Branch ("ne", Done & "_divide");
+                                    Emit ("movs r0, #0");
+                                    Emit ("movs r1, #0");
+                                    Jump (Done);
+                                 end if;
+                              end;
+                           end if;
+                           Put (Done & "_divide:");
+                           if Wide then
+                              Emit ("bl __aeabi_"
+                                & (if Signed then "ldivmod" else "uldivmod"));
+                              if Op = Landin.IR.Remainder then
+                                 Emit ("mov r0, r2");
+                                 Emit ("mov r1, r3");
+                              end if;
+                           elsif Has_Divide then
+                              --  The guards above have already refused a zero
+                              --  divisor and settled the minimum over -1, so
+                              --  what reaches here divides as the helper did:
+                              --  the quotient rounds toward zero, and the
+                              --  remainder is the dividend less its product.
+                              Emit ((if Signed then "sdiv" else "udiv")
+                                    & " r1, r0, r2");
+                              if Op = Landin.IR.Remainder then
+                                 Emit ("mls r0, r1, r2, r0");
+                              else
+                                 Emit ("mov r0, r1");
+                              end if;
+                           else
+                              Emit ("mov r1, r2");
+                              Emit ("bl __aeabi_"
+                                & (if Signed then "idivmod" else "uidivmod"));
+                              if Op = Landin.IR.Remainder then
+                                 Emit ("mov r0, r1");
+                              end if;
+                           end if;
+                        end if;
+                        Put (Done & ":");
+                        Store_Value (Value);
+                     end if;
                   end;
                when Landin.IR.Negation | Landin.IR.Complement
                   | Landin.IR.Logical_Not =>
@@ -5575,6 +5611,10 @@ package body Landin.Backend.Cortex_M is
                      Put (Done & ":");
                      Store_Value (Value);
                   end;
+               when Landin.IR.Rotate_Left =>
+                  --  Simplification forms one only for x86-64 and arm64.
+                  raise Compiler_Defect with
+                    "a rotate on a target that selects none";
                when Landin.IR.Shift_Left | Landin.IR.Shift_Right =>
                   declare
                      Bits : constant Natural := Natural
@@ -7392,6 +7432,10 @@ package body Landin.Backend.Cortex_M is
                                 Bits, Signed_At (Value));
                         end;
 
+                     when Landin.IR.Rotate_Left =>
+                        --  Simplification forms one only in routines.
+                        raise Compiler_Defect with
+                          "a rotate in a static datum";
                      when Landin.IR.Add | Landin.IR.Subtract
                         | Landin.IR.Multiply | Landin.IR.Divide
                         | Landin.IR.Remainder
