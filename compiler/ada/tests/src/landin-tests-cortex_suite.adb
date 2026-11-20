@@ -2038,6 +2038,87 @@ package body Landin.Tests.Cortex_Suite is
          Result => Result);
       Landin.Testing.Check (Item, not Valid, "empty map is refused");
 
+      --  D1629: a measurement refused names what it met, and an image
+      --  reset fills must not load its data from writable memory.
+      declare
+         Fault : U.Unbounded_String;
+      begin
+         Host.Add_File ("p.elf.map", "/tool/libgcc.a(_udivsi3.o)" & LF);
+         Put (128, 16#2000_0008#, 4);
+         Host.Add_File ("p.elf", Data);
+         Landin.Build_Reports.Firmware.Measure
+           (Host, "p.elf", "p.elf.map", Reference, Stage => "",
+            Valid => Valid, Result => Result, Fault => Fault);
+         Landin.Testing.Check_Equal
+           (Item, U.To_String (Fault),
+            "the load segment at 536870920 has its contents loaded from"
+            & " 536870920, in writable memory, where nothing holds them"
+            & " when reset fills the image (D1359)",
+            "data loaded from RAM is refused by its segment");
+         Landin.Testing.Check (Item, not Valid, "and not measured");
+         Put (128, 768, 4);
+         Host.Add_File ("p.elf.map", "");
+         Host.Add_File ("p.elf", Data);
+         Landin.Build_Reports.Firmware.Measure
+           (Host, "p.elf", "p.elf.map", Reference, Stage => "",
+            Valid => Valid, Result => Result, Fault => Fault);
+         Landin.Testing.Check_Equal
+           (Item, U.To_String (Fault), "the link map is empty",
+            "an empty map is named");
+
+         --  The Xtensa reference: a loader writes every segment where it
+         --  is mapped (D1359), its data into DRAM.
+         declare
+            package F renames Landin.Targets.Firmware;
+            Xtensa : F.Profile;
+         begin
+            Xtensa.Present := True;
+            Xtensa.Reference := True;
+            Xtensa.Device := F.To_Name ("xtensa-reference");
+            Xtensa.Core := F.Xtensa_LX6;
+            Xtensa.Vector_Count := 32;
+            Xtensa.Boot := F.Vector_Table;
+            Xtensa.Count := 2;
+            Xtensa.Regions (1) :=
+              (F.To_Name ("IRAM"), 16#4008_0000#, 32 * 1024,
+               F.Read_Execute);
+            Xtensa.Regions (2) :=
+              (F.To_Name ("DRAM"), 16#3FFB_0000#, 16 * 1024, F.Read_Write);
+            Xtensa.Placed := [F.Vectors | F.Text => 1, others => 2];
+            Xtensa.Stack_Size := 4 * 1024;
+            Put (18, 94, 2);
+            Put (60, 16#4008_0000#, 4);
+            Put (64, 16#4008_0000#, 4);
+            Put (92, 16#3FFB_0000#, 4);
+            Put (96, 16#3FFB_0000#, 4);
+            Put (124, 16#3FFB_0100#, 4);
+            Put (128, 16#3FFB_0100#, 4);
+            Put (132, 0, 4);
+            Host.Add_File ("p.elf", Data);
+            Host.Add_File ("p.elf.map", "/tool/libgcc.a(_udivsi3.o)" & LF);
+            Landin.Build_Reports.Firmware.Measure
+              (Host, "p.elf", "p.elf.map", Xtensa, Stage => "",
+               Valid => Valid, Result => Result, Fault => Fault);
+            Landin.Testing.Check
+              (Item, Valid
+                 and then Ada.Strings.Fixed.Index
+                   (U.To_String (Result),
+                    """code_used"":192,") > 0
+                 and then Ada.Strings.Fixed.Index
+                   (U.To_String (Result), """static_ram_used"":288,") > 0,
+               "the Xtensa reference's DRAM data is measured: "
+               & U.To_String (Result) & U.To_String (Fault));
+            Put (18, 40, 2);
+            Put (60, 0, 4);
+            Put (64, 0, 4);
+            Put (92, 512, 4);
+            Put (96, 512, 4);
+            Put (124, 16#2000_0008#, 4);
+            Put (128, 768, 4);
+            Put (132, 16, 4);
+         end;
+      end;
+
       --  D546: a developer's script is linked in place of OUT.ld, and an
       --  image with no startup symbols breaks the contract's clause 2.
       Host.Add_File ("dev.ld", "SECTIONS { }");

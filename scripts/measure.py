@@ -227,8 +227,7 @@ ENTRY = MEASURE / "entry.ldn"
 def entry(target: str, level: str) -> list[str]:
     """The firmware entry file a workload is linked with at LEVEL, and the
     root it needs: the target's reference profile, but Xtensa's chips'
-    own descriptions, since the Xtensa reference gives initialized data no
-    load address at boot, a defect the register records."""
+    own descriptions, the boards' whose cycles the timing runs count."""
     if target == "xtensa":
         chip = level.removeprefix("xtensa-")
         return ["--root=" + str(ROOT / "devices"),

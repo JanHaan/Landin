@@ -254,6 +254,12 @@ class Lanes(unittest.TestCase):
                 self.parser().parse_args([])
             self.assertIsNone(self.parser(required=False).parse_args([]).refine)
 
+    def test_a_relative_path_is_made_absolute_where_it_was_given(self):
+        with mock.patch.object(refine_revision, "warn"):
+            args = self.parser().parse_args(["--refine", "build/bin/refine"])
+            self.assertEqual(args.refine,
+                             Path.cwd() / "build/bin/refine")
+
     def test_the_environment_names_one_and_is_asked_too(self):
         with mock.patch.object(refine_revision, "warn") as warn, \
                 mock.patch.dict(os.environ, {"LANDIN_REFINE": "/e/refine"}):

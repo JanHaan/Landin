@@ -10,7 +10,7 @@
     subprocess.run([*lane_refine.command(args.refine, 'svd'), ...])
 
 `argument` adds `--refine` to an argparse parser.  Its value is a `Path`,
-as given, and parsing it asks scripts/refine_revision.py once whether that
+as given but made absolute when it names a directory, and parsing it asks scripts/refine_revision.py once whether that
 binary is the one this checkout builds, writing D1307's one-line warning
 to standard error when it is not; a warning never changes a lane's status.
 A value from $LANDIN_REFINE is asked the same way.
@@ -58,7 +58,13 @@ def warn(refine):
 
 
 def _given(text):
-    return warn(Path(text))
+    """TEXT as a Path, made absolute when it names a directory, so that a
+    lane that runs it from another directory, as measure.py runs refine
+    from compiler/ada, runs the binary its caller named."""
+    path = Path(text)
+    if os.sep in text and not path.is_absolute():
+        path = path.absolute()
+    return warn(path)
 
 
 def argument(parser, *, required=True, environment=False, help=None):

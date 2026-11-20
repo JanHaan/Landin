@@ -4732,6 +4732,7 @@ package body Landin.Driver is
 
             procedure Write_Build_Report is
                Firmware : Unbounded.Unbounded_String;
+               Fault : Unbounded.Unbounded_String;
                Valid : Boolean := True;
             begin
                if Report_Seen and then not Landin.Stages.Failed (Context) then
@@ -4750,12 +4751,13 @@ package body Landin.Driver is
                         Private_Path (Product_Path & ".map"),
                         Landin.IR.Firmware_Profile
                           (Landin.Stages.Code (Context).all),
-                        Boot_Stage_Routine, Firmware, Valid,
+                        Boot_Stage_Routine, Firmware, Valid, Fault,
                         ESP_Image => Unbounded.To_String (ESP_Image_Report));
                      if not Valid then
                         Note_Failure
                           (Code_Toolchain_Failed,
-                           "cannot measure linked firmware image or map");
+                           "cannot measure linked firmware image or map: "
+                           & Unbounded.To_String (Fault));
                         return;
                      end if;
                   end if;

@@ -26111,6 +26111,11 @@ the next to be written, shares arm64's placement where the two agree rather
 than writing it again; Cortex-M's low and high registers and Xtensa's
 native selection are placed by their own work.
 
+**Amended on 2026-11-20:** Xtensa's placement reads its routine's words,
+the scratch words its selection writes among them, over the routine's own
+text rather than this analysis, and places them in the machine layer that
+knows what each Xtensa instruction writes (D1627).
+
 **The alternatives:** one allocator over a register description for every
 backend, which would first have had to describe each selection's scratch
 use per operation, and would have put the cheapest measured gains, arm64's
@@ -26457,6 +26462,111 @@ Xtensa, x86-64 and arm64 do not need for speed, each dividing by a
 constant already or in hardware.
 
 **Pinned by** the Cortex-M corpus and `compiler/tests/measure/baselines/`.
+
+### D1627 — Xtensa places every word of a routine over the routine's own text
+
+**The tour said** nothing. Xtensa's machine layer kept every RISC-V-form
+logical word but five in memory at a7 + 4×N and every value and slot in
+its frame home, so an operation loaded its operands, computed and stored
+its result back: 414 of the firmware mandelbrot's 545 instructions in
+`in_set` were `l32i` and `s32i` through a7, and the build report's share
+of stack loads and stores was 53.5% at xtensa-esp32.
+
+**Chosen:** the emitter keeps its walk of the verified IR and its
+RISC-V-form words, and in a routine without an `assembler.block` gives
+each scalar value and each slot `Landin.Backend.Placement` finds no address
+reaches a word of its own, `vN`, two for an eight-byte one, whose home is
+the value's or slot's frame home; a narrower one holds its value
+zero-extended. The machine layer buffers the routine's body, computes the
+liveness of every word over the body's own blocks and branches, joins the
+definitions that reach a common use into a web, and places the webs by
+linear scan in order of their first position: a web live across a call
+takes one of a2-a6, which CALL8 preserves, any other also a10-a15,
+preferring the register a call's arguments or results or the routine's
+entry or exit want it in, or that of a word it is copied to or from; a web
+that copies another's value without either being written in its interval
+reads the other's register. When none is free, the web with the fewest
+occurrences, weighted eight times for each loop around them, for each
+position it would hold stays in its home, and selection loads it into a8
+or a9 where it is read. Before placing, a `mul`, `add`, `divu` or `remu`
+whose operand is a word set once to a number, directly or through copies,
+is a shift, an `addi`, a shift right or a mask where the number is a power
+of two or small, and a zero test of such a word is decided; an operation
+without effect whose results nothing reads is dropped; and a set on a
+comparison that only the zero test after it reads is that test, `sltu`
+and `bnez` one `bltu`. The entry moves the incoming a2-a6 into x10-x14's webs, a call its
+argument words into a10-a15 and its results out of a10-a14, and the exit
+x10-x13 and x31 into a2-a6, each as one parallel move. A routine whose
+text the analysis cannot follow, a native line in its body, a jump to a
+label outside it or a write of SP or the CFA, or whose text is longer than
+150,000 lines or whose liveness would take more than 2 ** 26 bits, is
+selected word by word as before, the value and slot words in their homes.
+The scratch words x5-x7, x9 and x18 have no home: when one finds no
+register, the cheapest web that has a home gives up its own. The frame is
+the one it was, its 80-byte bank and every value's and slot's home kept:
+a firmware fibre's stack is sized to it. Over the firmware
+set every image is smaller at every profile and both levels, `.text`
+0.37 to 0.76 of the baselines before it, `in_set` is 121 instructions, 30
+of them stack loads and stores, and on both boards every workload runs in
+0.17 to 0.68 of the cycles it took.
+
+**The alternatives:** selecting natively from the IR, which D1403 named
+for Xtensa, a second emitter of the RISC-V emitter's 6,900 lines for the
+ABI, firmware, interrupt and pair handling this one already has; an
+allocator over the RISC-V form in the emitter, as D1503's, which D1403
+declined because the machine layer would still load and store every
+logical word, and which places the words the machine layer here places;
+and placing over `Landin.IR.Liveness` as D1403 has the other backends do,
+which sees values and slots but not the scratch words selection writes in
+every operation, which are half of what this places. D1403's one liveness
+analysis is therefore not Xtensa's: its placement reads the routine's
+words, not its IR.
+
+**Pinned by** `xtensa backend/placed words keep a loop in registers`,
+`xtensa backend/a word across a call keeps a2-a6`, both chips' corpus
+lanes and `compiler/tests/measure/baselines/`.
+
+### D1628 — On Xtensa a comparison only its branch reads is the branch
+
+**The tour said** nothing. A comparison made its truth value with a branch
+around two moves, stored it, and the branch after it loaded it and
+branched on it.
+
+**Chosen:** an integer comparison that no other operand reads and that
+the next operation of its block branches on is that branch's own test,
+`beq`, `bltu` and the rest on the two operands, followed by a `j` to the
+alternative, as D1566 has Cortex-M's flags do. A float comparison, a
+libgcc helper's answer, keeps its truth value.
+
+**The alternatives:** leaving the pair to placement, which removes the
+truth value's memory traffic but keeps both branches.
+
+**Pinned by** both chips' corpus lanes and
+`compiler/tests/measure/baselines/`.
+
+### D1629 — An Xtensa image is measured as a loader writes it
+
+**The tour said** nothing. D1359 has a loader write every Xtensa image
+where it is mapped, the ROM an application image's segments and a
+debugger or emulator the reference's, and reset copies nothing; but the
+build report's measurement refused an image of the Xtensa reference's
+boot layout whose `.rodata` and `.data` are loaded into DRAM, because a
+boot image's initialized data must come from its text region, and said
+only that it could not measure the image.
+
+**Chosen:** the measurement refuses initialized data loaded from writable
+memory only for an image reset fills, `Boots_From_Image`, so the Xtensa
+reference is measured as its chips' descriptions are; and every image it
+cannot measure is refused naming what it met, the segment and its load
+address and the rule it breaks, the symbol, or the map's line.
+
+**The alternatives:** giving the reference's initialized data a load
+address in IRAM and copying it at reset, which no Xtensa startup does and
+which would put byte-addressed data where an ESP32 reads only words; and
+refusing the reference's boot layout at link time, which would refuse
+every corpus image with a constant.
+
+**Pinned by** `cortex ABI/linked firmware evidence`.
 
 ### D1383 — `refine` keeps the compiler's commands and ships four of its tools beside it
 

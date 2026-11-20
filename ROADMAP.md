@@ -281,7 +281,7 @@ timed again. `compiler/tests/measure/findings.md` is the ranked list:
 arm64's allocator unused at `size`, RV64's far jumps, Cortex-M's homes
 addressed through r6, then allocation. `SR-09` and `SR-1267` are settled;
 SR-596, SR-869, SR-231, `SR-996`, `SR-577`, SR-583 and `SR-1268` are R16.20's;
-SR-275, `SR-387` and SR-1023 are restated with their figures, and SR-1302
+SR-275, `SR-387` and SR-1023 are restated with their figures, and `SR-1302`
 records the Xtensa reference's boot layout. Findings fixed on the way: the
 stack report names its frame quantities as the build report does (D1380),
 the stage report gives each source's scanning and parsing (D1381), and an
@@ -325,7 +325,7 @@ modes agree and the scaling bound holds. The candidate passed its
 [gate](https://github.com/JanHaan/Landin/actions/runs/44407003576) and
 [boards](https://github.com/JanHaan/Landin/actions/runs/44413857908).
 R16.21 to R16.24 took the other backends and their rows, `SR-586` and
-SR-1302 among them. Findings fixed on the way: LLDB's `GetValueAsSigned`
+`SR-1302` among them. Findings fixed on the way: LLDB's `GetValueAsSigned`
 read a zero-extended `i32` in a register whole, so the Darwin sessions read
 integers at their type's width; a failed Darwin LLDB session keeps its
 transcripts; a wall pair whose candidate image is the base's is no longer
@@ -445,7 +445,7 @@ does not change.
 
 ### R16.23 — Xtensa selection
 
-Status: active
+Status: complete
 Depends on: R16.10
 
 Xtensa's backend writes RISC-V-form words that its machine layer keeps in
@@ -454,13 +454,47 @@ instructions in `in_set` are `l32i` and `s32i` through the frame, and the
 report share is 53.5% at xtensa-esp32. An allocator over the RISC-V form
 does not remove that class. This item either selects natively from the IR,
 placing values as D1403 says, or records why Xtensa is left out. It takes on
-SR-1024's frame budget, SR-1178's test of the outgoing area D1110 counts and
-SR-1302's boot layout of the reference description.
+`SR-1024`'s frame budget, `SR-1178`'s test of the outgoing area D1110
+counts and `SR-1302`'s boot layout of the reference description.
 
 Exit evidence: the ESP32 and ESP32-S3 images measured smaller than their
 R16.10 baselines and their cycles no slower, with unchanged behavior and the
 board records made again; or the reason Xtensa is left out recorded with its
 measurement.
+
+Done: Xtensa places the words of every routine without an assembly block
+over the routine's own text (D1627). The emitter keeps its walk of the IR
+and its RISC-V-form words and gives each scalar value and each slot no
+address reaches a word of its own; the machine layer computes the words'
+liveness, joins their definitions into webs and places them by linear scan
+in a2-a6, which a call preserves, and a10-a15, the rest in their homes.
+Before placing it folds a word set once to a number into the `mul`, `add`,
+`divu` or `remu` that reads it, so a division or remainder by a power of
+two is a shift or a mask, which takes the Xtensa half of SR-1429, now
+restated for RISC-V alone; it drops what nothing reads and makes a flag
+and its zero test one branch; and a comparison only its branch reads is
+that branch (D1628). A routine of more than 150,000 lines, or whose text
+the analysis cannot follow, is selected word by word as before. Over the
+firmware set every image is smaller at every profile and both levels,
+`.text` 0.37 to 0.76 of R16.10's; the report share of stack loads and
+stores at xtensa-esp32 speed-auto is 11.1% against 53.5%, and the firmware
+mandelbrot's `in_set` 121 instructions against 545, 30 of them stack loads
+and stores against 414. On the boards every configuration runs faster: the
+ESP32 0.18 to 0.68 of R16.10's cycles and the ESP32-S3 0.17 to 0.67,
+mandelbrot, whose doubles are libgcc's, gaining least. The ESP32's and
+ESP32-S3's RAM and boot records were made again on the rig, and both chips'
+complete corpus lanes, native controls, boundaries and ABI peers pass.
+`SR-1024`: the frame budget counts no saves, the window making them, and
+the RISC-V save set is gone. `SR-1178`: a unit case holds a prepared
+stack's check to the outgoing area, and a negative fixture a firmware entry
+whose area alone exceeds the reference's stack. `SR-1302`: the measurement
+reads an Xtensa image as its loader writes it, as D1359 has it, so the
+reference's boot layout is measured, and an image it cannot measure is
+refused naming the segment, symbol or line it met (D1629). SR-1433 files
+the frame placement leaves: a bank and a home for every word. Findings
+fixed on the way: a lane's relative `--refine` was run from another
+directory, so `measure.py size` failed with a traceback; it is now made
+absolute where it is given.
 
 ### R16.24 — The hosted backends' remaining costs
 
@@ -599,7 +633,7 @@ Done: every moved row typed, the rows-to-be filed as `SR-1282` to `SR-1298`,
 `scripts/register_next.py` with its controls, and `check.py` refusing a
 register over its cap or a row past its age in controls. The maintainer's
 answers to Q-1 to Q-5 retired 43 rows and scheduled `SR-195` and `SR-768` on
-R17.50, SR-1178 on R16.20, SR-1237 on R19.10 and C3 on R20.10; a rig fix
+R17.50, `SR-1178` on R16.20, SR-1237 on R19.10 and C3 on R20.10; a rig fix
 rooting the GPIO shell retired one more, leaving 57 open with R17.50's
 fixes merged. The retired rows' standing facts moved to
 `docs/capabilities.md`, `docs/targets.md` and `devices/README.md`.

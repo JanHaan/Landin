@@ -35,9 +35,9 @@ test program like any fixture's.
 A firmware workload's size is measured on the image `refine` itself links,
 with the entry `compiler/tests/measure/entry.ldn` that runs the fixture's
 `main` and keeps its status: at the target's reference profile, the one a
-program importing no description gets, except on Xtensa, whose reference
-gives initialized data no load address at boot, so its workloads link
-against the ESP32's and the ESP32-S3's own descriptions, the boards'. Its
+program importing no description gets, except on Xtensa, whose workloads
+link against the ESP32's and the ESP32-S3's own descriptions, the boards'
+whose cycles the timing runs count. Its
 time is measured on the image the timing lane runs: an emulator lane's own
 profile, or a board's RAM layout.
 

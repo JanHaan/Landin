@@ -1030,7 +1030,14 @@ process ignores SIGPIPE and gives its children the default back.
   and r1 at every level, eight-byte values and VFP floats keeping their
   homes (D1567), at the Thumb-2 levels branches directly and builds
   constants with MOVW and MOVT (D1564), and divides by a constant power of
-  two with shifts (D1626).
+  two with shifts (D1626). Xtensa places every word of a routine without
+  an assembly block, its selection's scratch words and each scalar value
+  and unaddressed slot, over the routine's own liveness in a2-a6, which a
+  call preserves, and a10-a15, dropping operations nothing reads, folding
+  constants into the operations that read them, dividing by a constant
+  power of two with shifts and masks, and making a comparison's flag and
+  its test one branch (D1627), and fuses a comparison with the branch
+  after it (D1628).
 - **At speed** a direct call to a small routine becomes a copy of its body,
   which the debuggers show as an inlined frame of that routine (D339);
   slices and small structs split into scalars; and a branch whose arms only

@@ -3,7 +3,7 @@ with Landin.Backend.Firmware;
 with Landin.Platform;
 with Landin.Targets.Firmware;
 
---  Post-link firmware evidence, Cortex-M's and RV32's. The ELF load
+--  Post-link firmware evidence, Cortex-M's, RV32's and Xtensa's. The ELF load
 --  extents, rather than section payload sums or the ELF file length,
 --  determine occupied capacity, and the selected profile (D543) says what
 --  the capacity is and where.
@@ -22,6 +22,19 @@ package Landin.Build_Reports.Firmware is
       Stage : String;
       Result : out Ada.Strings.Unbounded.Unbounded_String;
       Valid : out Boolean;
+      ESP_Image : String := "");
+
+   --  As Measure, and when the image cannot be measured, Fault says what
+   --  of it was met: the segment, the symbol or the map's line, and the
+   --  rule it breaks.
+   procedure Measure
+     (Host : Landin.Platform.Filesystem'Class;
+      Executable, Link_Map : String;
+      Profile : Landin.Targets.Firmware.Profile;
+      Stage : String;
+      Result : out Ada.Strings.Unbounded.Unbounded_String;
+      Valid : out Boolean;
+      Fault : out Ada.Strings.Unbounded.Unbounded_String;
       ESP_Image : String := "");
 
    --  The report of a request that writes the derived linker script alone
