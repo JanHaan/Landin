@@ -382,7 +382,7 @@ run records and what the gate checks for each target.
   manager, self-hosting, a browser target, dates and times in the library
   and every release decision stay outside it.
 
-**Next roadmap item: R19.10 — Decide the candidates (planned).**
+**Current roadmap work: R19.10 — Decide the candidates.**
 
 ## Questions, bugs and ideas
 

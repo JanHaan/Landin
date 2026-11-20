@@ -1167,7 +1167,7 @@ until R19.10 decides it.
 
 ### R19.10 — Decide the candidates
 
-Status: planned
+Status: active
 Depends on: R18
 
 The maintainer takes each candidate in or leaves it out, and groups the
