@@ -1583,8 +1583,9 @@ jobs:
   #  without the two that execute Linux programs, then determinism closures,
   #  native report identity and the server.
   #
-  #  The Darwin jobs share the five macOS runners an account may hold at
-  #  once, and on one runner this took 25 to 31 minutes, 19 to 24 of them
+  #  The Darwin jobs share the macOS runners an account may hold at once,
+  #  five until 2026-11-20 and fifteen since, and on one runner this took
+  #  25 to 31 minutes, 19 to 24 of them
   #  the host suite.  So the suite runs as two `--shard` jobs, which together
   #  are the complete --host run as the `compiler` shards are the complete
   #  run, and the checks after it are divided between them by their
@@ -1678,18 +1679,15 @@ jobs:
   #  the first and the LLDB sessions with the second, whose checks are the
   #  shorter.  Both are required.
   #
-  #  They also wait for darwin-release-compare, which they need not
-  #  otherwise: a cached release build ends minutes before the debug
-  #  build, and these two jobs, ready then, took the macOS runners
-  #  darwin-host-1 needed at the debug build's end, so that shard, the
-  #  longest path, started 7.7 minutes late on run 44070770890 and the gate
-  #  ended at 31.5 minutes.  The comparison ends after the debug build, so
-  #  darwin-host and the Darwin determinism manifests take the runners
-  #  first; the three short parity shards still start at the release
-  #  build's end, while only the two builds hold runners (docs/process.md).
+  #  They start at the cached release build's end, as the parity shards
+  #  do.  Under the account's former cap of five macOS jobs they also
+  #  waited for darwin-release-compare, so that darwin-host took the
+  #  runners first; with fifteen since 2026-11-20 every Darwin job of a run
+  #  has one at once (docs/process.md), and the wait only delayed them.
+  #  The aggregate still needs the comparison.
   darwin-host-release:
     name: darwin-host-release-${{ matrix.shard }}
-    needs: [inputs, darwin-release-build, darwin-release-compare]
+    needs: [inputs, darwin-release-build]
     if: needs.inputs.outputs.software == 'true' && needs.inputs.outputs.reuse != 'true'
     runs-on: macos-26
     timeout-minutes: 60
@@ -1808,7 +1806,7 @@ jobs:
       #  the panic sessions and the source-debugging contract, with every
       #  dSYM, DWARF and Mach-O identity check.  41 s on a Mac; as a job of
       #  their own they took five minutes and one of the five macOS runners
-      #  the account may hold at once, for which darwin-parity then queued.
+      #  the account could then hold at once, for which darwin-parity queued.
       - name: LLDB source debugging
         if: matrix.shard == 2
         run: ./scripts/debug.sh --target=darwin-arm64 --parity --output "$RUNNER_TEMP/lldb"

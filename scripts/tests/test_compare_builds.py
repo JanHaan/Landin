@@ -384,9 +384,14 @@ class DarwinWorkflow(unittest.TestCase):
         self.assertIn("darwin-release-compare",
                       [name.strip() for name in needs.split(",")])
 
-    def test_the_release_lanes_wait_for_the_comparison(self):
-        self.assertIn("needs: [inputs, darwin-release-build, darwin-release-compare]",
+    def test_the_release_lanes_start_at_the_cached_build(self):
+        #  Fifteen macOS runners leave no reason to hold them back for the
+        #  comparison, which the aggregate still needs.
+        self.assertIn("needs: [inputs, darwin-release-build]\n",
                       self.jobs["darwin-host-release"])
+        needs = re.search(r"needs: \[([^]]*)\]", self.jobs["gate"]).group(1)
+        self.assertIn("darwin-release-compare",
+                      [name.strip() for name in needs.split(",")])
 
 
 if __name__ == "__main__":

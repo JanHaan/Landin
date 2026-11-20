@@ -245,9 +245,11 @@ The instruction counts, exact and a few minutes each, run on every push
 too: RV64's in the same job, Cortex-M's in the `cortex-m` job, which has
 the lanes' tools. Wall time and board cycles run on the weekly schedule
 and on a dispatch, `scope=boards` included, in timing jobs beside the
-boards. The pilot over the whole matrix, recorded in
+boards, unless a passed dispatch on the branch already timed the same key
+over the same base (D1649). The pilot over the whole matrix, recorded in
 `compiler/tests/measure/pilot.json`, gives each job's minutes, the jobs it
-adds against the limit it ran under, 20 concurrent jobs and 5 macOS, and
+adds against the limit it ran under, 20 concurrent jobs and 5 macOS (60
+and 15 since 2026-11-20), and
 each class's noise, before any tolerance is enforced.
 
 ## Reports
