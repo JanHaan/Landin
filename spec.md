@@ -26388,6 +26388,77 @@ a load, its cost above and a write of r7 the allocator must avoid.
 **Pinned by** the firmware lane's leaf and trap cases and the Cortex-M
 corpus at `armv6-m`.
 
+### D1624 — Two shifts that rotate are one rotate on x86-64 and arm64
+
+**The tour said** nothing; [0320] has shifts and no rotate. A rotate written
+as `(x << n) | (x >> (w - n))` was two shifts, an `|` and the registers
+both shifts held: SipHash-1-3's round (SR-1268) spent about 90
+instructions where C spends 14, its temporaries spilled to the frame.
+
+**Chosen:** at `size` and `speed`, on x86-64 and arm64, simplification
+turns an `|`, `^` or `+%` of `x << n` and `x >> m` into `Rotate_Left` of x
+by n, when x is one unsigned value of 32 or 64 bits, n and m are constants,
+n is in 1 to the width less one and n + m is the width; either shift may
+come first. x86-64 selects `rol` and arm64 `ror` by the width less n. Both
+shifts are then dead, and a shift whose amount is unsigned, or a constant
+past zero, is removed as any unused pure value is, since only a negative
+amount traps. On 16 bytes SipHash-1-3 at `speed` falls from 1,041 to 730
+instructions, its round from about 90 to 15, all in registers, and a
+SHA-256 of 64 MiB from 10.8 G to 8.9 G instructions.
+
+**The alternatives:** fusing the pair in each backend's selection, which
+must keep x alive to the `|` against liveness that ends it at the second
+shift; forming it on every target, where RV64 and RV32 without Zbb,
+Thumb-1 and Xtensa would select the shifts again; a rotate in the
+language, a source change for what the optimizer can recognize; and
+narrower widths, which neither instruction set rotates at their width.
+
+**Pinned by** `runtime/shifts-that-rotate` at every profile on every hosted
+target, `x86 opt/shifts that rotate` and `arm64 selection/shifts that
+rotate`.
+
+### D1625 — x86-64 keeps floats in XMM registers at `size`
+
+**The tour said** nothing. x86-64 offered XMM8 to XMM15 at `speed` alone,
+so at `size` every float lived in its home: mandelbrot executed 2.3 times
+the instructions at `size` that it executes at `speed`, for a `.text` 1.6%
+smaller. A float an element, field, pointer or module value load produced
+went through a general register and its home at every objective, and
+fasta's search compared each element from memory.
+
+**Chosen:** `size` allocates XMM registers as `speed` does, with `size`'s
+own rules for source variables (D1404); SysV saves no XMM register, so a
+float in one costs no prologue, and its operations are shorter than their
+frame forms. A float an element, field, indirect or datum load produces
+may take one, as a slot's load does, and is loaded straight into it. At
+`size` mandelbrot executes 0.435 of the instructions it did and its
+`.text` shrinks; fasta and binary-trees execute 8% fewer.
+
+**The alternatives:** `speed` alone, the measured cost above; and an XMM
+register for a source variable over its interval at `size`, which loses
+it from the debugger outside it.
+
+**Pinned by** `compiler/tests/measure/baselines/` and the x86-64 debugger
+sessions at `size`.
+
+### D1626 — Cortex-M divides by a constant power of two with shifts
+
+**The tour said** nothing. Cortex-M0 has no divide instruction, so an
+unsigned `% 8` called `__aeabi_uidivmod` (SR-1268) and `/ 16`
+`__aeabi_uidiv`.
+
+**Chosen:** an unsigned division by a constant 2 ** k, k from 1 to 31,
+is `lsrs` by k, and its remainder `lsls` and `lsrs` by 32 - k, at every
+Cortex-M level and objective: neither can trap, as a nonzero divisor's
+division cannot.
+
+**The alternatives:** a mask, which needs the constant in a register on
+Thumb-1; and a target-neutral rewrite in simplification, which RISC-V,
+Xtensa, x86-64 and arm64 do not need for speed, each dividing by a
+constant already or in hardware.
+
+**Pinned by** the Cortex-M corpus and `compiler/tests/measure/baselines/`.
+
 ### D1383 — `refine` keeps the compiler's commands and ships four of its tools beside it
 
 **The tour said** nothing; [what refine does today] listed thirteen commands of one executable.

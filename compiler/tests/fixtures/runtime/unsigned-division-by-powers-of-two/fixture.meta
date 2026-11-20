@@ -1,0 +1,7 @@
+class: runtime
+profiles: standard
+summary: an unsigned division and remainder by a constant power of two give the quotient and remainder at every width up to 32 bits, from the lowest power to the highest
+constructs: 1770, 1890
+program: main.ldn
+status: 42
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

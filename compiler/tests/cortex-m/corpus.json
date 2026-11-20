@@ -4930,6 +4930,9 @@
     "runtime/shifts-fill-with-zeros-beyond-the-width": {
       "mode": "execute"
     },
+    "runtime/shifts-that-rotate": {
+      "mode": "execute"
+    },
     "runtime/short-circuit-conditions-jump": {
       "mode": "execute"
     },
@@ -5351,6 +5354,9 @@
         "L0015"
       ],
       "mode": "refuse"
+    },
+    "runtime/unsigned-division-by-powers-of-two": {
+      "mode": "execute"
     },
     "runtime/utf16-slice-not-boundary-traps": {
       "mode": "execute"

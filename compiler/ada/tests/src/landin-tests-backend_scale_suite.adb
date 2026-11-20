@@ -345,10 +345,18 @@ package body Landin.Tests.Backend_Scale_Suite is
             begin
                Emit (Work, Opt.Size, Text, Fresh);
             end;
-            Landin.Testing.Check
-              (Item, not Contains (US.To_String (Text), ".set "),
-               "exposure or explicit ABI identity prevents folding channel "
-               & Image (Channel));
+            if Channel = 6 then
+               --  D415: `public` alone is no export, so nothing outside
+               --  the program can tell the two entries apart.
+               Landin.Testing.Check
+                 (Item, Contains (US.To_String (Text), ".set "),
+                  "a public routine alone does not prevent folding");
+            else
+               Landin.Testing.Check
+                 (Item, not Contains (US.To_String (Text), ".set "),
+                  "exposure or explicit ABI identity prevents folding"
+                  & " channel " & Image (Channel));
+            end if;
          end;
       end loop;
    end Exposure_Channels;

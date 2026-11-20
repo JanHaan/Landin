@@ -7566,15 +7566,27 @@ package body Landin.IR.Verifier is
                                     Ordinary_Numeric : constant Boolean :=
                                       Op in Multiply | Divide | Add | Subtract;
                                  begin
-                                    if Op in Numeric_Kind
-                                      and then
-                                        (if Ordinary_Numeric
-                                         then Operand_Kind
-                                                not in
-                                                  Landin.Types.Numeric_Name
-                                         else Operand_Kind
-                                                not in
-                                                  Landin.Types.Integer_Name)
+                                    if (Op in Numeric_Kind
+                                        and then
+                                          (if Ordinary_Numeric
+                                           then Operand_Kind
+                                                  not in
+                                                    Landin.Types.Numeric_Name
+                                           else Operand_Kind
+                                                  not in
+                                                    Landin.Types.Integer_Name))
+                                      --  D1624: an unsigned value turned
+                                      --  by a constant.
+                                      or else
+                                        (Op = Rotate_Left
+                                         and then
+                                           (Landin.Types.Is_Signed
+                                              (Landin.Types.Integer_Name
+                                                 (Operand_Kind))
+                                            or else Op_Of (Of_Unit, Id, R)
+                                              /= Number
+                                            or else Is_Negated
+                                              (Of_Unit, Id, R)))
                                     then
                                        return
                                          (Kind => Result_Disagrees,
