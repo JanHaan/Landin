@@ -19,8 +19,8 @@ rewritten as R21 for today's library, second Io and threads.
 This roadmap makes the language smaller and the tools around it ordinary:
 the project's own process first, then `refine` split into commands, a
 breaking simplification of the language, a review of the standard library,
-Windows, and the library a newcomer expects to find. Optimization runs
-beside all of it.
+Windows, the library a newcomer expects to find, and the install routes
+that make a release quick to reach. Optimization runs beside all of it.
 
 Outside it, and staying outside: a build tool and package manager, the
 Companion tool and ecosystem family's; self-hosting and separate
@@ -83,7 +83,7 @@ branch and promotes them once, at its gate; a continuous item lands on
 main meanwhile and the branch takes it.
 
 ```text
-Execution order: R17, R16.10, R18, R19, R20, R21, R22
+Execution order: R17, R16.10, R18, R19, R20, R21, R22, R23
 Continuous: R16.20 onward
 ```
 
@@ -1459,6 +1459,144 @@ artifact upload failed on DNS) and boards run 44535495255 on f968ab7f3.
 Each addition on every target its namespace admits, with its oracle; each
 generated table held by its check.
 
+## R23 — Install routes
+
+Four routes to an installed `refine`, which the maintainer added on
+2026-11-20. Today a release archive (Linux x86-64, Linux arm64 and macOS
+arm64, the Linux ones linked against glibc), nix, which builds from source
+in minutes, a Homebrew tap kept outside the repository, and a build from
+source are the ways in; a newcomer on NixOS, Alpine or in a container has
+none that is quick. These items make the releases that exist reachable:
+they add steps to the release recipe and the flake, and make no release
+and change no version, which stay outside this roadmap. Package
+repositories (apt, rpm, the AUR) and further hosts (Windows, an Intel Mac,
+FreeBSD) are not among them; R21 owns Windows.
+
+Their dependencies are inside the phase, so each may start beside the
+serial lane's item, as R17.50 did; while R19 to R22 have an item, the
+pointers keep naming it. An item that changes a step of the release
+recipe writes that step into `docs/process.md`. The recipe, a declaration
+commit, the gate, the tag, the release workflow's publication and the
+commit that records the published hashes in the flake, is written today
+only in comments of `.github/workflows/release.yml` and `flake.nix`, so
+the first such item writes the whole recipe down.
+
+### R23.10 — Container images on releases
+
+Status: planned
+Depends on: none
+
+Two images under `ghcr.io/701-dev`, for Linux amd64 and arm64 in one
+manifest each, published by the release workflow and only at a release,
+never from main or a commit. The user image holds a release archive's
+prefix (`bin/refine`, `libexec/landin`, `lib/landin`) and the C compiler
+and binutils `refine` links with, under the GNU triplet name it asks for
+(`libexec/landin/<triplet>-gcc`, as `flake.nix`'s `refineBin` arranges);
+it is built from the two Linux release archives without compiling. The
+contributor image is the pinned GNAT and GPRbuild environment for building
+the compiler, grown from `environments/linux-amd64/Containerfile` with an
+arm64 counterpart; it reads `environments/pins.sh`, so `check.py`'s pin
+agreement covers it. Neither carries a Cortex-M, RISC-V or Xtensa
+toolchain; the installing documentation says how a user adds the
+dependencies for a cross build, and that debugging inside a container
+needs `--cap-add=SYS_PTRACE`. A base image's packages move only at a
+release. Whether a release also moves a `latest` tag is Q-65.
+
+Exit evidence: a gate job that builds the user image from the gate's
+packaged release compiler and compiles and runs the first program inside
+it, as `outside-user-stock` does outside one, on amd64 and arm64; the
+contributor image built and the compiler built inside it, in the gate or,
+where its cost forbids, in the release workflow; the release workflow
+building and checking both images before its approval and pushing them
+after it, shown on a run whose push is withheld; both images in the
+installing documentation and `docs/capabilities.md`; the release recipe's
+image step, and how to check a published image, written in
+`docs/process.md`. The first published images are the next release's
+evidence, not this item's.
+
+### R23.20 — Nix installs the prebuilt compiler
+
+Status: planned
+Depends on: none
+
+`nix profile install github:701-dev/Landin` builds `refine` from source,
+which takes minutes, though the flake already has `refine-bin`, the
+published release archive for the same three hosts, which the installing
+documentation does not name; and the flake defines no `apps`, so `nix run`
+has nothing to run. The route the documentation gives takes the prebuilt
+compiler on a host the release covers and the source build elsewhere, and
+`nix run github:701-dev/Landin -- ...` runs `refine`. The source build
+stays one name away for a contributor and for a host without an archive.
+
+Exit evidence: `nix profile install` and `nix run` of the documented
+reference fetching the release archive rather than compiling, and the
+source build still reachable, in the gate's flake jobs; the installing
+documentation giving both commands; the release recipe's flake-hash step
+in `docs/process.md` checking `nix run` against the newly published
+archives before that commit is promoted.
+
+### R23.30 — A one-line install script
+
+Status: planned
+Depends on: none
+
+A script a user pipes from `curl` into `sh`: it names the release archive
+for the host it runs on, downloads it and its `.sha256`, refuses on a
+mismatch, unpacks it into a directory of the user's choosing or a default
+under the home directory, and says what to put on `PATH`. A host no
+archive serves is refused with the routes that do serve it. It installs a
+named version or the newest, and says it can check the archive's
+attestation with `gh` when that is installed. Where the script is served
+from, the address the documentation prints, is Q-66.
+
+Exit evidence: the script run in the gate on Linux x86-64, Linux arm64
+and macOS arm64 against the gate's packaged compiler served as a release
+would be, installing a program that runs the first program, and refusing
+a damaged archive and an unserved host, each in a control; the
+installing documentation's command; the release recipe's step that checks
+the script's archive names against the assets the release workflow
+publishes, in `docs/process.md`.
+
+### R23.40 — Whether a static Linux `refine` can be built
+
+Status: planned
+Depends on: none
+
+A Linux `refine` linked statically, against musl, would run on Alpine,
+NixOS and a minimal container without the glibc loader the Linux archives
+ask for. Nobody knows whether the pinned GNAT makes that hard: its runtime
+is built for glibc, and its tasking, exceptions and the C adapters each
+need a look. This item looks, tries a static build of `refine` and the
+split commands on Linux x86-64 and arm64, and writes what it found, with
+the cost and the toolchain it would pin, under `roadmap/inputs/`.
+
+Exit evidence: the finding in `roadmap/inputs/`, with a static `refine`
+that passed the release test program if one was built; R23.50 confirmed or
+rewritten to match, or, if it cannot be done at a cost worth paying, a
+question asking the maintainer to retire it.
+
+### R23.50 — A static Linux archive
+
+Status: planned
+Depends on: R23.10, R23.30, R23.40
+
+The release workflow publishes a static Linux archive for x86-64 and
+arm64 as R23.40 found it can be built, beside the glibc archives or in
+their place as that finding argues. The install script takes it on a
+musl host, and the user image takes it where it makes the image simpler.
+
+Exit evidence: a gate job that runs the packaged static compiler on
+Alpine and in an image with no C library of its own beyond the linker it
+needs, compiling and running the first program; the release test program
+passed by the static build; the install script choosing it on Alpine in
+its control; the archive in the installing documentation; the release
+recipe's step for it in `docs/process.md`.
+
+### R23 gate
+Every route in the installing documentation and exercised by the gate or,
+where only a release can, by the release workflow; the release recipe
+written in `docs/process.md` with each route's step.
+
 ## Successor families
 
 The first roadmap named six families as destinations for what it did not do,
@@ -1479,8 +1617,8 @@ waits for its activation.
   baseline code.
 - **Language evolution:** parked constructs, watches and proposals whose
   triggers have not fired.
-- **Release readiness:** distribution, production claims and every release or
-  version decision.
+- **Release readiness:** distribution beyond R23's routes, production
+  claims and every release or version decision.
 - **Usability:** what a person meets using Landin from its documentation
   alone: knowledge a newcomer cannot guess, workarounds, refusals that do
   not say what to do, and documentation that disagrees with the tool.
