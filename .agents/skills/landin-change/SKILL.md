@@ -82,8 +82,9 @@ what a successor needs is never only in the conversation.
    main's gate ending or `finish` gives it up. An item that says
    `Promotion: maintainer` stops at the passed candidate and gives the
    token up with `item.py queue --release ITEM`.
-7. **Follow main**: `item.py gate ITEM --main --watch`. A failure there is
-   investigated, never rerun blindly.
+7. **Follow main**: `item.py gate ITEM --main --watch`. Main's push takes
+   the boards of the candidate's passed dispatch, so its gate is short. A
+   failure there is investigated, never rerun blindly.
 8. **Finish**: `item.py finish ITEM`, from the worktree or anywhere in the
    clone, refuses until main's gate passed, then removes the worktree, the
    local and remote branch, and moves the state to `landin-items/done/`,

@@ -144,7 +144,8 @@ and log paths instead of repeatedly pasting complete transcripts.
 An authorized promotion to main needs the candidate's complete multi-host
 software gate passed, a `scope=boards` dispatch passed on the identical
 tree unless the edit is declared `Gate: explanatory`, and main's own push
-gate followed to its end; the promoted tree must be the one tested. A
+gate followed to its end, which takes that dispatch's boards rather than
+running them again; the promoted tree must be the one tested. A
 changed merge tree needs new evidence. Filtered local checks are
 development feedback; they do not replace the gate.
 
