@@ -26392,8 +26392,8 @@ corpus at `armv6-m`.
 
 **The tour said** nothing; [0320] has shifts and no rotate. A rotate written
 as `(x << n) | (x >> (w - n))` was two shifts, an `|` and the registers
-both shifts held: SipHash-1-3's round (SR-1268) spent about 90
-instructions where C spends 14, its temporaries spilled to the frame.
+both shifts held: SipHash-1-3's round spent about 90 instructions where C
+spends 14, its temporaries spilled to the frame.
 
 **Chosen:** at `size` and `speed`, on x86-64 and arm64, simplification
 turns an `|`, `^` or `+%` of `x << n` and `x >> m` into `Rotate_Left` of x
@@ -26444,8 +26444,7 @@ sessions at `size`.
 ### D1626 — Cortex-M divides by a constant power of two with shifts
 
 **The tour said** nothing. Cortex-M0 has no divide instruction, so an
-unsigned `% 8` called `__aeabi_uidivmod` (SR-1268) and `/ 16`
-`__aeabi_uidiv`.
+unsigned `% 8` called `__aeabi_uidivmod` and `/ 16` `__aeabi_uidiv`.
 
 **Chosen:** an unsigned division by a constant 2 ** k, k from 1 to 31,
 is `lsrs` by k, and its remainder `lsls` and `lsrs` by 32 - k, at every

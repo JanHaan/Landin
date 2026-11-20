@@ -235,7 +235,7 @@ also says where a program's compile time goes among its sources, and gives
 the build and depth reports one name for each frame quantity. A measured code-quality cost attributable to
 assembly's fixed memory effect is recorded against `SR-09` before any narrower
 effect is proposed. Its ranked list answers the activations of SR-231,
-SR-387, SR-596, SR-869 and SR-1023, and measures x86-64's two-instruction
+`SR-387`, SR-596, SR-869 and SR-1023, and measures x86-64's two-instruction
 reach of a thread instance. This takes on `SR-996` and SR-275, and carries the
 fresh-copy requirement. The instruction count under emulation is the
 per-routine cost report `SR-1267` asked for.
@@ -277,8 +277,8 @@ cycles, and up to 1.085 in an A/A wall run, so a pair past its tolerance is
 timed again. `compiler/tests/measure/findings.md` is the ranked list:
 arm64's allocator unused at `size`, RV64's far jumps, Cortex-M's homes
 addressed through r6, then allocation. `SR-09` and `SR-1267` are settled;
-SR-596, SR-869, SR-231, `SR-996`, `SR-577`, SR-583 and SR-1268 are R16.20's;
-SR-275, SR-387 and SR-1023 are restated with their figures, and SR-1302
+SR-596, SR-869, SR-231, `SR-996`, `SR-577`, SR-583 and `SR-1268` are R16.20's;
+SR-275, `SR-387` and SR-1023 are restated with their figures, and SR-1302
 records the Xtensa reference's boot layout. Findings fixed on the way: the
 stack report names its frame quantities as the build report does (D1380),
 the stage report gives each source's scanning and parsing (D1381), and an
@@ -461,7 +461,7 @@ measurement.
 
 ### R16.24 — The hosted backends' remaining costs
 
-Status: active
+Status: complete
 Depends on: R16.10
 
 R16.10 ranked x86-64's costs as mostly not register allocation's: floats
@@ -470,13 +470,36 @@ iteration, a loop's shape and the bounds check an indexed increment keeps,
 `size` giving up the hot loops' registers, and the allocators' treatment of
 a routine with an assembly block, which on x86-64 takes no caller-saved
 register and whole-routine spans and on arm64 no slot in a register. This
-takes on SR-1268's SipHash round state and R551-12, whose atomic and barrier
-lowering is taken or recorded with its measurement, and SR-387's heap lock
+takes on `SR-1268`'s SipHash round state and R551-12, whose atomic and barrier
+lowering is taken or recorded with its measurement, and `SR-387`'s heap lock
 path, which with no thread started still makes two out-of-line calls an
 allocation and free.
 
 Exit evidence: each cost taken measured lower against its R16.10 baseline,
 with unchanged behavior, ABI and debugger evidence.
+
+Done: lowering no longer marks every `public` routine exposed, which D415
+had ruled out and the routine filling still did, so D339 copies and
+specialization reach the library's public routines; the heap reads its
+lock flag with the builtin, one load and a branch in `host_alloc` and
+`host_free`, and aligns a power-of-two unit with a mask rather than two
+divisions (`SR-387`): on x86-64 binary-trees 15 at speed-auto runs in 0.37
+s against 0.44 and 0.927 of the instructions. Shifts that rotate are
+`rol` and `ror` on x86-64 and arm64 (D1624), and SipHash-1-3 of 16 bytes
+takes 730 instructions against 1,041, its round 15, all in registers;
+Cortex-M divides by a constant power of two with shifts (D1626); the two
+take `SR-1268`. x86-64 keeps floats in XMM registers at `size`, and loads
+a float element, field, pointee or datum straight into one (D1625): at
+size-auto mandelbrot executes 0.435 of its instructions and fasta and
+binary-trees 0.92, and fasta 0.968 at speed-auto. Compiling the hosted set
+at speed takes no longer. What stays is filed with its measurement:
+SR-1422 the nine registers x86-64 offers, SR-1423 the assembly block's
+rule, SR-1424 float constants made in each block, SR-1425 a loop's two
+jumps, SR-1426 the order D339 copies in, and R551-12 keeps the bounds
+check a loop's end does not name and the calls of `core/atomic`'s cells;
+SR-1427, SR-1428 and SR-1429 record what the work met. Findings fixed on
+the way: the public exposure above, and a dead shift kept as if it could
+trap.
 
 ### R16.25 — RISC-V's remaining costs
 
