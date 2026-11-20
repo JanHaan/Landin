@@ -87,8 +87,21 @@ system's standard loader, `/lib64/ld-linux-x86-64.so.2` on x86-64 and
 `/lib/ld-linux-aarch64.so.1` on arm64. On NixOS or a musl distribution,
 install with nix or build from source.
 
-Each archive is attested: the release workflow built it from its tag. With
-the GitHub CLI, check a downloaded archive before you unpack it:
+Beside each archive is `landin-VERSION-PLATFORM.tar.gz.sha256`, one line
+in `sha256sum`'s own format: `SUM  landin-VERSION-PLATFORM.tar.gz`.
+Download it into the same directory as the archive and check the archive
+against it:
+
+```sh
+sha256sum -c landin-VERSION-PLATFORM.tar.gz.sha256        # Linux
+shasum -a 256 -c landin-VERSION-PLATFORM.tar.gz.sha256    # macOS
+```
+
+It prints `OK` after the file name when the archive arrived whole and
+unchanged. It does not say who built it.
+
+The attestation does: the release workflow built each archive from its
+tag. With the GitHub CLI, check a downloaded archive before you unpack it:
 
 ```sh
 gh attestation verify landin-VERSION-PLATFORM.tar.gz --repo 701-dev/Landin \

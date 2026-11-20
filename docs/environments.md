@@ -349,11 +349,9 @@ GNAT 16.1.0 with GPRbuild 26.0.0.
 
 It is defined for the three systems the pins carry checksums for,
 `x86_64-linux`, `aarch64-linux` and `aarch64-darwin`. The prebuilt
-`.#refine-bin` exists only for a system a release has published an asset
-for, with its hash recorded in the flake, so `aarch64-linux` has the shell
-and the source build `.#refine` and gains the prebuilt compiler with the
-first release that publishes it. The aarch64-linux and aarch64-darwin
-outputs are evaluated on x86-64 by the gate's `flake` job, and only the
+`.#refine-bin` exists for a system a release has published an asset for,
+with its hash recorded in the flake; since 0.2.10 that is all three. The
+aarch64-linux and aarch64-darwin outputs are evaluated on x86-64 by the gate's `flake` job, and only the
 x86-64 ones are built there (D585); the aarch64-linux shell is not yet built
 on arm64 hardware. That job is the whole of Nix CI.
 
