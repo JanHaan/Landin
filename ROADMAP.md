@@ -445,7 +445,7 @@ does not change.
 
 ### R16.23 — Xtensa selection
 
-Status: planned
+Status: active
 Depends on: R16.10
 
 Xtensa's backend writes RISC-V-form words that its machine layer keeps in
