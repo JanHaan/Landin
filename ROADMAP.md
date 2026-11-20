@@ -504,7 +504,11 @@ SR-1427, SR-1428 and SR-1429 record what the work met, and SR-1430 the
 STM32H753's binary-search, 9.7% slower at size where the RP2040 and
 RP2350 run every configuration faster. Findings fixed on
 the way: the public exposure above, and a dead shift kept as if it could
-trap.
+trap. The STM32H753's cached profile's RAM record was made again on the rig.
+The candidate passed its
+[gate](https://github.com/701-dev/Landin/actions/runs/44751439289) and
+[boards](https://github.com/701-dev/Landin/actions/runs/44756840002), timing
+included.
 
 ### R16.25 — RISC-V's remaining costs
 
