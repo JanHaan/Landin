@@ -1486,8 +1486,7 @@ agreement covers it. Neither carries a Cortex-M, RISC-V or Xtensa
 toolchain; the installing documentation says how a user adds the
 dependencies for a cross build, and that debugging inside a container
 needs `--cap-add=SYS_PTRACE`. A base image's packages move only at a
-release. Whether a release also moves a `latest` tag is Q-65. If R23.50
-lands first, the user image may take its static archive.
+release. Whether a release also moves a `latest` tag is Q-65.
 
 Exit evidence: a gate job that builds the user image from the gate's
 packaged release compiler and compiles and runs the first program inside
