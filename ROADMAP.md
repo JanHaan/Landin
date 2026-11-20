@@ -1113,6 +1113,20 @@ Every existing invocation works or is refused with its new form; every
 split command ships in the archive and the flake and keeps its controls;
 DAP sessions are scripted in the gate.
 
+Claimed after R18.71, on main `9dcc76831`: every item's completing commit
+passed its gate, its boards dispatch and main's gate. R18.40 refuses the
+bare-source form, naming the command to write. R18.70's old forms pass
+through the dispatcher with their controls, and R18.72 dispatches `refine
+build` to a contributed command. The full
+[pass](https://github.com/701-dev/Landin/actions/runs/44633646164) on that
+tree, which main's gate reused, packaged the archive with `refine-bindings`,
+`refine-dap`, `refine-site` and `refine-svd`, which `scripts/package.sh`
+refuses to leave out. It built the flake's `.#refine`, which installs each.
+It scripted DAP sessions over GDB in `release`, `arm64-release` and
+`rv64-qemu-1`, and over LLDB in `darwin-host-release-2` and both FreeBSD
+debugger jobs. A local run on the same tree reached each split's
+`--describe` and `--help` through the archive's `refine` and the flake's.
+
 ## R19 — A smaller language
 
 Breaking, serial. Its input is the list of simplification candidates,
