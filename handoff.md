@@ -1,7 +1,7 @@
 # Landin — orientation
 
 Everything a fresh reader, or a fresh session, needs before touching
-anything. Kept current at specification **0.2.11**. How work is done and
+anything. Kept current at version **0.2.11**. How work is done and
 checked, the development loop, the multi-host gate and the physical boards
 on the rig, is in [`docs/process.md`](docs/process.md). `D211` names a
 decision recorded in `spec.md`; `refine explain D211` prints its title.

@@ -89,7 +89,7 @@
           specification =
             let
               status = lib.findFirst (
-                line: lib.hasPrefix "**Status: specification " line
+                line: lib.hasPrefix "**Status: version " line
               ) null (lib.splitString "\n" (builtins.readFile ./README.md));
               found =
                 if status == null then
