@@ -6,7 +6,9 @@ def continuous_items(text, identities):
     """The items the `Continuous:` line puts in the continuous lane.
 
     `Continuous: ITEM onward` names ITEM and every later item of its
-    phase; a roadmap without the line has no continuous lane.
+    phase; several ranges, one a phase, are separated by commas, as in
+    `Continuous: ITEM onward, ITEM onward`.  A roadmap without the line
+    has no continuous lane.
     """
     lines = [line for line in text.splitlines()
              if line.startswith("Continuous:")]
@@ -15,16 +17,23 @@ def continuous_items(text, identities):
     if len(lines) != 1:
         raise ValueError("expected at most one Continuous line, found %d"
                          % len(lines))
-    match = re.fullmatch(r"Continuous: (R(\d+)\.([1-9]\d*)) onward", lines[0])
-    if not match:
+    if not re.fullmatch(r"Continuous: R\d+\.[1-9]\d* onward"
+                        r"(?:, R\d+\.[1-9]\d* onward)*", lines[0]):
         raise ValueError("malformed Continuous line")
-    if match.group(1) not in identities:
-        raise ValueError("the continuous lane starts at unknown "
-                         + match.group(1))
-    phase, first = match.group(2), int(match.group(3))
-    return [identity for identity in identities
-            if identity.split(".")[0] == "R" + phase
-            and int(identity.split(".")[1]) >= first]
+    items, phases = [], set()
+    for match in re.finditer(r"(R(\d+)\.([1-9]\d*)) onward", lines[0]):
+        if match.group(1) not in identities:
+            raise ValueError("the continuous lane starts at unknown "
+                             + match.group(1))
+        phase, first = match.group(2), int(match.group(3))
+        if phase in phases:
+            raise ValueError("the continuous lane names phase R%s twice"
+                             % phase)
+        phases.add(phase)
+        items += [identity for identity in identities
+                  if identity.split(".")[0] == "R" + phase
+                  and int(identity.split(".")[1]) >= first]
+    return items
 
 
 def execution_order(text, identities):
