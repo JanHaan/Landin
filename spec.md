@@ -40287,8 +40287,13 @@ Debian 13 image `environments/pins.sh` pins by digest, with Debian's
 `x86_64-linux-gnu-gcc` and `aarch64-linux-gnu-gcc`, names `refine`
 already asks for (D364), so nothing is linked under the name the flake's
 `refine-bin` makes. No firmware or cross toolchain is in it; the README
-says which Debian packages add one, and that GDB needs
-`--cap-add=SYS_PTRACE`. Each platform's image is built and checked on its
+says which Debian packages add one, and that Debian's GDB, added the same
+way, needs no added capability. The planned note that debugging needs
+`--cap-add=SYS_PTRACE` was measured before it was written: in the
+release rehearsal GDB stopped the first program at `main` on both
+platforms without it, and with it still warned that the default seccomp
+profile refuses turning off address randomisation, so the README says
+that instead, and the release workflow's check holds it. Each platform's image is built and checked on its
 own runner, `scripts/container_image.py check user` running the README's
 commands with a directory of the reader's mounted at `/work` as the
 reader's own user, and is kept as an archive so the publishing job pushes

@@ -32,8 +32,8 @@ user: `refine version`, which must name the library in
 compile`, owned by the reader, and run, and run again with `refine run`,
 each printing exactly its fixture's output.  With
 `--debugger` it also installs Debian's GDB in a container and stops the
-first program at `main`, with and without `--cap-add=SYS_PTRACE`, and
-requires the run the README gives to stop there.
+first program at `main`, without and with `--cap-add=SYS_PTRACE`, and
+requires the first, the run the README gives, to stop there.
 
 `check contributor` bind-mounts this checkout at `/work`, builds `refine`
 there with the image's toolchain under the build tag `image`, as the
@@ -41,18 +41,20 @@ invoking user, and runs the first program with it.
 
 `save` writes TAG as an archive for `publish`, which reads
 DIRECTORY/user-amd64.tar, user-arm64.tar, contributor-amd64.tar and
-contributor-arm64.tar.  For each image it assembles one manifest list of
-both platforms with `podman` and refuses unless the list holds exactly
-linux/amd64 and linux/arm64.  With `--layout DIR` it pushes the lists into
-an OCI layout there, which publishes nothing and is how the release
-rehearsal checks the step; without it it pushes each to the registry as
-VERSION, the only tag it ever moves.  A tag the registry
+contributor-arm64.tar.  For each image it copies both archives into an OCI
+layout with `skopeo`, refuses unless each holds an image for its own
+platform, and writes one index of the two, which `skopeo copy --all`
+pushes.  With `--layout DIR` the layout is DIR and the index is pushed
+into a second layout, DIR/published, which publishes nothing and is how
+the release rehearsal checks the step; without it the index is pushed to
+the registry as VERSION, the only tag it ever moves.  A tag the registry
 already holds is never replaced, since the build is not reproducible: it
 is reported and left as it is, so a publication that stopped part-way is
 completed by running again.  `--outputs` appends `user-digest=` and
 `contributor-digest=` lines, for the attestation steps, to FILE.
 """
 import argparse
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -192,14 +194,17 @@ def check_user(engine, tag, debugger):
 
 def check_debugger(engine, tag, source):
     """GDB from Debian's archive, as the README tells a reader to add it,
-    stopping the first program at main; the run without the capability is
-    reported, so the README's advice stays a measured one."""
+    stopping the first program at main in a container run as the README
+    says, with no added capability.  A run with `--cap-add=SYS_PTRACE` is
+    reported beside it, so the README's advice stays a measured one: on
+    the release workflow's runners both stop, and both warn that the
+    default seccomp profile refuses turning off address randomisation."""
     script = ("set -e; apt-get update -qq >&2; "
               "apt-get install -qq --yes --no-install-recommends gdb >&2; "
               "cd /tmp; cat > main.ldn; refine compile main.ldn -o main >&2; "
               "gdb -batch -ex 'break main' -ex run -ex bt ./main 2>&1")
     failures = []
-    for granted in (["--cap-add=SYS_PTRACE"], []):
+    for granted in ([], ["--cap-add=SYS_PTRACE"]):
         what = "gdb stops at main%s" % (
             " with --cap-add=SYS_PTRACE" if granted else
             " without the capability")
@@ -210,7 +215,7 @@ def check_debugger(engine, tag, source):
         stopped = status == 0 and "Breakpoint 1," in text
         print("%s %s\n%s" % ("ok  " if stopped else "no  ", what, text),
               flush=True)
-        if granted and not stopped:
+        if not granted and not stopped:
             failures.append("%s: it did not\n%s%s" % (
                 what, text, said.decode("utf-8", "replace")))
     return failures
@@ -239,18 +244,6 @@ def check_contributor(engine, tag):
     return failures
 
 
-def loaded(archive):
-    """The name `podman load` gives the image in ARCHIVE."""
-    done = run(["podman", "load", "--input", str(archive)],
-               stdout=subprocess.PIPE, text=True)
-    print(done.stdout, end="")
-    names = [line.split(":", 1)[1].strip() for line in done.stdout.splitlines()
-             if line.startswith("Loaded image")]
-    if not names:
-        raise Refused("podman named no image loaded from %s" % archive)
-    return names[-1]
-
-
 def published(ref):
     """Whether the registry already holds REF."""
     status, _, said = capture(["skopeo", "inspect", "--raw", "docker://" + ref])
@@ -263,51 +256,104 @@ def published(ref):
                   % (ref, text))
 
 
-def platforms(manifest):
-    listed = json.loads(run(["podman", "manifest", "inspect", manifest],
-                            stdout=subprocess.PIPE, text=True).stdout)
-    return sorted("%s/%s" % (entry["platform"]["os"],
-                             entry["platform"]["architecture"])
-                  for entry in listed.get("manifests", []))
+def blob(layout, digest):
+    algorithm, value = digest.split(":", 1)
+    return layout / "blobs" / algorithm / value
+
+
+def indexed(layout):
+    return json.loads((layout / "index.json").read_text())
+
+
+def entry(layout, name):
+    """The descriptor LAYOUT's index.json gives the reference NAME."""
+    for found in indexed(layout).get("manifests", []):
+        if found.get("annotations", {}).get(
+                "org.opencontainers.image.ref.name") == name:
+            return found
+    raise Refused("%s holds no image named %s" % (layout, name))
+
+
+def platform_of(layout, descriptor):
+    manifest = json.loads(blob(layout, descriptor["digest"]).read_text())
+    config = json.loads(blob(layout, manifest["config"]["digest"]).read_text())
+    return {"os": config.get("os", ""),
+            "architecture": config.get("architecture", "")}
+
+
+def assemble(layout, kind, version, directory):
+    """Both platforms' images of KIND copied into LAYOUT, and one index
+    naming them with their platforms, under the reference NAME-VERSION.
+
+    Each `docker save` archive is copied with skopeo, its layers
+    compressed; the index is written here rather than by an engine's
+    manifest list, so what is pushed is exactly these files, each image's
+    platform read from its own configuration."""
+    manifests = []
+    for arch in ARCHITECTURES:
+        archive = directory / ("%s-%s.tar" % (kind, arch))
+        if not archive.is_file():
+            raise Refused("%s is missing: publish takes both platforms of "
+                          "both images" % archive)
+        name = "%s-%s" % (NAMES[kind], arch)
+        run(["skopeo", "copy", "--dest-compress-format", "gzip",
+             "--dest-compress", "docker-archive:" + str(archive),
+             "oci:%s:%s" % (layout, name)])
+        descriptor = entry(layout, name)
+        found = platform_of(layout, descriptor)
+        if found != {"os": "linux", "architecture": arch}:
+            raise Refused("%s holds an image for %s/%s, not linux/%s" % (
+                archive, found["os"] or "?", found["architecture"] or "?",
+                arch))
+        manifests.append({"mediaType": descriptor["mediaType"],
+                          "digest": descriptor["digest"],
+                          "size": descriptor["size"],
+                          "platform": found})
+    index = json.dumps({"schemaVersion": 2,
+                        "mediaType": "application/vnd.oci.image.index.v1+json",
+                        "manifests": manifests},
+                       sort_keys=True, separators=(",", ":")).encode()
+    digest = "sha256:" + hashlib.sha256(index).hexdigest()
+    blob(layout, digest).write_bytes(index)
+    top = indexed(layout)
+    reference = "%s-%s" % (NAMES[kind], version)
+    top["manifests"] = [found for found in top.get("manifests", [])
+                        if found.get("annotations", {}).get(
+                            "org.opencontainers.image.ref.name") != reference]
+    top["manifests"].append({
+        "mediaType": "application/vnd.oci.image.index.v1+json",
+        "digest": digest, "size": len(index),
+        "annotations": {"org.opencontainers.image.ref.name": reference}})
+    (layout / "index.json").write_text(json.dumps(top, indent=2) + "\n")
+    print("ok   %s holds %s" % (reference, ", ".join(
+        "%s/%s" % (one["platform"]["os"], one["platform"]["architecture"])
+        for one in manifests)), flush=True)
+    return reference
 
 
 def publish(version, directory, layout, outputs):
     directory = Path(directory)
-    wanted = ["linux/%s" % arch for arch in ARCHITECTURES]
     said = []
-    for kind in NAMES:
-        ref = reference(kind, version)
-        if layout is None and published(ref):
-            print("%s is already published; it is left as it is" % ref)
-            continue
-        manifest = "landin-publish-%s" % kind
-        run(["podman", "manifest", "rm", manifest], check=False,
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        run(["podman", "manifest", "create", manifest])
-        for arch in ARCHITECTURES:
-            archive = directory / ("%s-%s.tar" % (kind, arch))
-            if not archive.is_file():
-                raise Refused("%s is missing: publish takes both platforms "
-                              "of both images" % archive)
-            run(["podman", "manifest", "add", manifest,
-                 "containers-storage:" + loaded(archive)])
-        held = platforms(manifest)
-        if held != wanted:
-            raise Refused("%s's list holds %s, not %s" % (
-                kind, ", ".join(held) or "nothing", ", ".join(wanted)))
-        print("ok   %s holds %s" % (ref, ", ".join(held)), flush=True)
-        if layout is not None:
-            destination = "oci:%s:%s-%s" % (layout, NAMES[kind], version)
-        else:
-            destination = "docker://" + ref
-        with tempfile.TemporaryDirectory(prefix="landin-digest-") as scratch:
-            digest_file = Path(scratch) / "digest"
-            run(["podman", "manifest", "push", "--all", "--digestfile",
-                 str(digest_file), manifest, destination])
+    with tempfile.TemporaryDirectory(prefix="landin-images-") as scratch:
+        staging = Path(layout) if layout else Path(scratch) / "layout"
+        for kind in NAMES:
+            ref = reference(kind, version)
+            if layout is None and published(ref):
+                print("%s is already published; it is left as it is" % ref)
+                continue
+            name = assemble(staging, kind, version, directory)
+            if layout is not None:
+                destination = "oci:%s:%s" % (staging / "published", name)
+            else:
+                destination = "docker://" + ref
+            digest_file = Path(scratch) / ("%s.digest" % kind)
+            run(["skopeo", "copy", "--all", "--digestfile", str(digest_file),
+                 "oci:%s:%s" % (staging, name), destination])
             digest = digest_file.read_text().strip()
-        print("pushed %s to %s as %s" % (ref, destination, digest), flush=True)
-        said.append("%s-digest=%s" % (kind, digest))
-        said.append("%s-name=%s" % (kind, ref.rsplit(":", 1)[0]))
+            print("pushed %s to %s as %s" % (ref, destination, digest),
+                  flush=True)
+            said.append("%s-digest=%s" % (kind, digest))
+            said.append("%s-name=%s" % (kind, ref.rsplit(":", 1)[0]))
     if outputs:
         with open(outputs, "a", encoding="utf-8") as stream:
             for line in said:

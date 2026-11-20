@@ -177,8 +177,10 @@ RUN apt-get update \
 Espressif's Xtensa compiler is not in Debian; it comes from Espressif.
 When a driver is missing, `refine`'s error names the package to install.
 
-To debug inside a container, install `gdb` the same way and run the
-container with `--cap-add=SYS_PTRACE`.
+To debug inside a container, install `gdb` the same way. It needs no
+extra capability. It warns that it cannot turn off address randomisation,
+which Docker's default security profile refuses, so a program's addresses
+can differ from one run to the next.
 
 An image moves only at a release: the Debian packages inside are the ones
 of the day the release was built.

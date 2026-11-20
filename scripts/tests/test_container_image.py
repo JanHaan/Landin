@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""scripts/container_image.py against stand-in `docker`, `podman` and
+"""scripts/container_image.py against stand-in `docker` and
 `skopeo`.
 
 The stand-ins record every call and answer as the real commands do, as far
 as the script asks: a build's context is listed, a run answers the checks
-with what a working or a broken image prints, and the manifest commands
-keep the platforms they were given.  What the engines and the registry do
+with what a working or a broken image prints, and `skopeo copy` writes a
+layout whose images name their platforms.  What the engines and the registry do
 is not shown here; what reaches an image's context, what a check accepts
 and what is pushed where, is.  The release workflow runs the real thing.
 """
@@ -44,14 +44,36 @@ elif tool == "docker" and argv[0] == "run":
         (work / argv[argv.index("-o") + 1]).write_text("program")
     elif argv[-1] == "./main" or argv[-2:] == ["run", "main.ldn"]:
         sys.stdout.write(Path(os.environ["FAKE_OUTPUT"]).read_text())
-elif tool == "podman" and argv[0] == "load":
-    print("Loaded image: localhost/" + Path(argv[-1]).stem)
-elif tool == "podman" and argv[:2] == ["manifest", "inspect"]:
-    print(json.dumps({"manifests": [
-        {"platform": {"os": "linux", "architecture": arch}}
-        for arch in os.environ.get("FAKE_ARCHES", "amd64 arm64").split()]}))
-elif tool == "podman" and argv[:2] == ["manifest", "push"]:
-    Path(argv[argv.index("--digestfile") + 1]).write_text("sha256:" + "ab" * 32)
+elif tool == "skopeo" and argv[0] == "copy":
+    import hashlib
+    source, destination = argv[-2], argv[-1]
+    def put(layout, data):
+        digest = "sha256:" + hashlib.sha256(data).hexdigest()
+        path = layout / "blobs" / "sha256" / digest[7:]
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(data)
+        return digest
+    def name(layout, ref, descriptor):
+        layout.mkdir(parents=True, exist_ok=True)
+        index = layout / "index.json"
+        top = json.loads(index.read_text()) if index.exists() else {
+            "schemaVersion": 2, "manifests": []}
+        descriptor = dict(descriptor, annotations={
+            "org.opencontainers.image.ref.name": ref})
+        top["manifests"].append(descriptor)
+        index.write_text(json.dumps(top))
+    if source.startswith("docker-archive:"):
+        arch = Path(source).stem.split("-")[-1]
+        arch = os.environ.get("FAKE_WRONG_" + arch.upper(), arch)
+        _, layout, ref = destination.split(":")
+        layout = Path(layout)
+        config = put(layout, json.dumps({"os": "linux", "architecture": arch}).encode())
+        manifest = json.dumps({"config": {"digest": config}}).encode()
+        name(layout, ref, {"mediaType": "application/vnd.oci.image.manifest.v1+json",
+                           "digest": put(layout, manifest), "size": len(manifest)})
+    else:
+        assert "--all" in argv
+        Path(argv[argv.index("--digestfile") + 1]).write_text("sha256:" + "ab" * 32)
 elif tool == "skopeo":
     held = os.environ.get("FAKE_HELD", "").split()
     if any(argv[-1].endswith("/" + name) for name in held):
@@ -67,7 +89,7 @@ class Stand(unittest.TestCase):
         self.scratch = Path(tempfile.mkdtemp(prefix="landin-image-test-"))
         bin_dir = self.scratch / "bin"
         bin_dir.mkdir()
-        for tool in ("docker", "podman", "skopeo"):
+        for tool in ("docker", "skopeo"):
             (bin_dir / tool).write_text(STAND_IN)
             (bin_dir / tool).chmod(0o755)
         self.calls = self.scratch / "calls"
@@ -150,16 +172,27 @@ class Publish(Stand):
         return directory
 
     def pushes(self, calls):
-        return [call[-1] for call in calls if call[1:3] == ["manifest", "push"]]
+        return [call[-1] for call in calls
+                if call[:2] == ["skopeo", "copy"] and "--all" in call]
 
     def test_a_rehearsal_pushes_into_a_layout_and_asks_no_registry(self):
+        layout = self.scratch / "layout"
         done, calls = self.run_script("publish", "0.2.11", str(self.images()),
-                                      "--layout", "/tmp/layout")
+                                      "--layout", str(layout))
         self.assertEqual(done.returncode, 0, done.stderr)
         self.assertEqual(self.pushes(calls),
-                         ["oci:/tmp/layout:landin-0.2.11",
-                          "oci:/tmp/layout:landin-contributor-0.2.11"])
-        self.assertFalse([call for call in calls if call[0] == "skopeo"])
+                         ["oci:%s/published:landin-0.2.11" % layout,
+                          "oci:%s/published:landin-contributor-0.2.11" % layout])
+        self.assertFalse([call for call in calls if call[1] == "inspect"])
+        #  The index names both platforms, each image's own.
+        top = json.loads((layout / "index.json").read_text())
+        index = [one for one in top["manifests"]
+                 if one["annotations"]["org.opencontainers.image.ref.name"]
+                 == "landin-0.2.11"][0]
+        listed = json.loads((layout / "blobs/sha256" / index["digest"][7:]).read_text())
+        self.assertEqual([one["platform"] for one in listed["manifests"]],
+                         [{"os": "linux", "architecture": "amd64"},
+                          {"os": "linux", "architecture": "arm64"}])
 
     def test_a_published_version_is_never_replaced(self):
         outputs = self.scratch / "outputs"
@@ -175,13 +208,13 @@ class Publish(Stand):
             "contributor-digest=sha256:" + "ab" * 32,
             "contributor-name=ghcr.io/701-dev/landin-contributor"])
 
-    def test_a_list_without_both_platforms_is_refused(self):
+    def test_an_archive_of_another_platform_is_refused(self):
         done, calls = self.run_script("publish", "0.2.11", str(self.images()),
-                                      "--layout", "/tmp/layout",
-                                      FAKE_ARCHES="amd64")
+                                      "--layout", str(self.scratch / "layout"),
+                                      FAKE_WRONG_ARM64="amd64")
         self.assertEqual(done.returncode, 1)
-        self.assertIn("holds linux/amd64, not linux/amd64, linux/arm64",
-                      done.stderr)
+        self.assertIn("user-arm64.tar holds an image for linux/amd64, not "
+                      "linux/arm64", done.stderr)
         self.assertEqual(self.pushes(calls), [])
 
     def test_a_registry_that_cannot_answer_stops_the_publication(self):
@@ -195,7 +228,7 @@ class Publish(Stand):
         directory = self.images()
         (directory / "user-arm64.tar").unlink()
         done, calls = self.run_script("publish", "0.2.11", str(directory),
-                                      "--layout", "/tmp/layout")
+                                      "--layout", str(self.scratch / "layout"))
         self.assertEqual(done.returncode, 1)
         self.assertIn("user-arm64.tar is missing", done.stderr)
 

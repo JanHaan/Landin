@@ -455,7 +455,7 @@ jobs:
         run: |
           set -eu
           version=$(sed -n 's/.*specification \([0-9][0-9.]*\)\..*/\1/p' README.md | head -1)
-          printf '%s\n' "$GH_TOKEN" | podman login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+          printf '%s\n' "$GH_TOKEN" | skopeo login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
           python3 scripts/container_image.py publish "$version" "$RUNNER_TEMP/images" \
             --outputs "$GITHUB_OUTPUT"
 
