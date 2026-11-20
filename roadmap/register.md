@@ -83,10 +83,12 @@ Open:
 
 | Question | Default until answered | What waits on the answer |
 | --- | --- | --- |
-| [Q-65 — Does R22's arbitrary precision include floating point?](questions/Q-65.md) | integers and rationals only, with arbitrary-precision floating point named in R22.13 as left out. | nothing now; the answer adds an item or leaves R22.13 as written. |
-| [Q-66 — What does R22's mathematics give a target without a float unit?](questions/Q-66.md) | `f32` and `f64` on every target through soft float where there is no unit, and R22.14's fixed-point item kept as written, with R22.73's Q15 and Q31 forms. | R22.14, and R22.73's dependency on it. |
+| [Q-65 — Does a release also move a `latest` tag on the container images?](questions/Q-65.md) | the images carry version tags only and no `latest`, and the documentation names the version. | nothing in R23.10's work; only the tags its release workflow step moves and the command the documentation prints. |
+| [Q-66 — From which address is the one-line install script served?](questions/Q-66.md) | the script is served from the project's site, `https://www.701.dev/install.sh`, published with it from the repository. | only the address R23.30 documents; the script and its controls do not depend on it. |
 | [Q-67 — Are matrices of complex numbers in R22's linear algebra?](questions/Q-67.md) | real matrices only, complex scalars, eigenvalues and transforms as written, and complex matrices named as left out in R22.15 to R22.17. | the scope of R22.15, R22.16 and R22.17. |
 | [Q-68 — Do R22's sparse matrices bring direct factorizations?](questions/Q-68.md) | sparse storage, products and the iterative solvers with their preconditioners, and direct factorizations named as left out. | the scope of R22.19. |
+| [Q-69 — Does R22's arbitrary precision include floating point?](questions/Q-69.md) | integers and rationals only, with arbitrary-precision floating point named in R22.13 as left out. | nothing now; the answer adds an item or leaves R22.13 as written. |
+| [Q-70 — What does R22's mathematics give a target without a float unit?](questions/Q-70.md) | `f32` and `f64` on every target through soft float where there is no unit, and R22.14's fixed-point item kept as written, with R22.73's Q15 and Q31 forms. | R22.14, and R22.73's dependency on it. |
 
 Answered:
 
