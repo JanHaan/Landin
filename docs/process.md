@@ -23,8 +23,8 @@ they cost. `D586` names a decision recorded in `spec.md`, and
 | after touching the harness | `./scripts/parallel-equivalence.sh --suite='fixture execution'` | a wider run reaches the same verdicts, byte for byte |
 | before pushing a Darwin change | focused native Mac checks, with LLDB in an appropriate security audit session when affected | native developer feedback; full host/parity/debugger coverage runs in CI |
 | candidate push or pull request | `.github/workflows/gate.yml` | every target, unless identical-tree reuse or an explanatory edit applies; the [job table](#the-mechanical-gate) says what each job runs |
-| physical boards for a candidate | `gh workflow run gate.yml --ref BRANCH -f scope=boards`, by the maintainer | each port's RAM run, then its boot check, on the rig through `environments/boards/gate.py`, with `inputs`, documents and scripts; never a software pass |
-| promotion to main | the [promotion rule](#physical-boards-and-promotion): the candidate's complete software gate, a passed boards dispatch on the identical tree, then main's own push gate followed to its end; an item's agent promotes without asking again unless the item says `Promotion: maintainer` (`ROADMAP.md`'s Mechanics) | the push reuses the full candidate software pass and runs the boards fresh; documents and script controls still run |
+| physical boards for a candidate | `item.py boards ITEM`, or `gh workflow run gate.yml --ref BRANCH -f scope=boards`, by the maintainer or an item's agent, once `main` is an ancestor of the head | each port's RAM run, then its boot check, on the rig through `environments/boards/gate.py`, with `inputs`, documents and scripts, and the timing jobs; never a software pass. A run that failed in timing alone [re-runs its failed jobs](#a-timing-failure-is-not-a-boards-failure) |
+| promotion to main | the [promotion rule](#physical-boards-and-promotion): the candidate's complete software gate, a passed boards dispatch on the identical tree, then main's own push gate followed to its end; an item's agent promotes without asking again unless the item says `Promotion: maintainer` (`ROADMAP.md`'s Mechanics), in [the promotion queue's](#the-promotion-queue) order | the push reuses the full candidate software pass and runs the boards fresh; documents and script controls still run |
 | closing an item | `python3 scripts/activations.py`, then the steps in [closing an item](#closing-an-item) | the register rows whose activation the item's changes met, and the passes only the gate runs that the changes reach |
 
 Every software lane runs on GitHub-hosted images; the FreeBSD lanes boot
@@ -111,11 +111,13 @@ puts the steps in order:
 | start | `item.py start ITEM` | refuses a complete item or one with an incomplete dependency; makes `../Landin-ITEM` and its branch from `origin/main`; reserves blocks of decision, row and question numbers no other running item of the clone holds, which `register_next.py` then gives out first; marks the item active, moves a pointer naming it, commits that as `Gate: explanatory`; writes `brief.md` |
 | after a reopen | `item.py resume [ITEM]` | the worktree, every recorded run as running, finished or lost, the gate runs, the journal's last lines and the next step |
 | along the way | `item.py note ITEM TEXT`, `item.py run ITEM NAME --limit S [--cwd DIR] -- COMMAND` | a dated journal line; a detached `run_logged.py` run kept in the state, in the item's worktree or DIR |
-| gate | `item.py gate ITEM [--main] [--watch]` | records the pushed head's runs, or main's after promotion, and follows them with `gate_watch.py --all` in a detached run |
-| boards | `item.py boards ITEM [--watch]` | dispatches `scope=boards` on the pushed head, records the run and with `--watch` follows it in a detached run |
-| promotion | `item.py promote ITEM [--dry-run] [--partial]` | pushes the head to main only as the [promotion rule](#physical-boards-and-promotion) allows: a passed push gate on it with its whole job listing, boards on its tree or before only explanatory commits, main its ancestor, the item complete; refuses an item that says `Promotion: maintainer` |
-| finish | `item.py finish ITEM` | once main's gate on the promoted commit passed: removes the worktree and the local and remote branch, keeps the state under `landin-items/done/`; run from the item's own worktree it works from the clone's main checkout |
-| watching items | `item.py status`, `item.py stalled` | every running item; those nothing has moved for an hour, exit 1 |
+| push | `item.py push ITEM [--watch]` | refuses a stale `citations.txt`, which names the compiler sources' digest and so goes stale over a merge, and says how to regenerate it; pushes the head and records its gate runs as `gate` does |
+| gate | `item.py gate ITEM [--main] [--watch]` | records the pushed head's runs, or main's after promotion, and follows them with `gate_watch.py --all` in a detached run; a failed boards run is named a timing failure when only timing jobs failed |
+| boards | `item.py boards ITEM [--watch] [--unmerged] [--rerun-failed]` | dispatches `scope=boards` on the pushed head, records the run and with `--watch` follows it in a detached run; refuses while `main` is not an ancestor of the head, since promotion would refuse that tree (`--unmerged` dispatches anyway, for board feedback before the final merge); `--rerun-failed` re-runs only the failed jobs of a boards run that [failed in timing alone](#a-timing-failure-is-not-a-boards-failure) |
+| merging main | `item.py merge-main ITEM [--no-queue]` | takes the [promotion token](#the-promotion-queue) and merges `origin/main`; when every commit it brings says `Gate: explanatory` and the merged tree has the candidate's gate key, the merge says it too, so the gate reuses the candidate's pass and its boards still count; otherwise it names the commits and paths that make the tree new. Conflicts stop it with the token held. `--no-queue` is for a merge mid-work |
+| promotion | `item.py promote ITEM [--dry-run] [--partial]` | pushes the head to main only as the [promotion rule](#physical-boards-and-promotion) allows: a passed push gate on it with its whole job listing, boards on its tree or before only explanatory commits, main its ancestor, the item complete, the promotion token its own or free; refuses an item that says `Promotion: maintainer` |
+| finish | `item.py finish ITEM` | once main's gate on the promoted commit passed: removes the worktree and the local and remote branch, gives up the promotion token, keeps the state under `landin-items/done/`; run from the item's own worktree it works from the clone's main checkout |
+| watching items | `item.py status`, `item.py stalled`, `item.py queue [--wait ITEM \| --release ITEM]` | every running item and the token's holder and line; those nothing has moved for an hour, exit 1; the token's holder and line, waiting until ITEM holds it (exit 124 at `--timeout`, 270 seconds by default), or giving up ITEM's token or place |
 | report | `item.py report ITEM` | a draft of [the report](../.agents/skills/landin-change/report.md), ending with the open questions the item asked and their defaults |
 
 ## Closing an item
@@ -940,7 +942,7 @@ still succeed. The linked full run contains the target-test results.
 | `darwin-release-clean` | `macos-26` | build the release executables from clean, with `ZERO_AR_DATE=1`, for `darwin-release-compare` alone |
 | `darwin-release-compare` | `ubuntu-24.04` | require the two Darwin release builds' `refine` and `landin_tests` to be the same files, byte for byte, and their manifests to record the same inputs (`scripts/compare_builds.py`) |
 | `darwin-release-cache` | `ubuntu-24.04` | on a push, once `darwin-release-compare` has passed, save `darwin-release-build`'s object tree to the cache for the next run; `gate` does not need it |
-| `darwin-release-main-cache` | `macos-26` | on a push to `main` only, build the release executables from clean, with `ZERO_AR_DATE=1`, and save the tree as `main`'s cache entry, which a branch's first run restores; `gate` does not need it |
+| `darwin-release-main-cache` | `macos-26` | on a push to `main` only, unless `main`'s entry for the tree's gate key already exists: build the release executables from clean, with `ZERO_AR_DATE=1`, and save the tree as `main`'s cache entry, which a branch's first run restores; `gate` does not need it |
 | `darwin-host` matrix | `macos-26` | the debug compiler host suite in two `--host --shard` jobs, `darwin-host-1` and `darwin-host-2`, which together are the complete host run; the first also runs the verifier observations, the determinism closures, report identity and the native C controls, the second compile publication, tool cancellation and the scripted server sessions |
 | `darwin-host-release` matrix | `macos-26` | the release compiler host suite in two shards, `darwin-host-release-1` and `darwin-host-release-2`, with the same follow-on checks divided the same way; the first also uses the installed toolchain outside the checkout, the second runs the LLDB sessions and the DAP session through `refine dap` over Xcode's `lldb-dap`; both also wait for `darwin-release-compare`, so that `darwin-host` and the Darwin determinism manifests take the macOS runners first |
 | `darwin-parity` matrix | `macos-26` | the hosted corpus executed natively with the release compiler, its fixtures dealt round `darwin-parity-1` to `darwin-parity-3` by `compiler/tests/darwin/check.py --parity --shard=I/3`, so the three are every case once; the parity harness's own tests (`test_darwin_assembly`) and every Darwin source verdict in the first, the bindings in the second |
@@ -1043,7 +1045,11 @@ as to hold no macOS one. `main`'s runs reuse the candidate's pass and
 build nothing, so `darwin-release-main-cache` builds `main` from clean on
 each push to it and saves that tree, as `board-bundles` does Linux
 x86-64's, and a new branch's first run restores it; `gate` does not need
-it, and on `main` it takes a macOS runner no other job wants.
+it, and on `main` it takes a macOS runner no other job wants. Its entry is
+named by the tree's gate key (`gate_inputs.py key`), which leaves out only
+the content of the explanatory files, so a push whose entry already exists,
+an explanatory promotion among them, asks the cache and builds nothing:
+a clean build of the same inputs would save the same objects.
 
 Both caches carry the sources' modification times with the objects
 (`scripts/source_times.py`). GPRbuild's checksum mode spares the units
@@ -1396,6 +1402,39 @@ A candidate reaches `main` in three steps:
    `Gate: explanatory` skips this step; its main push still runs the boards.
 3. `main`'s own push gate, with its fresh boards, is followed to its end.
    A failure there is investigated, never rerun blindly.
+
+#### The promotion queue
+
+A candidate gated while another item lands has to merge `main` again and
+run its whole gate and boards again: in the three days before the queue,
+eight merged trees were an item's second or third. So promotions take
+turns. The clone holds one promotion token, `landin-items/queue.json`.
+`item.py merge-main` takes it before an item's final merge of `main`, and
+`item.py promote` before pushing; the holder keeps it through its merged
+tree's gate, its boards, its promotion and `main`'s gate on it, and gives
+it up when that gate ends (`item.py gate ITEM --main`, or `finish`) or with
+`item.py queue --release ITEM`. An item that finds the token held is put
+in line and waits with `item.py queue --wait ITEM`, which returns once the
+token is its own; it keeps working meanwhile, but takes no final merge.
+A holder this clone no longer runs, or whose `main` gate has ended, holds
+nothing. A merge whose main side is all `Gate: explanatory` and leaves the
+gate key alone is declared so by `merge-main` and reuses the candidate's
+pass and boards, as the reuse rule allows.
+
+#### A timing failure is not a boards failure
+
+Every boards dispatch also runs the three `measure-time` jobs and each
+leg's timing runs, and the aggregate compares the boards' cycles with the
+base's baselines. A run whose board legs all passed and whose only failed
+jobs are `measure-time` ones, with the aggregate after them, failed in
+timing, not in the boards: `gate_watch.py`, the aggregate's summary and
+`item.py gate` say so. Read the failed timing job's log; when it reads as
+noise, `item.py boards ITEM --rerun-failed` (`gh run rerun RUN --failed`)
+runs only those jobs and the aggregate again as the run's next attempt,
+which judges each port by its latest attempt and keeps the passed legs'
+evidence, rather than a new dispatch. A run whose aggregate alone failed,
+every job before it passed, failed its verdict or its cycles comparison; a
+re-run would judge the same figures again, so read its log instead.
 
 An unavailable rig blocks promotion. A RAM run's success never establishes
 power-on, ROM loading or fixed-image restoration, so every leg runs each
