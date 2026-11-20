@@ -1,0 +1,47 @@
+{
+ "schema": 1,
+ "about": "The cross-language comparison of docs/benchmarks.md, run by scripts/benchmarks.py: each Benchmark Game port, the size it is timed at, and the C program it is compared with, pinned by its member of the Benchmark Game's source archive and that member's SHA-256.",
+ "c_source": {
+  "url": "https://benchmarksgame-team.pages.debian.net/benchmarksgame/download/benchmarksgame-sourcecode.zip",
+  "note": "The archive is whatever the Benchmark Game serves today, so it is not pinned; each member below is, and a member that is missing or differs is refused. A copy kept from an earlier download is given with --c-archive."
+ },
+ "c_flags": ["-pipe", "-Wall", "-O3", "-fomit-frame-pointer", "-march=native"],
+ "programs": [
+  {
+   "name": "fannkuch-redux",
+   "fixture": "runtime/benchmark-game-fannkuch-redux",
+   "args": ["12"],
+   "c": {"member": "fannkuchredux/fannkuchredux.gcc-3.gcc", "number": 3,
+         "sha256": "4c96f8a019b9b1e2425123a243405046f8d86e030f256796574fdf6bfd0e8c07"}
+  },
+  {
+   "name": "mandelbrot",
+   "fixture": "runtime/benchmark-game-mandelbrot",
+   "args": ["16000"],
+   "c": {"member": "mandelbrot/mandelbrot.gcc-8.gcc", "number": 8,
+         "sha256": "c785a5031762cb7818d4b3ca595dbce90c68279763aebd5625c0ef4956943246"}
+  },
+  {
+   "name": "fasta",
+   "fixture": "runtime/benchmark-game-fasta",
+   "args": ["25000000"],
+   "c": {"member": "fasta/fasta.gcc-2.gcc", "number": 2,
+         "sha256": "87a7ec3e31cea551e69267780eb802955af566ef2ea76115e576e8c07594c6d2"}
+  },
+  {
+   "name": "reverse-complement",
+   "fixture": "runtime/benchmark-game-reverse-complement",
+   "args": [],
+   "stdin_from": {"program": "fasta", "args": ["25000000"]},
+   "c": {"member": "revcomp/revcomp.gcc-5.gcc", "number": 5,
+         "sha256": "b16bb102330f3ca0e1fafe134a4242a7a02aced49992006f5695beba262e9626"}
+  },
+  {
+   "name": "binary-trees",
+   "fixture": "runtime/benchmark-game-binary-trees",
+   "args": ["21"],
+   "c": {"member": "binarytrees/binarytrees.gcc", "number": 1, "libs": ["-lm"],
+         "sha256": "730e4c677c1913d48d81535890070c6ca04b9768fc5edccb7600d1d251ea15ea"}
+  }
+ ]
+}

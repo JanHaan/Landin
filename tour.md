@@ -5908,7 +5908,7 @@ README](README.md#current-compiler-capabilities) says what it does today.
 Production status, release versioning, package acquisition and
 self-hosting are not part of the current plan.
 
-Version 0.2.10 — what each version changed is in
+Version 0.2.11 — what each version changed is in
 [the handoff](handoff.md#versions).
 
 Warnings are the compiler's observations about legal source, never extra
