@@ -2291,7 +2291,7 @@ what outlives the item.
 
 ### R23.50 — A static Linux archive
 
-Status: planned
+Status: active
 Depends on: R23.10, R23.30, R23.40
 
 The release workflow publishes a Linux `refine` linked statically against
