@@ -146,6 +146,11 @@ class Start(Clone):
         self.assertIn(str(worktree), brief)
         self.assertIn("item.py resume %s" % FIRST, brief)
         self.assertIn("Authority paragraph", brief)
+        #  The brief rules of docs/process.md: selectors, workers, the
+        #  environment and the wait.
+        for rule in ("exact `dev-test.sh` selectors", "no `-j` or `taskset`",
+                     "agent_env.sh", "run_logged.py --wait"):
+            self.assertIn(rule, brief)
 
     def test_start_from_another_worktree_places_it_beside_the_main_one(self):
         elsewhere = self.top / "elsewhere" / "checkout"
@@ -296,6 +301,15 @@ class Promote(Clone):
         self.state["gates"].append(self.gate(later, "software"))
         self.assertEqual(len(self.problems(later)), 1)
 
+    def test_a_mention_of_the_declaration_is_not_one(self):
+        work = self.commit("work")
+        self.state["gates"].append(self.gate(work, "boards"))
+        mention = self.commit("Say why `%s` is written" % item.EXPLANATORY)
+        self.state["gates"].append(self.gate(mention, "software"))
+        problems = self.problems(mention)
+        self.assertEqual(len(problems), 1, problems)
+        self.assertIn("no passed boards dispatch", problems[0])
+
     def test_a_boards_run_still_going_is_named_not_dispatched_again(self):
         head = self.commit("work")
         going = dict(self.gate(head, "boards"), status="in_progress",
@@ -430,6 +444,244 @@ class Promote(Clone):
                          / "journal.md").exists())
         status, out = self.item("resume", FIRST)
         self.assertIn("is finished", out)
+
+
+class Queue(Clone):
+    """The promotion token: one holder, the others in line, in order."""
+
+    def setUp(self):
+        super().setUp()
+        self.item("start", FIRST)
+        self.item("start", SECOND)
+        item.REPOSITORY[0] = self.clone
+
+    def test_one_holder_and_a_line(self):
+        self.assertEqual(item.take(FIRST, "test"), (True, None))
+        taken, why = item.take(SECOND, "test")
+        self.assertFalse(taken)
+        self.assertIn("%s holds the promotion token" % FIRST, why)
+        self.assertIn("queue --wait %s" % SECOND, why)
+        status, out = self.item("status")
+        self.assertIn("promotion token: %s since" % FIRST, out)
+        self.assertIn("waiting: %s" % SECOND, out)
+        self.assertTrue(item.release(FIRST, "test"))
+        self.assertEqual(item.take(SECOND, "test"), (True, None))
+
+    def test_the_line_keeps_its_order(self):
+        self.item("start", THIRD, "--force")
+        item.REPOSITORY[0] = self.clone
+        item.take(FIRST, "test")
+        item.take(SECOND, "test")
+        item.release(FIRST, "test")
+        taken, why = item.take(THIRD, "test")
+        self.assertFalse(taken)
+        self.assertIn("%s waits for the promotion token before %s"
+                      % (SECOND, THIRD), why)
+        self.assertEqual(item.take(SECOND, "test"), (True, None))
+
+    def test_a_holder_this_clone_no_longer_runs_holds_nothing(self):
+        item.take(FIRST, "test")
+        status, out = self.item("finish", FIRST, "--unpromoted")
+        self.assertEqual(status, 0, out)
+        item.REPOSITORY[0] = self.clone
+        self.assertEqual(item.take(SECOND, "test"), (True, None))
+
+    def test_a_holder_whose_main_gate_ended_holds_nothing(self):
+        item.take(FIRST, "test")
+        asked = []
+        saved = item.main_gate_ended
+        item.main_gate_ended = lambda held, commit: asked.append(
+            (held, commit)) or held == FIRST
+        try:
+            #  Not promoted under this hold: an earlier promotion's ended
+            #  gate does not end it.
+            self.assertFalse(item.take(SECOND, "test")[0])
+            self.assertEqual(asked, [])
+            item.mark_promoted(FIRST, "c0ffee")
+            self.assertFalse(item.take(SECOND, "test", ask=False)[0])
+            self.assertEqual(item.take(SECOND, "test"), (True, None))
+            self.assertEqual(asked, [(FIRST, "c0ffee")])
+        finally:
+            item.main_gate_ended = saved
+
+    def test_wait_returns_once_the_token_is_the_items(self):
+        item.take(FIRST, "test")
+        status, out = self.item("queue", "--wait", SECOND, "--timeout", "0")
+        self.assertEqual(status, 124, out)
+        self.assertIn("holds the promotion token", out)
+        item.release(FIRST, "test")
+        status, out = self.item("queue", "--wait", SECOND, "--timeout", "0")
+        self.assertEqual(status, 0, out)
+        status, out = self.item("queue")
+        self.assertIn("promotion token: %s since" % SECOND, out)
+        status, out = self.item("queue", "--release", SECOND)
+        self.assertIn("released", out)
+
+
+class MergeMain(Clone):
+    """`merge-main` declares a merge explanatory only when reuse allows."""
+
+    def setUp(self):
+        super().setUp()
+        self.item("start", FIRST)
+        self.state = item.load(FIRST)
+        self.worktree = Path(self.state["worktree"])
+        (self.worktree / "work.txt").write_text("work\n")
+        git(self.worktree, "add", "-A")
+        git(self.worktree, "commit", "-q", "-m", "work")
+
+    def on_main(self, path, text, message):
+        target = self.clone / path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(text)
+        git(self.clone, "add", "-A")
+        git(self.clone, "commit", "-q", "-m", message)
+        git(self.clone, "push", "-q", "origin", "main")
+        return git(self.clone, "rev-parse", "HEAD")
+
+    def merged_message(self):
+        return git(self.worktree, "log", "-1", "--format=%B")
+
+    def test_an_explanatory_main_makes_an_explanatory_merge(self):
+        self.on_main("roadmap/questions/Q-0.md", "a question\n",
+                     "Ask\n\n" + item.EXPLANATORY)
+        status, out = self.item("merge-main", FIRST)
+        self.assertEqual(status, 0, out)
+        self.assertIn(item.EXPLANATORY, self.merged_message())
+        self.assertIn("reuses the candidate's pass", out)
+        self.assertEqual(len(git(self.worktree, "log", "-1",
+                                 "--format=%P").split()), 2)
+        self.assertEqual(item.take(FIRST, "again"), (True, None))
+        status, out = self.item("merge-main", FIRST)
+        self.assertIn("nothing to merge", out)
+
+    def test_an_undeclared_commit_makes_a_new_tree(self):
+        brought = self.on_main("roadmap/questions/Q-0.md", "a question\n",
+                               "Ask")
+        status, out = self.item("merge-main", FIRST)
+        self.assertEqual(status, 0, out)
+        self.assertNotIn(item.EXPLANATORY, self.merged_message())
+        self.assertIn("commits from main without", out)
+        self.assertIn(brought[:12], out)
+
+    def test_a_declared_change_outside_the_set_makes_a_new_tree(self):
+        self.on_main("spec.md", "D41 changed.\n",
+                     "Change\n\n" + item.EXPLANATORY)
+        status, out = self.item("merge-main", FIRST)
+        self.assertEqual(status, 0, out)
+        self.assertNotIn(item.EXPLANATORY, self.merged_message())
+        self.assertIn("paths outside the explanatory set differ: spec.md",
+                      out)
+
+    def test_a_conflict_stops_and_keeps_the_token(self):
+        self.on_main("work.txt", "other\n", "Clash\n\n" + item.EXPLANATORY)
+        status, out = self.item("merge-main", FIRST)
+        self.assertEqual(status, 2, out)
+        self.assertIn("conflicts in work.txt", out)
+        item.REPOSITORY[0] = self.clone
+        self.assertFalse(item.take(SECOND, "test")[0])
+        git(self.worktree, "merge", "--abort")
+
+    def test_a_held_token_refuses_the_merge(self):
+        self.item("start", SECOND)
+        item.REPOSITORY[0] = self.clone
+        item.take(SECOND, "test")
+        self.on_main("roadmap/questions/Q-0.md", "q\n", "Ask")
+        head = git(self.worktree, "rev-parse", "HEAD")
+        status, out = self.item("merge-main", FIRST)
+        self.assertEqual(status, 2, out)
+        self.assertIn("%s holds the promotion token" % SECOND, out)
+        self.assertEqual(git(self.worktree, "rev-parse", "HEAD"), head)
+
+    def test_boards_refuse_a_head_main_is_not_an_ancestor_of(self):
+        git(self.worktree, "push", "-q", "origin", self.state["branch"])
+        self.on_main("roadmap/questions/Q-0.md", "q\n", "Ask")
+        status, out = self.item("boards", FIRST)
+        self.assertEqual(status, 2, out)
+        self.assertIn("merge-main %s" % FIRST, out)
+        self.assertIn("--unmerged", out)
+
+    def test_push_refuses_stale_citations(self):
+        (self.worktree / "check.py").write_text(
+            "def citations_dump():\n    return 'fresh'\n"
+            "def regenerating(path):\n    return 'the regeneration'\n")
+        (self.worktree / "citations.txt").write_text("stale")
+        git(self.worktree, "add", "-A")
+        git(self.worktree, "commit", "-q", "-m", "citations")
+        status, out = self.item("push", FIRST)
+        self.assertEqual(status, 2, out)
+        self.assertIn("citations.txt is stale", out)
+        self.assertIn("the regeneration", out)
+        self.assertIsNone(git_or_none(self.worktree, "rev-parse",
+                                      "origin/" + self.state["branch"]))
+        (self.worktree / "citations.txt").write_text("fresh")
+        git(self.worktree, "commit", "-q", "-am", "regenerated")
+        saved = item.runs_of
+        item.runs_of = lambda commit: []
+        try:
+            status, out = self.item("push", FIRST)
+        finally:
+            item.runs_of = saved
+        self.assertEqual(status, 0, out)
+        self.assertIn("no gate run for", out)
+        self.assertEqual(git(self.worktree, "rev-parse", "HEAD"),
+                         git(self.worktree, "rev-parse",
+                             "origin/" + self.state["branch"]))
+
+
+class Timing(Promote):
+    """A boards run that failed in timing alone is re-run, not dispatched."""
+
+    def boards_run(self, head):
+        git(self.worktree, "push", "-q", "origin", self.state["branch"])
+        entry = dict(self.gate(head, "boards"), conclusion="failure",
+                     attempt=1)
+        self.state["gates"].append(entry)
+        item.save(self.state)
+        return entry
+
+    def rerun(self, kind):
+        asked = []
+        saved = item.record_gates, item.failure_of, item.rerun_failed_jobs
+        item.record_gates = lambda state, commit: state
+        item.failure_of = lambda run: kind
+        item.rerun_failed_jobs = asked.append
+        try:
+            status, out = self.item("boards", FIRST, "--rerun-failed")
+        finally:
+            item.record_gates, item.failure_of, item.rerun_failed_jobs = saved
+        return status, out, asked
+
+    def test_a_timing_failure_reruns_its_failed_jobs(self):
+        entry = self.boards_run(self.commit("work"))
+        status, out, asked = self.rerun("timing")
+        self.assertEqual(status, 0, out)
+        self.assertEqual(asked, [entry["run"]])
+        self.assertIn("attempt 2", out)
+
+    def test_a_board_failure_is_not_rerun(self):
+        self.boards_run(self.commit("work"))
+        for kind in ("jobs", "aggregate"):
+            with self.subTest(kind=kind):
+                status, out, asked = self.rerun(kind)
+                self.assertEqual(status, 2, out)
+                self.assertEqual(asked, [])
+                self.assertIn("did not fail in timing alone", out)
+
+    def test_a_timing_failure_reads_as_timing(self):
+        entry = dict(self.gate(self.commit("work"), "boards"),
+                     conclusion="failure", failed="timing")
+        self.state["gates"].append(entry)
+        text = "\n".join(item.describe(self.state))
+        self.assertIn("timing only, every board leg passed", text)
+        self.assertIn("boards %s --rerun-failed" % FIRST, text)
+
+
+def git_or_none(root, *arguments):
+    result = subprocess.run(["git", *arguments], cwd=root, env=environment(),
+                            text=True, stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE)
+    return result.stdout.strip() if result.returncode == 0 else None
 
 
 if __name__ == "__main__":

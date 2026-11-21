@@ -89,7 +89,7 @@
           specification =
             let
               status = lib.findFirst (
-                line: lib.hasPrefix "**Status: specification " line
+                line: lib.hasPrefix "**Status: version " line
               ) null (lib.splitString "\n" (builtins.readFile ./README.md));
               found =
                 if status == null then
@@ -104,7 +104,7 @@
           #  README first, and a tagged tree cannot hold the hashes of assets
           #  built from itself, so the two move in the commit that records
           #  the new hashes and never before.
-          releaseVersion = "0.2.10";
+          releaseVersion = "0.2.11";
 
           #  The triplet the pinned archive installs its driver under on
           #  each Linux system, which is the name refine asks for.
@@ -117,11 +117,11 @@
 
           releaseHashes = {
             x86_64-linux =
-              "525374ce73d7bfea553be1456f27f1421fbe4f605401e33597afaf0f5675f48f";
+              "a0e546c97f11b0c47f643ba5a3610808c9a514dfe19e48b91bcd5d8f9da53451";
             aarch64-linux =
-              "e1acba936b36772cafd16d53f646f51264f9c3673e00553f8c44f9a237edb3ca";
+              "1619ab42b19c226d2f1d62bf2314432863452d42035f71689b638b848f85ba06";
             aarch64-darwin =
-              "cad6d5264e61124f9ea4da85b3a3a4a25c7ea6af53655ac0ad3a867ed4c313e9";
+              "b4c121ca536fc2237b1da2ced7c63aaeaf0b1fa882456546272011693b906880";
           };
 
           releases = pin "LANDIN_RELEASES";
@@ -152,6 +152,10 @@
               buildInputs = lib.optionals pkgs.stdenv.hostPlatform.isLinux [
                 (lib.getLib pkgs.stdenv.cc.cc)
                 pkgs.expat
+                #  GPRbuild's arm64 Linux archive links its tools other than
+                #  gprbuild itself, gprconfig among them, against
+                #  libgmp.so.10; the x86-64 one does not.
+                pkgs.gmp
                 pkgs.ncurses
                 pkgs.xz
                 pkgs.zlib
@@ -919,11 +923,13 @@
 
       packages = builtins.mapAttrs (
         system: built: {
-          #  The source build is the default, because `nix build` on a
-          #  repository is expected to build it.  refine-bin is the fast
-          #  path for a consumer who wants the compiler rather than the
-          #  toolchain that made it.
-          default = built.refine;
+          #  The prebuilt compiler is the default where a release published
+          #  one (D1707): `nix profile install github:701-dev/Landin` and
+          #  `nix run` then fetch a 17 MB archive in seconds rather than
+          #  the pinned toolchain and minutes of compiling.  The source
+          #  build stays one name away, `.#refine`, for a contributor and
+          #  for a system no release covers, where it is the default.
+          default = if built.hasRelease then built.refineBin else built.refine;
           inherit (built) refine;
         }
         #  Only a system a release published an asset for, and whose hash
@@ -945,5 +951,16 @@
           };
         } else { })
       ) perSystem;
+
+      #  `nix run github:701-dev/Landin -- ARGS` runs refine from the
+      #  default package, the prebuilt one where a release covers the
+      #  system (D1707).
+      apps = builtins.mapAttrs (system: _: {
+        default = {
+          type = "app";
+          program = "${inputs.self.packages.${system}.default}/bin/refine";
+          meta.description = "refine, the Landin compiler";
+        };
+      }) perSystem;
     };
 }

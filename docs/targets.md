@@ -1493,25 +1493,48 @@ carriers; pinned runtime helpers may use the configured FPU.
 
 The backend works in two layers. `Landin.Backend.Xtensa`, which began as a
 copy of the RISC-V emitter, still lowers verified IR to RISC-V-form logical
-instructions, `addi`, `lw`, `beq`, `call`, over the logical words x0-x31.
-None of them is kept: each is passed at once to
-`Landin.Backend.Xtensa_Machine.Select_Word`, which parses it and writes the
-Xtensa instructions it stands for. A logical word lives in memory at
-a7 + 4×N, a7 being the routine's frame base, and an operation loads its
-operands into the transient a8-a13, computes, and stores its result back;
-x0 reads as zero, sp is a1, and x8, the CFA, is a7 plus the frame size. A
-routine without an `assembler.block` keeps the emitter's five scratch words,
-x5-x7, x9 and x18, in a2-a6 instead, and the twenty other words it uses in
-an 80-byte bank; a routine with one keeps all 32 words, 128 bytes, and a
-64-byte snapshot of the physical registers. A word with no home in its routine's bank,
-or a logical operation the selector does not know, is a compiler defect.
-A call loads the argument words x10-x15 into a10-a15 for CALL8 or CALLX8
-and stores a10-a13 back into the result words and a14 into the failure
-word x31. A jump is `movi` and `jx` through
-a10 until `Compact_Jumps` proves a local one in range of a direct `j`. The
-cost is code quality: most operations make a round trip through memory, no
-value is allocated a register as on arm64 and x86-64, and the build
-report's `register_count` is zero.
+instructions, `addi`, `lw`, `beq`, `call`, over words: the logical words
+x0-x31 its selection names and, in a routine without an `assembler.block`,
+a word `vN` for each scalar value and each slot no address reaches, a
+64-bit one a pair of them. `Landin.Backend.Xtensa_Machine` selects the
+Xtensa instructions they stand for and places the words (D1627).
+
+Such a routine's body is buffered whole. The machine layer computes each
+word's liveness over the routine's own text, joins the definitions that
+reach a common use into webs, folds a word that only ever holds a number
+into the `mul`, `add`, `divu` or `remu` that reads it where a shift, an
+`addi` or a mask does its work and decides a zero test of it, drops an
+operation whose results nothing reads, makes a set on a comparison that
+only the zero test after it reads that test's branch, and places the webs
+in order of their first use. A
+web live across a call takes a2-a6, which CALL8 preserves; another may
+also take a10-a15, preferring the argument or result register a call or
+the routine's entry and exit wants it in, or the register of the word it
+is copied from. a7 is the base of the frame, and a8 and a9 are selection's
+transients. A web that finds no register stays in its home in the frame,
+the value's or slot's own, or a logical word's in the 80-byte bank, and is
+loaded into a8 or a9 where it is read; the scratch words x5-x7, x9 and
+x18 have no home and always take a register, another web giving up its
+own if it must. A call moves its argument words into
+a10-a15 for CALL8 or CALLX8 and its results from a10-a13 and a14, the
+failure word x31; the entry moves the incoming a2-a6 into x10-x14 and the
+exit x10-x13 and x31 into a2-a6. A comparison only the branch after it
+reads is that branch (D1628), and a conditional branch is the native one,
+which the assembler relaxes to an inverse branch around a `j` when its
+target is beyond reach. A routine too long for `j` to reach every target
+jumps with `movi` and `jx` through a8. The build report's `register_count`
+is the registers a routine's placement used.
+
+A routine with an `assembler.block`, whose text the analysis cannot
+follow, or too long for it, more than 150,000 lines, is selected word by
+word as the first form of this layer was: each
+word in its home at a7 + 4×N, an operation loading its operands into the
+transient a8-a13, computing, and storing its result back; x0 reads as zero,
+sp is a1, and x8, the CFA, is a7 plus the frame size. Without a block the
+scratch words x5-x7, x9 and x18 are then in a2-a6; with one the routine
+keeps all 32 words, 128 bytes, and a 64-byte snapshot of the physical
+registers. A word with no home, or a logical operation the selector does
+not know, is a compiler defect.
 
 Routines use ENTRY and RETW, with compiler-owned window overflow and
 underflow vectors for CALL4, CALL8 and CALL12 helpers. Each firmware profile has an aligned 1 KiB architectural vector block,

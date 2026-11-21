@@ -161,6 +161,7 @@ LIVE_DOCS = FILES + ["AGENTS.md", "README.md", "handoff.md", "examples.md",
                      "docs/targets.md",
                      "docs/benchmarks.md",
                      "docs/measurement.md",
+                     "docs/process.md",
                      "docs/capabilities.md",
                      "compiler/ada/README.md",
                      "core/README.md",
@@ -3080,7 +3081,7 @@ def check_citations(paths, guide_paths=()):
 
 
 def check_specification_version(full_run):
-    """Every place that states the specification's version states one.
+    """Every place that states the version states one.
 
     README.md's status line is the version the machinery reads: the flake,
     release.yml's asset name and llms.txt all take it from there.  Six more
@@ -3096,30 +3097,30 @@ def check_specification_version(full_run):
     readme = "README.md"
     places = [
         ("docs/site/render_html.py",
-         re.compile(r'^VERSION_LINE = "specification ([0-9][0-9.]*)"$', re.M)),
+         re.compile(r'^VERSION_LINE = "version ([0-9][0-9.]*)"$', re.M)),
         ("handoff.md",
-         re.compile(r"Kept current at specification \*\*([0-9][0-9.]*)\*\*")),
+         re.compile(r"Kept current at version \*\*([0-9][0-9.]*)\*\*")),
         ("tour.md", re.compile(r"^Version ([0-9][0-9.]*) \u2014", re.M)),
     ] + [(name, re.compile(r"^Current with specification ([0-9][0-9.]*)\.", re.M))
          for name in PROTOTYPE_FILES]
     out = absent([readme] + [path for path, _ in places])
     if out:
         return out
-    stated = re.search(r"^\*\*Status: specification ([0-9][0-9.]*)\.",
+    stated = re.search(r"^\*\*Status: version ([0-9][0-9.]*)\.",
                        read_file(readme, encoding="utf-8"), re.M)
     if not stated:
-        return [(readme, 1, "the status line states no specification version")]
+        return [(readme, 1, "the status line states no version")]
     version = stated.group(1)
     for path, pattern in places:
         text = read_file(path, encoding="utf-8")
         found = pattern.search(text)
         if not found:
-            out.append((path, 1, "states no specification version where "
+            out.append((path, 1, "states no version where "
                                  "check_specification_version looks"))
         elif found.group(1) != version:
             line = text.count("\n", 0, found.start(1)) + 1
             out.append((path, line,
-                        "says specification %s; README.md says %s"
+                        "says %s where README.md's version is %s"
                         % (found.group(1), version)))
     return out
 
@@ -3237,16 +3238,18 @@ def check_site_documents(full_run):
 def check_pinned_toolchain(full_run):
     """Every file that installs or records the toolchain must name one.
 
-    The recipe pins it, compiler/ada/TOOLCHAIN.md records it for a reader,
-    and environments/pins.sh is the one place a value is written; the nix
-    shell and the workflows read that file rather than repeating it. Every
+    environments/pins.sh is the one place a value is written, and
+    compiler/ada/TOOLCHAIN.md records it for a reader; the contributor
+    image's recipe, the nix shell and the workflows read that file rather
+    than repeating it, and both image recipes stand on its base image. Every
     file naming a compiler version is another chance to be wrong, and the one
     that drifts is the one nobody reads.
     """
     if not full_run:
         return []
 
-    recipe = os.path.join(ROOT, "environments/linux-amd64/Containerfile")
+    recipe = os.path.join(ROOT, "environments/images/contributor.Containerfile")
+    user_recipe = os.path.join(ROOT, "environments/images/user.Containerfile")
     record = os.path.join(ROOT, "compiler/ada/TOOLCHAIN.md")
     pins = os.path.join(ROOT, "environments/pins.sh")
 
@@ -3254,43 +3257,62 @@ def check_pinned_toolchain(full_run):
     #  vacuous the moment either was renamed: the pins would stop being
     #  compared and the run would still say all clean.  That is the fault
     #  absent() was written for, and this check had it.
-    out = absent([recipe, record])
+    out = absent([recipe, user_recipe, record, pins])
     if out:
         return out
 
     recipe_text = read_file(recipe, encoding="utf-8")
     record_text = read_file(record, encoding="utf-8")
-    pins_text = (read_file(pins, encoding="utf-8")
-                 if os.path.exists(pins) else "")
+    pins_text = read_file(pins, encoding="utf-8")
 
+    def pinned(name):
+        found = re.search(r"^%s=(\S+)$" % name, pins_text, re.M)
+        return found.group(1) if found else None
+
+    #  The values a file could write by hand, as pins.sh writes them.  The
+    #  recipe used to repeat these four as build arguments; since the
+    #  contributor image (D1668) it copies pins.sh in and names none.
     wanted = {
-        "GNAT_VERSION": re.compile(r"ARG GNAT_VERSION=(\S+)"),
-        "GPRBUILD_VERSION": re.compile(r"ARG GPRBUILD_VERSION=(\S+)"),
-        "GNAT_SHA256": re.compile(r"ARG GNAT_SHA256=(\S+)"),
-        "GPRBUILD_SHA256": re.compile(r"ARG GPRBUILD_SHA256=(\S+)"),
+        "GNAT_VERSION": pinned("LANDIN_GNAT_VERSION"),
+        "GPRBUILD_VERSION": pinned("LANDIN_GPRBUILD_VERSION"),
+        "GNAT_SHA256": pinned("LANDIN_GNAT_SHA256_X86_64_LINUX"),
+        "GPRBUILD_SHA256": pinned("LANDIN_GPRBUILD_SHA256_X86_64_LINUX"),
     }
-    #  Two more places a fetch could diverge: where the archives come from
-    #  and which base image the recipe stands on.  Both are held to pins.sh
-    #  alone; TOOLCHAIN.md records compilers, not download sites.
-    pins_only = {
-        "RELEASES": re.compile(r"ARG RELEASES=(\S+)"),
-        "BASE_IMAGE": re.compile(r"FROM (\S+@sha256:[0-9a-f]+)"),
-    }
-
-    for name, pattern in list(wanted.items()) + list(pins_only.items()):
-        found = pattern.search(recipe_text)
-        if not found:
-            out.append((recipe, 1, "%s is not pinned in the recipe" % name))
-            continue
-        value = found.group(1)
-        if name in wanted and value not in record_text:
-            out.append((recipe, 1,
+    for name, value in wanted.items():
+        if value is None:
+            out.append((pins, 1, "%s is not pinned in environments/pins.sh"
+                        % name))
+        elif value not in record_text:
+            out.append((pins, 1,
                         "%s %s is not recorded in compiler/ada/TOOLCHAIN.md"
                         % (name, value)))
-        if pins_text and value not in pins_text:
-            out.append((recipe, 1,
-                        "%s %s is not pinned in environments/pins.sh"
-                        % (name, value)))
+    wanted = {name: value for name, value in wanted.items() if value}
+
+    #  Both image recipes stand on the base image pins.sh names.  The
+    #  contributor recipe installs the toolchain through pins.sh, for the
+    #  platform it is built for, and writes no version or checksum itself.
+    base = pinned("LANDIN_BASE_IMAGE")
+    if base is None:
+        out.append((pins, 1,
+                    "BASE_IMAGE is not pinned in environments/pins.sh"))
+    for path in (recipe, user_recipe):
+        text = read_file(path, encoding="utf-8")
+        found = re.search(r"^FROM (\S+@sha256:[0-9a-f]+)", text, re.M)
+        if not found:
+            out.append((path, 1, "BASE_IMAGE is not pinned in the recipe"))
+        elif base and found.group(1) != base:
+            out.append((path, 1, "BASE_IMAGE %s is not pinned in "
+                        "environments/pins.sh" % found.group(1)))
+        for name, value in wanted.items():
+            if value in text:
+                out.append((path, 1, "the recipe names %s %s literally "
+                            "instead of reading it from environments/pins.sh"
+                            % (name, value)))
+    for fragment in ("COPY pins.sh ", "landin_install_toolchain "):
+        if fragment not in recipe_text:
+            out.append((recipe, 1, "the recipe does not install the "
+                        "toolchain through environments/pins.sh: no `%s`"
+                        % fragment.strip()))
 
     #  The nix shell installs the toolchain itself, so it is a further place
     #  a version could be written.  It is held to reading the pins rather
@@ -3304,9 +3326,8 @@ def check_pinned_toolchain(full_run):
         if "environments/pins.sh" not in text:
             out.append((path, 1, "%s does not read environments/pins.sh"
                                  % relative))
-        for name, pattern in wanted.items():
-            found = pattern.search(recipe_text)
-            if found and found.group(1) in text:
+        for name, value in wanted.items():
+            if value in text:
                 out.append((path, 1,
                             "%s names %s literally instead of reading it "
                             "from environments/pins.sh" % (relative, name)))
@@ -3337,9 +3358,8 @@ def check_pinned_toolchain(full_run):
             path = os.path.join(directory, name_yml)
             relative = os.path.relpath(path, ROOT)
             text = read_file(path, encoding="utf-8")
-            for name, pattern in wanted.items():
-                found = pattern.search(recipe_text)
-                if found and found.group(1) in text:
+            for name, value in wanted.items():
+                if value in text:
                     out.append((path, 1,
                                 "%s names %s literally instead of reading it "
                                 "from environments/pins.sh" % (relative, name)))
@@ -10626,6 +10646,166 @@ def check_record_hints(full_run):
     return out
 
 
+#  The documents whose anchors other files link to, and which therefore
+#  must keep every anchor a link names.  Twenty-three links in a dozen files
+#  point into docs/process.md's sections, and nothing noticed when a
+#  heading was renamed.
+ANCHORED_DOCUMENTS = ("docs/process.md",)
+#  Text files that may link to such an anchor: documents, scripts and
+#  workflows.
+ANCHOR_SOURCES = (".md", ".py", ".sh", ".yml", ".yaml", ".nix", ".adb",
+                  ".ads", ".json")
+
+
+def heading_anchors(text):
+    """The anchors GitHub gives a Markdown document's headings.
+
+    Lower case, every character but a letter, a digit, a space, `-` or `_`
+    dropped, each space a `-`; a repeated anchor gains `-1`, `-2` and so
+    on.  Headings inside a fenced listing are not headings.
+    """
+    anchors, seen, fence = set(), {}, None
+    for line in text.splitlines():
+        marker = re.match(r"\s*(`{3,}|~{3,})", line)
+        if marker:
+            if fence is None:
+                fence = marker.group(1)
+            elif marker.group(1)[0] == fence[0] and len(marker.group(1)) >= len(fence):
+                fence = None
+            continue
+        if fence is not None:
+            continue
+        heading = re.match(r"#{1,6}\s+(.*?)\s*#*\s*$", line)
+        if not heading:
+            continue
+        slug = re.sub(r"[^\w\- ]", "", heading.group(1).lower()).replace(" ", "-")
+        count = seen.get(slug, 0)
+        seen[slug] = count + 1
+        anchors.add(slug if count == 0 else "%s-%d" % (slug, count))
+    return anchors
+
+
+def check_document_anchors(full_run):
+    """Every link to an anchor of an ANCHORED_DOCUMENTS file resolves.
+
+    A link elsewhere names the document by any relative path ending in its
+    file name, `process.md#closing-an-item` or
+    `../../docs/process.md#the-mechanical-gate`; the document's own links
+    are `(#anchor)`.  A renamed or removed heading leaves such a link
+    pointing at the top of the page, which no renderer reports.
+    """
+    if not full_run:
+        return []
+    out = []
+    targets = {}
+    for document in ANCHORED_DOCUMENTS:
+        path = os.path.join(ROOT, document)
+        if not os.path.exists(path):
+            out.append((document, 1, "this file is needed by a check and is not here"))
+            continue
+        targets[document] = heading_anchors(read_file(path, encoding="utf-8"))
+    for here, dirs, files in os.walk(ROOT):
+        dirs[:] = sorted(d for d in dirs
+                         if d not in (".git", "build", ".scratch", ".claude",
+                                      "node_modules", "site", "__pycache__"))
+        for name in sorted(files):
+            if not name.endswith(ANCHOR_SOURCES):
+                continue
+            path = os.path.join(here, name)
+            relative = os.path.relpath(path, ROOT).replace(os.sep, "/")
+            try:
+                text = read_file(path, encoding="utf-8")
+            except (UnicodeDecodeError, OSError):
+                continue
+            for document, anchors in targets.items():
+                base = re.escape(os.path.basename(document))
+                own = r"\]\(#([\w-]+)\)" if relative == document else None
+                pattern = r"(?<![\w.-])(?:[\w./-]*/)?%s#([\w-]+)" % base
+                for n, line in enumerate(text.splitlines(), 1):
+                    found = [m.group(1) for m in re.finditer(pattern, line)]
+                    if own:
+                        found += [m.group(1) for m in re.finditer(own, line)]
+                    for anchor in found:
+                        if anchor not in anchors:
+                            out.append((relative, n,
+                                        "%s has no heading whose anchor is "
+                                        "#%s; link to an anchor it has, or "
+                                        "keep the heading" % (document, anchor)))
+    return out
+
+
+#  The bytes each `##` section of docs/process.md may hold, its heading and
+#  its subsections included, and the preamble's under "".  Set at the
+#  sections' size when history left the file, plus a margin; the loop and
+#  the closing checklist, which every item reads, have the least.
+PROCESS_SECTION_BUDGETS = {
+    "": 1000,
+    "The loop that runs now": 9200,
+    "Running an item": 4200,
+    "Closing an item": 6000,
+    "Local agent feedback": 16800,
+    "Parallel sessions and shared resources": 14600,
+    "Command reference": 8400,
+    "The mechanical gate": 48000,
+    #  Raised when the install script's check joined the recipe's step 6.
+    "Releasing a version": 12600,
+}
+
+
+def process_sections(text):
+    """docs/process.md as (title, first line, bytes) per `##` section."""
+    sections, title, start, size, fence = [], "", 1, 0, None
+    for n, line in enumerate(text.splitlines(True), 1):
+        marker = re.match(r"\s*(`{3,}|~{3,})", line)
+        if marker:
+            fence = None if fence else marker.group(1)
+        elif fence is None and line.startswith("## "):
+            sections.append((title, start, size))
+            title, start, size = line[3:].strip(), n, 0
+        size += len(line.encode("utf-8"))
+    sections.append((title, start, size))
+    return sections
+
+
+def check_process_budgets(full_run):
+    """Each section of docs/process.md stays within its byte budget.
+
+    The file grew by fifteen hundred lines in seven weeks, every incident's
+    lesson added where it happened and nothing ever leaving, until rules
+    sat inside historical accounts where no reader found them.  A budget
+    makes the choice explicit: what does not fit goes to its owner, a
+    script's `--help`, the subsystem's reference or the commit message.
+    """
+    if not full_run:
+        return []
+    document = "docs/process.md"
+    path = os.path.join(ROOT, document)
+    if not os.path.exists(path):
+        return [(document, 1, "this file is needed by a check and is not here")]
+    out = []
+    for title, line, size in process_sections(read_file(path, encoding="utf-8")):
+        budget = PROCESS_SECTION_BUDGETS.get(title)
+        name = "the preamble" if not title else "section \"%s\"" % title
+        if budget is None:
+            out.append((document, line,
+                        "%s has no budget; add it to check.py's "
+                        "PROCESS_SECTION_BUDGETS with the section" % name))
+        elif size > budget:
+            out.append((document, line,
+                        "%s is %d bytes, over its budget of %d: move detail "
+                        "to the script's --help or the subsystem's reference "
+                        "and history to the commit message, or raise the "
+                        "budget in the same change, saying why"
+                        % (name, size, budget)))
+    for title in sorted(set(PROCESS_SECTION_BUDGETS) -
+                        {t for t, _, _ in process_sections(
+                            read_file(path, encoding="utf-8"))}):
+        out.append((document, 1,
+                    "check.py budgets a section \"%s\" the file no longer "
+                    "has; remove its budget" % title))
+    return out
+
+
 AGENT_GUIDANCE_MAX_BYTES = 24 * 1024
 
 
@@ -12338,6 +12518,8 @@ def main(argv):
     stale_paths = LIVE_DOCS if full_run else paths
     extra += check_stale_backlog(stale_paths, full_run)
     extra += check_agent_guidance(full_run)
+    extra += check_document_anchors(full_run)
+    extra += check_process_budgets(full_run)
     extra += check_document_reachability(full_run)
     extra += check_project_status(full_run)
     extra += check_roadmap_citations(full_run)

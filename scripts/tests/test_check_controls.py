@@ -547,7 +547,7 @@ class LibraryConsumers(unittest.TestCase):
         self.assertIn("generated table", said[0][2])
 
 
-PINS = ["environments/linux-amd64/Containerfile",
+PINS = ["environments/images/contributor.Containerfile",
         "compiler/ada/TOOLCHAIN.md",
         "environments/pins.sh",
         "highlight/tree-sitter/package.json",
@@ -556,7 +556,9 @@ PINS = ["environments/linux-amd64/Containerfile",
         "flake.nix",
         "environments/cortex-m/setup.py",
         #  The workflow that runs the pinned actionlint.
-        ".github/workflows/gate.yml"]
+        ".github/workflows/gate.yml",
+        #  The user image's recipe, held to the same base image.
+        "environments/images/user.Containerfile"]
 
 
 class PinnedToolchain(unittest.TestCase):
@@ -569,11 +571,35 @@ class PinnedToolchain(unittest.TestCase):
     def test_a_recipe_that_names_another_version_is_reported(self):
         from check_controls import tree
         with tree(copied=PINS) as root:
-            recipe = root / PINS[0]
-            recipe.write_text(
-                recipe.read_text().replace("16.1.0", "16.2.0"))
+            pins = root / PINS[2]
+            pins.write_text(pins.read_text().replace(
+                "LANDIN_GNAT_VERSION=16.1.0-1", "LANDIN_GNAT_VERSION=16.2.0-1"))
             said = [why for _, _, why in checker.check_pinned_toolchain(True)]
-        self.assertTrue(said)
+        self.assertTrue(any("GNAT_VERSION 16.2.0-1 is not recorded" in why
+                            for why in said), said)
+
+    def test_the_image_recipes_are_held_to_the_pins(self):
+        #  D1668: the contributor recipe reads pins.sh and writes no
+        #  version; both recipes stand on its base image.  Each break is
+        #  named.
+        from check_controls import tree
+        for relative, old, new, fragment in (
+                (PINS[0], "ARG TARGETARCH\n",
+                 "ARG TARGETARCH\nARG GNAT_VERSION=16.1.0-1\n",
+                 "names GNAT_VERSION 16.1.0-1 literally"),
+                (PINS[0], "COPY pins.sh ", "COPY other.sh ",
+                 "no `COPY pins.sh`"),
+                (PINS[0], "landin_install_toolchain ", "install_somehow ",
+                 "no `landin_install_toolchain`"),
+                (PINS[-1], "debian@sha256:f", "debian@sha256:0",
+                 "is not pinned in environments/pins.sh")):
+            with self.subTest(fragment=fragment), tree(copied=PINS) as root:
+                path = root / relative
+                text = path.read_text()
+                self.assertIn(old, text)
+                path.write_text(text.replace(old, new))
+                said = [why for _, _, why in checker.check_pinned_toolchain(True)]
+                self.assertTrue(any(fragment in why for why in said), said)
 
     def test_a_missing_recipe_is_reported_rather_than_skipped(self):
         #  This check used to `return []` when the recipe or the record was
@@ -1631,6 +1657,79 @@ class DeveloperLoops(unittest.TestCase):
                 'Incremental="yes"', 1))
             said = [why for _, _, why in checker.check_developer_loops(True)]
         self.assertTrue(said)
+
+
+class DocumentAnchors(unittest.TestCase):
+    """A link to a section of docs/process.md names a heading it has."""
+
+    PROCESS = ("# Process\n\n## The loop\n\nSee [closing](#closing-an-item).\n\n"
+               "### Integration, publication and CI\n\n"
+               "```sh\n# not a heading\n```\n\n## Closing an item\n")
+
+    #  Written as LINK % anchor so that check.py, reading this file, does
+    #  not take these deliberate faults for links of its own.
+    LINK = "[x](process" ".md#%s)"
+
+    def said(self, other):
+        return faults(checker.check_document_anchors,
+                      written={"docs/process.md": self.PROCESS,
+                               "docs/other.md": other})
+
+    def test_the_real_tree_passes(self):
+        self.assertEqual(faults(checker.check_document_anchors, copied=[
+            "docs/process.md", "AGENTS.md", "docs/environments.md",
+            "compiler/tests/README.md", "environments/xtensa/README.md"]), [])
+
+    def test_links_by_any_relative_path_resolve(self):
+        self.assertEqual(self.said(
+            self.LINK % "the-loop" + " [b](../docs/process" ".md#integration"
+            "-publication-and-ci) `docs/process" ".md#closing-an-item`\n"), [])
+
+    def test_a_missing_anchor_is_named_with_its_line(self):
+        said = self.said("ok\n" + self.LINK % "not-a-heading" + "\n")
+        self.assertEqual([(path, line) for path, line, _ in said],
+                         [("docs/other.md", 2)])
+        self.assertIn("#not-a-heading", said[0][2])
+
+    def test_a_comment_in_a_listing_is_no_heading(self):
+        self.assertTrue(self.said(self.LINK % "not-a-heading" + "\n"))
+
+    def test_the_documents_own_links_are_held(self):
+        text = "# P\n\nSee [closing](#closing).\n\n## Closing an item\n"
+        said = faults(checker.check_document_anchors,
+                      written={"docs/process.md": text})
+        self.assertEqual([path for path, _, _ in said], ["docs/process.md"])
+
+    def test_a_repeated_heading_gains_a_number(self):
+        self.assertEqual(checker.heading_anchors("## A\n\n## A\n"),
+                         {"a", "a-1"})
+
+
+class ProcessBudgets(unittest.TestCase):
+    """Each section of docs/process.md stays within its byte budget."""
+
+    def test_the_real_file_passes(self):
+        self.assertEqual(faults(checker.check_process_budgets,
+                                copied=["docs/process.md"]), [])
+
+    def test_an_oversized_section_is_named_with_where_text_goes(self):
+        limit = checker.PROCESS_SECTION_BUDGETS["Running an item"]
+        text = "# P\n\n## Running an item\n\n" + "x" * limit + "\n"
+        said = faults(checker.check_process_budgets,
+                      written={"docs/process.md": text})
+        self.assertTrue(any("Running an item" in why and "--help" in why
+                            for _, _, why in said))
+
+    def test_a_new_section_needs_a_budget(self):
+        said = reasons(checker.check_process_budgets,
+                       written={"docs/process.md": "# P\n\n## Something new\n"})
+        self.assertTrue(any("Something new" in why and "no budget" in why
+                            for why in said))
+
+    def test_a_heading_in_a_listing_starts_no_section(self):
+        sections = checker.process_sections(
+            "# P\n\n## A\n\n```sh\n## not one\n```\n")
+        self.assertEqual([title for title, _, _ in sections], ["", "A"])
 
 
 class LoopTable(unittest.TestCase):

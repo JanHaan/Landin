@@ -107,8 +107,9 @@ checks for what it touches pass. Run further local lanes beside its gate,
 not before the push: the lanes that fail a gate are mostly ones no local
 host has, so an hour on the local matrix first only delays hearing from
 them. A change to
-the grammar, the highlighters or a fixture also runs
-`./highlight/test.sh --integration`, about a minute, before the push.
+the grammar, `highlight/tree-sitter/`, a positive, runtime or ABI fixture
+or `core/` also runs `./highlight/test.sh --integration`, about a minute,
+before the push.
 
 A question to the user holds up only the work its answer decides. Complete
 an authorized promotion whose gate passed, start what the answer cannot
@@ -121,7 +122,7 @@ names the exact selectors for what the stream changes, leaves the complete
 suite to the integrated tree or the gate, names the harness's completion
 method with `run_logged.py --wait` as fallback, and leaves the build's
 worker count and CPU placement at their defaults, with no `-j` or
-`taskset`: a full build at `-j4` took 2.5 times as long as the default.
+`taskset`: a full build at `-j4` took 2.6 times as long as the default.
 
 For parallel sessions, follow the
 [ownership and integration rules](docs/process.md#parallel-sessions-and-shared-resources).
@@ -143,22 +144,25 @@ and log paths instead of repeatedly pasting complete transcripts.
 
 An authorized promotion to main needs the candidate's complete multi-host
 software gate passed, a `scope=boards` dispatch passed on the identical
-tree unless the edit is declared `Gate: explanatory`, and main's own push
-gate followed to its end; the promoted tree must be the one tested. A
+tree, or before only commits declared `Gate: explanatory`, unless the edit
+is itself declared explanatory, and main's own push
+gate followed to its end, which takes that dispatch's boards rather than
+running them again; the promoted tree must be the one tested. A
 changed merge tree needs new evidence. Filtered local checks are
 development feedback; they do not replace the gate.
 
 Read [the gate reference](docs/process.md#the-mechanical-gate) when changing
 CI, checking reuse, following a candidate or promoting it. It owns the job
-matrix, identical-tree and explanatory reuse conditions, runner scope,
-retained artifacts and historical timings. The workflows are executable
+matrix, identical-tree and explanatory reuse conditions, runner scope and
+retained artifacts. The workflows are executable
 truth; keep that reference current when they change. Document and script
 checks always run, including when a verified full pass is reused.
 
 Before closing an implementation item, follow
 [closing an item](docs/process.md#closing-an-item): run activations against
 the item's starting commit, read unmatched rows, and run the build-modes
-comparison and scaling check when lowering or emission changed. After any
+comparison, manifest and scaling check when lowering, emission, a backend,
+a target or the positive fixtures changed. After any
 documentation edit run the full `python3 check.py` and review the prose
 against what it describes. A change to the harness or fixtures that Darwin
 runs also receives focused native Mac checks when a Mac is available; the

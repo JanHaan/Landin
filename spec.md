@@ -24666,7 +24666,8 @@ Cortex-M0's and a corpus that fits 32 KiB in Thumb did not.
 **Chosen:** at XLEN 32 a routine saves and restores its callee-saved
 registers at the frame's stack pointer, where each is one compressible
 instruction, and only those its text names, by number or, in an assembly
-block, by ABI alias; their homes stay in the frame. Where every region of
+block, by ABI alias; their homes stay in the frame (D1688 lays the frame
+out without them). Where every region of
 the profile is at most 1 MiB, a jump is `j` and a branch is written as
 itself, which GNU as lengthens with a JAL past 4 KiB, since a routine is
 one input section within one region. A word loaded from the home the line
@@ -25853,6 +25854,10 @@ needs, `flake` among them.
 
 ### D586 — An explanatory edit may take its base from any branch's full run
 
+**Amended by D1648 and D1650:** the key leaves out more than the four
+documents' content: the guides and the tree D1648 names, and the boards'
+cycles baselines.
+
 **The tour said** nothing. The explanatory exception took its base only
 from a full run of a push to main, so a documents-only commit that closed
 an item after its branch's full gate cost one more full run before main
@@ -25884,6 +25889,8 @@ hold ancestry, declarations and the complete listing.
 
 ### D1373 — The roadmap's own files leave an explanatory edit's key
 
+**Amended by D1648:** `docs/site/` is left out the same way.
+
 **The tour said** nothing. D586 left the content of four top-level
 documents out of the tree key an explanatory edit is compared by, and
 `ROADMAP.md`'s register was a table in one of them. The third roadmap
@@ -25911,6 +25918,45 @@ a new row would escape.
 `test_the_roadmap_tree_does_not_count_at_all` and its `Readers` case,
 which names every tracked file that mentions `roadmap/` and why no lane
 the key lets skip reads it.
+
+### D1648 — The derived guides no lane reads, and the site's renderer, leave an explanatory edit's key
+
+**The tour said** nothing. D586 and D1373 left four top-level documents'
+content and the roadmap's own directory out of the key an explanatory edit is
+compared by. Two of one item's three merges of `main` in the survey of
+2026-11-20 brought only `docs/process.md`, `docs/environments.md` and
+`docs/site/*.py` with the roadmap, and each cost a full gate and a boards
+run. The maintainer chose this on 2026-11-20.
+
+**Chosen:** the content of the guides `docs/benchmarks.md`,
+`docs/capabilities.md`, `docs/diagnostics.md`, `docs/documents.md`,
+`docs/environments.md`, `docs/ir.md`, `docs/measurement.md`,
+`docs/process.md`, `docs/server.md` and `docs/targets.md` joins the four
+documents', and the tree `docs/site/`, paths too, joins the roadmap's, as
+`scripts/gate_inputs.py`'s `DOCUMENTS` and `CONTENT_FREE_TREES` name them.
+Each was shown to be read by no lane the key lets skip: `pages.yml`,
+`scripts/site.sh` and `check.py` read them, and the files that name them
+otherwise do so in comments and messages. `docs/commands.md` and
+`docs/library.md` stay in the key, because `test_cli_native` reads them in
+the compiler-checks and release lanes, and so do `docs/format.md` and
+`docs/from-c.md`, which the Ada test program reads. `docs/diagnostics.md`
+is in the set because the explanations `refine explain` prints are
+generated from it into an Ada body that is not, so a change to what it
+says changes the key through that body. Everything else in D586 and D1373
+stands: an edit is explanatory only when every commit says so.
+
+**The reason:** these files explain; a sentence in them that changes a
+claim is checked by `check.py`, the pages workflow and review, not by a
+compiler lane, as for the four documents.
+
+**The alternatives:** adding only `docs/site/`; and keeping D586 and D1373
+as they stood.
+
+**Pinned by** `scripts/tests/test_gate_inputs.py`'s
+`test_the_unread_guides_and_the_site_do_not_count`,
+`test_the_guides_a_lane_reads_count` and its `DocumentReaders` cases, which
+name every tracked file that mentions one of them, the scripts tests a lane
+runs included, and why no lane the key lets skip reads it.
 
 ### D1375 — Generated code is measured against committed baselines, size exactly in both directions
 
@@ -26013,6 +26059,69 @@ hours of emulation for a figure that is exact at any size.
 `scripts/tests/test_measure_count.py`, and the gate's `measure-size` and
 `cortex-m-programs` jobs.
 
+### D1649 — A dispatch times a key once on its branch
+
+**The tour said** nothing. D1378's timing ran on the schedule and on every
+dispatch whatever its scope, so a dispatch after a merge that changed
+nothing the timing reads timed the same compiler again: three
+`measure-time` jobs, about 58 runner-minutes, and the boards' time steps,
+which take a leg from about 11 minutes on the rig to about 30. The
+maintainer chose this on 2026-11-20.
+
+**Chosen:** a dispatch leaves out `measure-time`, the timing images and the
+boards' time steps when a successful dispatch of this repository on the same
+branch, under a week old, whose `measure-time` legs ran and passed in a
+complete listing, was made on a commit with the same gate key, and the
+two commits' bases, which the timing pairs the compiler with and holds the
+cycles to, found as `measure.py base` finds them against `main` as it now
+stands, have the same key too. The key is the one an explanatory edit is
+compared by, which leaves out only what no lane reads, so the compiler,
+the bundles and the measuring scripts timed are the ones this dispatch
+would time; no declaration is needed, because nothing the timing reads
+differs. `gate_inputs.py physical` decides it, and
+the aggregate accepts the skip on a dispatch alone and names the run. The
+schedule always times. A run that failed only in timing is still re-run in
+its failed jobs, not dispatched again.
+
+**The reason:** a timing judges the compiler's code against the base's
+baselines; the same inputs give the same judgement, and timing them again
+spent runners and rig time on noise, which failed five of nine dispatches
+in the survey.
+
+**The alternatives:** a `scope=timing` dispatch run once per item with
+boards dispatches untimed; and timing on every dispatch with only the
+re-run of failed jobs.
+
+**Pinned by** `scripts/tests/test_gate_inputs.py`'s `TimingReuse` cases
+and `BoardVerdict`'s `test_a_dispatch_may_take_its_timing_from_a_timed_run`.
+
+### D1650 — The cycles baselines leave the key
+
+**The tour said** nothing. A commit that recorded only the boards' cycles
+baselines, `compiler/tests/measure/baselines/*.cycles.json`, ran every
+software lane again, about 520 runner-minutes, though only
+`environments/boards/timing.py` reads those files, in the aggregate of an
+event that times the boards, from the base commit. The maintainer chose
+this on 2026-11-20.
+
+**Chosen:** the gate's key leaves those files out, paths too, by
+`scripts/gate_inputs.py`'s `CONTENT_FREE_PATTERNS`, so a commit that
+records them alone and says `Gate: explanatory` reuses the software pass.
+The size and instruction baselines, which lanes read, stay in the key. A
+candidate's identical-tree key still counts them, and the dispatch that
+judges the new baselines still runs.
+
+**The reason:** no software lane reads them, and the evidence they change
+is the boards' timing, which a dispatch gives.
+
+**The alternatives:** also letting the aggregate judge the previous
+dispatch's kept figures against the new baselines without measuring again,
+which was not asked for; and keeping the files in the key.
+
+**Pinned by** `scripts/tests/test_gate_inputs.py`'s
+`test_cycles_baselines_do_not_count_and_other_baselines_do` and its
+`DocumentReaders` case.
+
 ### D1379 — The instruction counter declares the plugin calls it makes
 
 **The tour said** nothing.
@@ -26111,6 +26220,11 @@ the next to be written, shares arm64's placement where the two agree rather
 than writing it again; Cortex-M's low and high registers and Xtensa's
 native selection are placed by their own work.
 
+**Amended on 2026-11-20:** Xtensa's placement reads its routine's words,
+the scratch words its selection writes among them, over the routine's own
+text rather than this analysis, and places them in the machine layer that
+knows what each Xtensa instruction writes (D1627).
+
 **The alternatives:** one allocator over a register description for every
 backend, which would first have had to describe each selection's scratch
 use per operation, and would have put the cheapest measured gains, arm64's
@@ -26173,7 +26287,8 @@ The allocator then offers x10-x17, which cost no save, and x9, x18, x19
 and x22, which every routine saves already (D678 prunes an unnamed one at
 XLEN 32, where they are offered only where enough scalar traffic pays for
 the save), to a location only where that record writes none of them over
-its interval; x20, x21, x23-x27 and the temporaries are never offered. A parameter
+its interval; x20, x21, x23-x27 and the temporaries are never offered (D1687
+now offers x20, x21 and x23-x25). A parameter
 takes only the argument register it arrives in, since the entry stores
 each parameter while later ones still wait in theirs. The routine is
 emitted again with that plan and its writes recorded again; if any meets a
@@ -26208,6 +26323,109 @@ corrupt a held value silently; and homes, the measured cost above.
 
 **Pinned by** `backend/RISC-V keeps values in registers`, the RV64 GDB
 sessions, the RV32 lanes' corpus and `compiler/tests/measure/baselines/`.
+
+### D1687 — RISC-V branches on a comparison's operands where they are
+
+**The tour said** nothing. RISC-V has no condition flags, and selection
+emulated Arm's: every comparison copied its operands into x20 and x21 for
+the branch that followed, a float comparison set x20, x21 and x23-x25 from
+seven instructions, and every addition or subtraction, checked or not,
+computed its carry and overflow into x23 and x24 and left its result in
+x20 against zero in x21. After D1503 these were 22% of RV64's
+instructions over four hosted workloads, and they kept five registers
+from the allocator.
+
+**Chosen:** a comparison records its operands where they are and emits
+nothing; the branch that follows reads them there (`blt a0, a1`), a
+literal other than zero is loaded into x29, and zero is `zero`. A
+comparison's result is computed directly, with `slt`, `sltu`, `seqz` or
+`snez` and at most an `xori`, and a float comparison's with the one
+`feq`, `flt` or `fle` its condition needs, operands swapped for greater;
+only a carry or overflow test still branches. An addition or subtraction
+records its result against zero, and computes a carry, the unsigned check,
+or an overflow, the signed one, only where a check reads it, into x30:
+a borrow is `sltu` of the operands before the difference, a carry `sltu`
+of the sum below the operand it does not overwrite, and an operand the
+result overwrites is first copied to x7 or x28. An addition by a literal
+that fits twelve bits is `addi`. Every temporary selection writes after an
+operation's own result, at its position, is one no location is offered,
+since the recorded writes (D1503) cannot tell it from the result's own
+write. A line that writes a recorded operand, calls, or is a label marks
+the comparison stale, and a branch on a stale one is a compiler defect
+rather than a wrong program. x20, x21 and x23-x25 are offered to the
+allocator after x22, x20-x21 and x24-x25 as RV32 pairs.
+
+Over the seven hosted workloads, with D1688 and D1689, RV64's
+instructions executed under QEMU fall to 0.73 of what they were at
+`speed`, 0.68 at `size` and 0.73 at `none` (fasta 0.56, fannkuch-redux
+0.59, mandelbrot 0.71, binary-trees 0.75), and the four workloads' lines
+naming x20, x21 or x23-x25 as a destination fall from 22% to 1.1-1.4%,
+now held values.
+
+**The alternatives:** keeping the emulation and only offering the
+registers between comparisons, which leaves the copies; computing every
+condition into a register first, as the float form did, one instruction
+more per branch; and fusing the comparison into the branch in the IR,
+which would ask the same of every backend for RISC-V's want alone.
+
+**Pinned by** `backend/RISC-V compares without copies`, the
+RV64 fixtures under QEMU, the RV32 lanes' corpus and
+`compiler/tests/measure/baselines/`.
+
+### D1688 — A RISC-V routine's frame holds only the saves its text names
+
+**The tour said** nothing. RV64 saved x9 and x18-x26 in every routine
+and RV32 x9 and x18-x27, through a frame laid out before the text that
+decides what is named; D678 pruned RV32's unnamed saves after the fact
+but left their homes in the frame, up to 44 bytes more than the saves
+needed.
+
+**Chosen:** a routine that is not naked and holds no assembly block is
+emitted, the callee-saved registers its lines name apart from their
+saves and restores are collected as the lines are written (x26 after its
+far jumps are settled), and when that is fewer than its plan saves, it is
+emitted again with only those saves and a frame laid out for them. The
+second emission is kept when it names no register outside its saves and,
+for a routine holding registers, its writes still hold (D1503); otherwise
+the first is written again. At `none` a routine that holds nothing and
+calls nothing saves nothing.
+
+With D1687 and D1689, RV64's `.text` falls a further 20.5% at `none`,
+26.3% at `size` and 24.3% at `speed`, and RV32's 5.9-6.2%, 9.3-10.1% and
+9.9-10.8%; RV64's frame for a leaf routine falls from 112 bytes to 32,
+arm64's. Three corpus programs that overran the RV32 lanes' 32 KiB at
+`none` now fit, and their D698 limits are removed.
+
+**The alternatives:** predicting the saves before emission, which would
+describe selection's every register use beside it, the cost D1503 avoided;
+and laying RV32's frame out again only, leaving RV64 to save ten
+registers a routine.
+
+**Pinned by** `backend/RV64 jumps are near within a routine`, `stack
+report/a closed graph on every target`, the RV64 GDB sessions and
+`compiler/tests/measure/baselines/`.
+
+### D1689 — RISC-V divides by a constant power of two with a shift or a mask
+
+**The tour said** nothing. RISC-V divided an unsigned value by a constant
+2 ** k with `divu`, several cycles on every core the rig holds, where
+Cortex-M shifts (D1626) and Xtensa shifts and masks, and formed every
+remainder from a quotient, a `mul` and a `sub`.
+
+**Chosen:** an unsigned division of a value no wider than XLEN by a
+constant 2 ** k is `srli` by k, and its remainder `andi` with 2 ** k - 1
+where that fits twelve bits, else `slli` and `srli` by XLEN - k, at both
+XLENs and every objective; neither can trap. Any other remainder is `rem`
+or `remu`, which truncates as the quotient does and is zero for the one
+signed quotient that overflows, so its check stays the quotient's alone.
+
+**The alternatives:** a target-neutral rewrite in simplification, which
+D1626 declined for the backends that divide in hardware; and a multiply
+by a reciprocal for every constant divisor, a larger change left to a
+measured need.
+
+**Pinned by** the RV32 lanes' corpus, the RV64 fixtures under QEMU and
+`compiler/tests/measure/baselines/`.
 
 ### D1563 — Cortex-M reaches its homes from sp, and a value's home is a word
 
@@ -26457,6 +26675,111 @@ Xtensa, x86-64 and arm64 do not need for speed, each dividing by a
 constant already or in hardware.
 
 **Pinned by** the Cortex-M corpus and `compiler/tests/measure/baselines/`.
+
+### D1627 — Xtensa places every word of a routine over the routine's own text
+
+**The tour said** nothing. Xtensa's machine layer kept every RISC-V-form
+logical word but five in memory at a7 + 4×N and every value and slot in
+its frame home, so an operation loaded its operands, computed and stored
+its result back: 414 of the firmware mandelbrot's 545 instructions in
+`in_set` were `l32i` and `s32i` through a7, and the build report's share
+of stack loads and stores was 53.5% at xtensa-esp32.
+
+**Chosen:** the emitter keeps its walk of the verified IR and its
+RISC-V-form words, and in a routine without an `assembler.block` gives
+each scalar value and each slot `Landin.Backend.Placement` finds no address
+reaches a word of its own, `vN`, two for an eight-byte one, whose home is
+the value's or slot's frame home; a narrower one holds its value
+zero-extended. The machine layer buffers the routine's body, computes the
+liveness of every word over the body's own blocks and branches, joins the
+definitions that reach a common use into a web, and places the webs by
+linear scan in order of their first position: a web live across a call
+takes one of a2-a6, which CALL8 preserves, any other also a10-a15,
+preferring the register a call's arguments or results or the routine's
+entry or exit want it in, or that of a word it is copied to or from; a web
+that copies another's value without either being written in its interval
+reads the other's register. When none is free, the web with the fewest
+occurrences, weighted eight times for each loop around them, for each
+position it would hold stays in its home, and selection loads it into a8
+or a9 where it is read. Before placing, a `mul`, `add`, `divu` or `remu`
+whose operand is a word set once to a number, directly or through copies,
+is a shift, an `addi`, a shift right or a mask where the number is a power
+of two or small, and a zero test of such a word is decided; an operation
+without effect whose results nothing reads is dropped; and a set on a
+comparison that only the zero test after it reads is that test, `sltu`
+and `bnez` one `bltu`. The entry moves the incoming a2-a6 into x10-x14's webs, a call its
+argument words into a10-a15 and its results out of a10-a14, and the exit
+x10-x13 and x31 into a2-a6, each as one parallel move. A routine whose
+text the analysis cannot follow, a native line in its body, a jump to a
+label outside it or a write of SP or the CFA, or whose text is longer than
+150,000 lines or whose liveness would take more than 2 ** 26 bits, is
+selected word by word as before, the value and slot words in their homes.
+The scratch words x5-x7, x9 and x18 have no home: when one finds no
+register, the cheapest web that has a home gives up its own. The frame is
+the one it was, its 80-byte bank and every value's and slot's home kept:
+a firmware fibre's stack is sized to it. Over the firmware
+set every image is smaller at every profile and both levels, `.text`
+0.37 to 0.76 of the baselines before it, `in_set` is 121 instructions, 30
+of them stack loads and stores, and on both boards every workload runs in
+0.17 to 0.68 of the cycles it took.
+
+**The alternatives:** selecting natively from the IR, which D1403 named
+for Xtensa, a second emitter of the RISC-V emitter's 6,900 lines for the
+ABI, firmware, interrupt and pair handling this one already has; an
+allocator over the RISC-V form in the emitter, as D1503's, which D1403
+declined because the machine layer would still load and store every
+logical word, and which places the words the machine layer here places;
+and placing over `Landin.IR.Liveness` as D1403 has the other backends do,
+which sees values and slots but not the scratch words selection writes in
+every operation, which are half of what this places. D1403's one liveness
+analysis is therefore not Xtensa's: its placement reads the routine's
+words, not its IR.
+
+**Pinned by** `xtensa backend/placed words keep a loop in registers`,
+`xtensa backend/a word across a call keeps a2-a6`, both chips' corpus
+lanes and `compiler/tests/measure/baselines/`.
+
+### D1628 — On Xtensa a comparison only its branch reads is the branch
+
+**The tour said** nothing. A comparison made its truth value with a branch
+around two moves, stored it, and the branch after it loaded it and
+branched on it.
+
+**Chosen:** an integer comparison that no other operand reads and that
+the next operation of its block branches on is that branch's own test,
+`beq`, `bltu` and the rest on the two operands, followed by a `j` to the
+alternative, as D1566 has Cortex-M's flags do. A float comparison, a
+libgcc helper's answer, keeps its truth value.
+
+**The alternatives:** leaving the pair to placement, which removes the
+truth value's memory traffic but keeps both branches.
+
+**Pinned by** both chips' corpus lanes and
+`compiler/tests/measure/baselines/`.
+
+### D1629 — An Xtensa image is measured as a loader writes it
+
+**The tour said** nothing. D1359 has a loader write every Xtensa image
+where it is mapped, the ROM an application image's segments and a
+debugger or emulator the reference's, and reset copies nothing; but the
+build report's measurement refused an image of the Xtensa reference's
+boot layout whose `.rodata` and `.data` are loaded into DRAM, because a
+boot image's initialized data must come from its text region, and said
+only that it could not measure the image.
+
+**Chosen:** the measurement refuses initialized data loaded from writable
+memory only for an image reset fills, `Boots_From_Image`, so the Xtensa
+reference is measured as its chips' descriptions are; and every image it
+cannot measure is refused naming what it met, the segment and its load
+address and the rule it breaks, the symbol, or the map's line.
+
+**The alternatives:** giving the reference's initialized data a load
+address in IRAM and copying it at reset, which no Xtensa startup does and
+which would put byte-addressed data where an ESP32 reads only words; and
+refusing the reference's boot layout at link time, which would refuse
+every corpus image with a constant.
+
+**Pinned by** `cortex ABI/linked firmware evidence`.
 
 ### D1383 — `refine` keeps the compiler's commands and ships four of its tools beside it
 
@@ -27524,6 +27847,9 @@ unpushed tree; or automatically refreshing a hardware record from a build.
 
 ### D904 — Physical boards run in the gate on trusted events only, and their evidence is never reused
 
+**Superseded in part by D1647:** a push to `main` takes its boards from a
+passed run of the same tree instead of running them again.
+
 **The tour said** nothing about where physical evidence comes from; D901
 and D902 made boot checks and RAM runs the closing evidence of a board
 item, run by hand from the maintainer's host.
@@ -27577,6 +27903,48 @@ to simulated pushes, schedules, dispatches, pull requests and forks;
 `scripts/tests/test_gate_inputs.py`, which holds `gate.yml`'s scope, the
 physical jobs outside the reuse list, the board matrix and the aggregate's
 verdict; and `scripts/tests/test_board_gate.py`'s `Sequence`.
+
+### D1647 — Main's push takes its boards from a passed run of the same tree
+
+**The tour said** nothing. D904 ran the boards fresh on every push to
+`main` and listed reusing a candidate's board evidence at promotion among
+its alternatives without a reason. In the 3.4 days surveyed on 2026-11-20,
+34 of 35 pushes to `main` followed a passed boards dispatch on the identical
+tree or before only explanatory commits; each cost about 11 minutes of the
+rig and 19 of the promoting item's finish, and in the fortnight before, the
+one failure of `main`'s boards was a rig difference on a tree that had
+passed its dispatch half an hour earlier. The maintainer chose this on
+2026-11-20.
+
+**Chosen:** a push to `main` takes its boards from a run of `gate.yml` in
+this repository on a board-scope event, a dispatch, a push to `main` or the
+schedule, under a week old and successful, whose `board-bundles` and every
+leg ran and passed in a complete job listing, when that run's commit is the
+identical tree, every file, mode and path, or a base the software-reuse
+rule of D586 accepts: the same key, an ancestor of the pushed commit, and
+every commit since it saying `Gate: explanatory`. `gate_inputs.py
+physical` decides it in the `inputs` job, which then skips the board jobs,
+and the aggregate accepts their skip on a push to `main` alone and names
+the run whose boards it took. The schedule and a dispatch always run the
+boards, and a run that took its boards is never a base. A candidate still
+needs its own passed boards dispatch before promotion. `main`'s Linux
+x86-64 cache entry, which `board-bundles` saved, is saved by
+`linux-release-main-cache` instead, under the tree's gate key.
+
+**The reason:** the run taken is evidence of the same inputs on the same
+rig, at most a week old, and the rig is sampled by every dispatch, about
+twenty a day, and by the weekly schedule, so a rig that has changed shows
+within hours on another item's dispatch. A second sample at promotion
+bought a red `main`, which blocks every item, for a rig change.
+
+**The alternatives:** keeping D904's rule; running the schedule daily as
+well; and dropping the candidate's dispatch so that `main`'s boards are the
+only ones, which turns `main` red on a candidate's board or cycles
+difference.
+
+**Pinned by** `scripts/tests/test_gate_inputs.py`'s `BoardsReuse` cases and
+`BoardVerdict`'s `test_a_main_push_may_take_its_boards_from_a_passed_run`
+and `test_a_dispatch_or_the_schedule_never_takes_boards`.
 
 ### D905 — A board run reports one outcome, stops cleanly when cancelled, and shares one rig state
 
@@ -37595,6 +37963,45 @@ which lets a test's permits be spent by a path it did not count; and
 `runtime/r420-tree-real-exhaustion`, `runtime/core-vec-pointer-storage`,
 `runtime/derived-hosted-memory` and `runtime/library-second-reading`.
 
+### D1727 — A storage with a block grows through the provider's `resize`
+
+**The tour said** at [1360] that allocators are passed to containers, and
+D356 made `mem.reserve_storage` their one way of taking slots: a growth
+asked in place, and when the provider refused, a fresh block, the prefix
+copied into it and the old block freed. The growing text builder already
+grew through `resize`, which lets `hosted/heap` move a large block's pages
+rather than copy its bytes: 4,000 appends of 64 KiB on Linux x86-64 at
+`--optimize speed` took 383 ms through `vec.append_bytes`, with 12
+`mremap`, 13 `mmap` and 13 `munmap` calls, against the builder's 163 ms.
+
+**Chosen:** a storage that holds a block with a positive extent grows by
+one call to the provider's `resize`, which grows it in place or moves it,
+the provider choosing; its first old extent of bytes, the prefix among
+them, are where the result is, and `out_of_memory` leaves the storage as
+it was. A storage with no block, or whose items have no size, still takes
+a fresh block. `mem.reserve_admit_copy`, which `vec.append_bytes` grows
+with, grows the same way, and when the bytes it appends are a view of the
+storage's own block it reads them where the block now is: the block keeps
+the old block's bytes whether it grew or moved, so what is appended is
+what they held when the call began (D1122). The list now takes 190 ms with 12 `mremap` calls, one
+`mmap` and one `munmap`. Through `core/fault`'s injector a growth is one
+attempt and, when it succeeds, one success and no free, whichever way the
+inner provider answers, so the fixtures that pinned an injector's
+counters were rewritten for it.
+
+**The alternatives:** keeping D356's growth asked in place before the
+`resize`, which asks the system twice for every block it cannot extend
+where it is; keeping D356's growth for an append of the list's own bytes,
+which links both ways of growing into every image that appends bytes and
+took `runtime/core-self-append` past Cortex-M0's 32 KiB at `none`; and a
+`resize` for byte lists alone, which leaves every other item type copying
+its slots.
+
+**Pinned by** the fixtures D356 names whose counters changed, among them
+`runtime/r420-vec-large-list`, `runtime/r420-failing-providers` and
+`runtime/core-vec-used-sort`, `runtime/core-self-append` and
+`runtime/hosted-heap-resize`.
+
 ### D357 — `file_system` refines `files`, and a member for another system says so
 
 **The tour said** at [1290] that a concept may refine another, and D325 made
@@ -38045,6 +38452,12 @@ place and overwrites every block it is given back, and which fails on each
 of the list's and the builder's cases without the rule;
 `runtime/core-text-builder` and `runtime/core-vec-bytes` hold the growth
 itself.
+
+D1727 amends how a list's append keeps the rule: its storage grows through
+the provider's `resize`, and a view of its own block is read at the same
+offset in the block `resize` returns, which holds the old block's bytes
+whether it grew or moved. A list's one view is a range of that block, so
+its offset is known, unlike a `format`'s values.
 
 ### D442 — `platform/linux`'s path parameters take `ptr u8`
 
@@ -40272,6 +40685,190 @@ attestation of every archive to before the publication, whose `Ref` cases
 refuse a run off its tag, and whose notes case holds the release to the
 verify command. The ruleset and the environment are repository settings
 that `gh api` reads; no case runs the workflow.
+
+### D1667 — A release publishes a user image built from its Linux archives over Debian's own GCC
+
+**The tour said** nothing. A release published archives for Linux,
+macOS and nix; a reader who wanted `refine` in a container, or on a host
+whose loader the Linux archive does not find, had to assemble one.
+
+**Chosen:** the release workflow builds `ghcr.io/OWNER/landin` from the
+two Linux archives without compiling: each archive's prefix, `bin/refine`,
+`libexec/landin` and `lib/landin`, unpacked into `/usr/local` of the
+Debian 13 image `environments/pins.sh` pins by digest, with Debian's
+`gcc` and `libc6-dev`. Debian installs its driver as
+`x86_64-linux-gnu-gcc` and `aarch64-linux-gnu-gcc`, names `refine`
+already asks for (D364), so nothing is linked under the name the flake's
+`refine-bin` makes. No firmware or cross toolchain is in it; the README
+says which Debian packages add one, and that Debian's GDB, added the same
+way, needs no added capability. The planned note that debugging needs
+`--cap-add=SYS_PTRACE` was measured before it was written: in the
+release rehearsal GDB stopped the first program at `main` on both
+platforms without it, and with it still warned that the default seccomp
+profile refuses turning off address randomisation, so the README says
+that instead, and the release workflow's check holds it. Each platform's image is built and checked on its
+own runner, `scripts/container_image.py check user` running the README's
+commands with a directory of the reader's mounted at `/work` as the
+reader's own user, and is kept as an archive so the publishing job pushes
+what was checked: one manifest list of linux/amd64 and linux/arm64,
+tagged with the version alone, after the release's archives are public,
+and attested in the registry. A tag the registry already holds is never
+replaced. The gate builds the same image from its own packaged compiler
+on amd64 and arm64 and runs the first program in it, so a release finds
+no new fault there.
+
+**The alternatives:** an image that compiles `refine` itself, which is
+the contributor image's work and would publish a compiler other than the
+archive's; a scratch or distroless image with a static `refine`, which
+needs a linker and C library all the same and waits on a static build; a
+`latest` tag that every release moves, which is the maintainer's question
+and defaults to no; and images from `main` or each commit, which the
+maintainer declined: an image is a release's.
+
+**Pinned by** `scripts/tests/test_container_image.py`, whose cases hold
+the build context to the archive and the recipe, the check to the
+README's commands, and the publication to both platforms and to never
+replacing a tag; `scripts/tests/test_release.py`'s `Workflow` cases, which
+hold the push to after the release is public and to the publishing job
+alone; `check.py`'s pin agreement, which holds the recipe's base image to
+`environments/pins.sh`; and the gate's `outside-user-stock` and
+`arm64-release` steps that build and run it.
+
+### D1668 — The contributor image is the pinned environment for both Linux architectures, read from pins.sh
+
+**The tour said** nothing. `environments/linux-amd64/Containerfile`
+was the local loop's image: amd64 only, with GNAT and GPRbuild's versions
+and checksums written again as build arguments that `check.py` compared
+with the pins.
+
+**Chosen:** the recipe moves to
+`environments/images/contributor.Containerfile`, builds from
+`environments/` and copies `pins.sh` in, installing the toolchain with its
+`landin_install_toolchain` for the platform the builder names, amd64 or
+arm64, behind versionless links, so it writes no version or checksum and
+`check.py` holds it to reading the pins rather than to repeating them. It
+adds `git`, which the build's identity reads. The release workflow builds
+it for both platforms from the tagged tree, builds that tree's compiler
+inside it as the invoking user under the build tag `image` and runs the
+first program, and publishes it as `ghcr.io/OWNER/landin-contributor`
+beside the user image, by the same steps. `scripts/linux-loop.sh` builds
+the same recipe for its Rosetta loop, its image tag carrying the recipe
+and the pins.
+
+**The alternatives:** a second recipe for arm64, which is a second place
+to keep in step; building it in the gate on every push, which fetches the
+toolchain and builds the compiler again on two more runners for an image
+published only at a release, so the release workflow and its rehearsal
+build it instead; and keeping the build arguments beside a copy of the
+pins, which is two places a version is written.
+
+**Pinned by** `check.py`'s pin agreement and its controls in
+`scripts/tests/test_check_controls.py`, which refuse a recipe naming a
+version, not copying `pins.sh` or not calling `landin_install_toolchain`;
+`scripts/tests/test_build_inventory.py`'s recipe checksum case; and the
+release workflow's `contributor-image` job.
+
+### D1669 — The release workflow rehearses on any ref and publishes nothing
+
+**The tour said** nothing. The release workflow ran only on a `v*` tag,
+so its builds and checks were first seen working on the run that
+publishes, after the tag that cannot be taken back.
+
+**Chosen:** a dispatch with `rehearse` runs on any ref. The tag and gate
+checks and the publishing job are skipped, and the environment would
+refuse a branch in any case; the archives' version is not compared with a
+tag; the three builds, both images' builds and checks, and the assembly of
+each image's two platforms into one list are run, the lists pushed into
+an OCI layout on the runner. The release recipe in `docs/process.md` runs
+one on `main` before the tag. The archives' artifacts are named apart from
+the images', so the publishing job uploads the archives alone as the
+release's assets.
+
+**The alternatives:** a separate workflow for the images, which would
+build from something other than the release's own run; and testing the
+publication against a registry of the project's, which publishes.
+
+**Pinned by** `scripts/tests/test_release.py`'s `Workflow` cases, which
+hold the publishing job to being skipped on a rehearsal, to taking the
+archives' artifacts alone and to pushing nowhere but the registry, and the
+`images` job to the layout.
+
+### D1707 — The flake's default package is the release archive where a release covers the system
+
+**The tour said** nothing. The README's `nix profile install
+github:701-dev/Landin` installed the flake's default package, the source
+build, which fetches the pinned toolchain and compiles for minutes; the
+flake's `refine-bin`, the same release archive the other routes install,
+was named nowhere a reader looks, and the flake had no `apps`, so `nix run`
+had nothing to run.
+
+**Chosen:** `packages.default` is `refine-bin` on a system whose release
+hash the flake records, which is all three today, and `refine` elsewhere;
+`refine` stays the source build by name. `apps.default` runs `bin/refine`
+from the default package, so `nix run github:701-dev/Landin -- ARGS` runs
+the released compiler. The README gives `nix profile install`, `nix run`
+and the source build's `#refine`. The default follows `releaseVersion`,
+so between a release's tag and the commit that records its hashes it
+installs the previous release, which is what a reader asking for the
+compiler wants; a checkout's own compiler is `.#refine`. The docs say
+`nix profile install`, which Nix 2.34 calls a deprecated alias of `add`,
+because `add` is unknown to the Nix versions before it that readers still
+run.
+
+**The alternatives:** keeping the source build as the default and naming
+`#refine-bin` in the README, which keeps the slow route the one a reader
+types without thinking; and `apps` that build from source, which makes
+`nix run` take minutes the first time.
+
+**Pinned by** `scripts/nix_route.py`, run in the gate's `flake-compiler`
+job: `nix profile install .` must install the `refine-bin` store path and
+report its version, `nix run . -- run main.ldn` must print the first
+program's output, and `.#refine` must be a different derivation, which the
+same job builds; `scripts/tests/test_nix_route.py` holds its refusals.
+
+### D1747 — The install script installs one release archive into one directory, by the archive's own checksum
+
+**The tour said** nothing. The roadmap asked for a script a reader pipes
+from `curl` into `sh` that installs the release archive for the host, and
+left where it installs, what it does to a directory already there and
+which hosts it refuses to the item that wrote it.
+
+**Chosen:** `install.sh`, in the repository and served unchanged at
+`https://www.701.dev/install.sh`, the address the maintainer chose, is POSIX `sh` needing `curl`,
+`tar` and `sha256sum` or `shasum`. It names the archive
+`landin-VERSION-PLATFORM.tar.gz` by the release workflow's names, finds
+the newest release by following GitHub's `releases/latest` redirect to its
+tag, or takes `--version`, and refuses an archive whose digest is not the
+one its `.sha256` names. It unpacks into `--dir`, by default
+`$HOME/.landin`, a directory holding only that install, which a later run
+replaces whole once the new one is unpacked beside it; a directory that
+holds anything else is refused. It edits no shell profile and runs nothing
+as root: it prints the `export PATH` line and the driver `refine run`
+links with. It refuses a host no archive serves, Linux without glibc's
+loader and NixOS, whose loader path is a stub, among them, and names nix
+and the source build there. When `gh` is installed it prints the commands
+that check the archive's attestation, and does not run them. `--platform`
+names the archive for another host and `--list` prints the names a release
+publishes for every platform. `LANDIN_RELEASES` names another place
+releases are served from, which is how the gate serves its own archive.
+
+**The alternatives:** installing into `/usr/local` or another system
+directory, which needs root and mixes with the system's files; keeping
+earlier versions side by side under the directory, which nothing selects
+between yet and a build tool will own; appending to a shell profile,
+which changes a file the reader did not name; the GitHub API for the
+newest release, which is rate-limited without a token; and running
+`gh attestation verify` itself, which needs a login a fresh machine does
+not have.
+
+**Pinned by** `scripts/install_check.py`, run in the gate's `release`,
+`arm64-release` and `darwin-host-release` jobs against each host's
+packaged compiler served from 127.0.0.1 as a release is: the newest and a
+named version installed and running the first program, a reinstall, a
+foreign directory, a damaged archive, a missing version and two unserved
+hosts refused; `scripts/tests/test_install_script.py` runs the same cases
+against a stand-in archive and holds the script's names to
+`release.yml`'s.
 
 ### D571 — A round's yield calls nothing beneath it but its sweep, its idler and its switch
 

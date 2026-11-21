@@ -104,7 +104,7 @@ what they were.
 
 No build manifest is submitted. GitHub is canonical and git.sr.ht is a mirror,
 kept in step by a second push URL on the same remote (the
-[gate reference](process.md#the-mechanical-gate) says what the mirror holds
+[integration recipe](process.md#integration-publication-and-ci) says what the mirror holds
 and how a deletion reaches it); the Pages and
 GitHub-mirror manifests are retired with the SourceHut gate, and
 `scripts/site.sh` renders and packages without publishing.
@@ -267,9 +267,14 @@ wrong in it — the same source builds in release natively and on the x86-64
 gate. This is written down because the message reads exactly like a compiler
 defect in one file and cost an investigation once already.
 
-`environments/linux-amd64/Containerfile` pins its base image by digest and
-verifies both Ada toolchain archives against the checksums in
-`environments/pins.sh` before unpacking either of them. It also installs the
+`environments/images/contributor.Containerfile`, the contributor image's
+recipe (D1668), pins its base image by digest and installs GNAT and GPRbuild
+through `environments/pins.sh`'s `landin_install_toolchain`, which verifies
+both archives against their checksums before unpacking either of them, for
+the platform it is built for: `scripts/linux-loop.sh` builds it for
+`linux/amd64`, and the release workflow for amd64 and arm64, publishing it
+as `ghcr.io/701-dev/landin-contributor` at each release. Its build context
+is `environments/`, so the recipe can copy `pins.sh` in. It also installs the
 versioned Debian stable `clang-19` package beside `libc6-dev` for C header
 extraction and generated-adapter tests. The frontend is deliberately separate
 from the pinned GNAT that builds `refine`: Clang supplies an external JSON AST,
@@ -350,7 +355,10 @@ GNAT 16.1.0 with GPRbuild 26.0.0.
 It is defined for the three systems the pins carry checksums for,
 `x86_64-linux`, `aarch64-linux` and `aarch64-darwin`. The prebuilt
 `.#refine-bin` exists for a system a release has published an asset for,
-with its hash recorded in the flake; since 0.2.10 that is all three. The
+with its hash recorded in the flake; since 0.2.10 that is all three. Where
+it exists it is the default package, which `nix profile install` and
+`nix run` take, and `.#refine` is the source build by name; elsewhere the
+source build is the default (D1707). The
 aarch64-linux and aarch64-darwin outputs are evaluated on x86-64 by the gate's `flake` job, and only the
 x86-64 ones are built there (D585); the aarch64-linux shell is not yet built
 on arm64 hardware. That job is the whole of Nix CI.
@@ -358,7 +366,7 @@ on arm64 hardware. That job is the whole of Nix CI.
 Both packages install the standard library beside the compiler, as
 `lib/landin/{core,hosted,platform}` next to `bin/refine`, and `refine` finds
 it there from its own executable, so a program anywhere imports it with no
-option. `.#refine-bin` fetches 0.2.10. Archives hold the library from 0.2.8
+option. `.#refine-bin` fetches 0.2.11. Archives hold the library from 0.2.8
 on; an archive from 0.2.7 or earlier holds `refine` alone.
 
 Outside nix, the same archives are installed by Homebrew,
@@ -368,7 +376,7 @@ the maintainer's tap, outside this repository and its gate, and needs the
 Xcode command-line tools on macOS and the system's GCC driver on Linux to
 link, as an unpacked archive does. What the formula depends on in a
 release, and the step that moves it, are in
-[the gate reference](process.md#the-mechanical-gate)'s release paragraphs.
+[the installers](process.md#the-installers).
 
 The shell sets `LANDIN_BUILD_TAG=nix-${system}`: `nix-x86_64-linux`,
 `nix-aarch64-linux` or `nix-aarch64-darwin`. Shells sharing a checkout
@@ -615,5 +623,5 @@ GDB/LLDB; no Cortex debugger session replaces a native one. See the
 
 Through 0.2.0 a controller under the removed `scripts/ci/` accepted each
 revision on a native Linux runner and a Mac against one archive; the
-[native acceptance operations](../environments/native-ci/README.md) and the
-historical sections of the [validation workflow](process.md) describe it.
+[native acceptance operations](../environments/native-ci/README.md) describe
+it, and the history of `docs/process.md` holds how its scope was chosen.

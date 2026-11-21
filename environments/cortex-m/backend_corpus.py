@@ -77,8 +77,15 @@ def inventory():
             require(old in source, 'stale counterpart source difference: ' + name)
             source = source.replace(old, new)
         expected = '-- Cortex-M0 counterpart: the original hosted fixture remains unchanged.\n' + source
-        require((COUNTERPARTS / 'cases' / name / 'main.ldn').read_text() == expected,
-                'unreviewed counterpart change: ' + name)
+        case = COUNTERPARTS / 'cases' / name / 'main.ldn'
+        if case.read_text() != expected:
+            require(False,
+                    'unreviewed counterpart change: %s: %s is the header line'
+                    ' and compiler/tests/fixtures/runtime/%s/main.ldn with the'
+                    ' replacements counterparts.json lists for it; when the'
+                    ' hosted fixture changed, review that the replacements'
+                    ' still say what the counterpart changes and write the case'
+                    ' from them' % (name, case, name))
     hosted = []
     for name, row in rows.items():
         require(row['mode'] in ('execute', 'refuse', 'restriction'), 'unknown corpus disposition')

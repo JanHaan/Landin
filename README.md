@@ -4,7 +4,7 @@
 > 32 TB*. Move fast, keep the pointers, and let the compiler tell you
 > when you are being an idiot.
 
-**Status: specification 0.2.11. Landin programs build and run on Linux,
+**Status: version 0.2.11. Landin programs build and run on Linux,
 macOS and FreeBSD, and firmware builds for Cortex-M, RV32 and windowed Xtensa.**
 
 The language is pre-v1 and still growing. Its compiler, `refine`, runs
@@ -42,12 +42,46 @@ application is at the other. This is what it is like to write:
 
 ## Installing
 
-`refine` is one executable, with its standard library in a directory
-beside it. There are four ways to get both: with Homebrew, from a release,
-with nix, or from source.
+`refine` is Landin's compiler, and the command you run for everything else
+too: checking, running and compiling programs, formatting source, and the
+language server and debug adapter your editor starts. An install gives you
+`refine`, a few further commands you run through it, and Landin's standard
+library. There are six ways to get it: with the install script, with
+Homebrew, from a release, in a container, with nix, or from source.
 
 Use 0.2.9 or later: [the first program](#your-first-program) needs
 `refine run` and `hosted/blocking`, both newer than 0.2.8.
+
+### With the install script
+
+On Linux x86-64 or arm64 with glibc, or on a Mac with Apple Silicon:
+
+```sh
+curl -fsSL https://www.701.dev/install.sh | sh
+```
+
+It downloads the newest release's archive for your platform, the one
+[From a release](#from-a-release) describes, checks it against the
+`.sha256` published beside it and unpacks it into `~/.landin`. It edits
+none of your files and needs no root: it prints the line that puts
+`~/.landin/bin` on your `PATH`, which you add to your shell's startup
+file. Run it again to replace that install with the newest release.
+
+Options follow `sh -s --`. To install a named release into a directory
+of your choosing:
+
+```sh
+curl -fsSL https://www.701.dev/install.sh | sh -s -- --version 0.2.11 --dir ~/opt/landin
+```
+
+`--help` lists the options. The script is
+[`install.sh`](install.sh) in this repository, served unchanged; read it
+before you run it if you like. It refuses a host no archive serves,
+NixOS, musl distributions, Intel Macs, FreeBSD and Windows among them,
+and names nix and the source build instead. With the GitHub CLI installed
+it also prints the commands that check the archive's attestation, as
+[From a release](#from-a-release) describes. To remove the install,
+delete `~/.landin`.
 
 ### With Homebrew
 
@@ -118,19 +152,114 @@ The archive leaves the compiler's debug information out and publishes it
 beside it as `landin-VERSION-PLATFORM-debug.tar.gz`. You need that file
 only to read a crash of the compiler itself.
 
+### In a container
+
+Each release publishes an image on GitHub's container registry,
+`ghcr.io/701-dev/landin:VERSION`. The tag is the release's version without
+the `v`: release `vVERSION` is tag `VERSION`. There is no `latest` tag, so
+name the version. Each tag holds Linux amd64 and arm64, and Docker or
+Podman picks the one for your host. Images start with the first release
+after 0.2.11; 0.2.11 and earlier have none.
+
+The image is Debian 13 with the release archive for its platform unpacked
+in `/usr/local`: `refine` in `/usr/local/bin`, its commands in
+`/usr/local/libexec/landin` and the library in `/usr/local/lib/landin`. It
+also holds Debian's `gcc` and `libc6-dev`, which `refine` links with.
+
+Its working directory is `/work`. Mount your directory there and run as
+your own user, so the files `refine` writes are yours:
+
+```sh
+docker run --rm -v "$PWD:/work" --user "$(id -u):$(id -g)" \
+  ghcr.io/701-dev/landin:VERSION refine run main.ldn
+```
+
+Compile and run a program the same way: give `refine compile main.ldn -o main`
+as the command, and then `./main`. `podman` takes the same arguments.
+
+With no command the image runs `refine version`, whose `library: ` line
+then says `/usr/local/lib/landin`.
+
+The release workflow attests each image. With the GitHub CLI, check one:
+
+```sh
+gh attestation verify oci://ghcr.io/701-dev/landin:VERSION --repo 701-dev/Landin \
+  --signer-workflow 701-dev/Landin/.github/workflows/release.yml \
+  --source-ref refs/tags/vVERSION --deny-self-hosted-runners
+```
+
+The image links only for Linux on its own architecture. It holds no
+toolchain for firmware (Cortex-M, RISC-V, Xtensa) or for the other Linux
+architecture. Add one from Debian in an image of your own, for example for
+Cortex-M:
+
+```dockerfile
+FROM ghcr.io/701-dev/landin:VERSION
+RUN apt-get update \
+ && apt-get install --no-install-recommends --yes gcc-arm-none-eabi libnewlib-arm-none-eabi \
+ && rm -rf /var/lib/apt/lists/*
+```
+
+`refine` also finds these Debian packages:
+
+- `gcc-riscv64-unknown-elf`, for RV32 firmware;
+- `gcc-aarch64-linux-gnu` and `libc6-dev-arm64-cross`, to link Linux
+  arm64 programs on amd64;
+- `gcc-x86-64-linux-gnu` and `libc6-dev-amd64-cross`, to link Linux
+  amd64 programs on arm64.
+
+Espressif's Xtensa compiler is not in Debian; it comes from Espressif.
+When a driver is missing, `refine`'s error names the package to install.
+
+To debug inside a container, install `gdb` the same way. It needs no
+extra capability. It warns that it cannot turn off address randomisation,
+which Docker's default security profile refuses, so a program's addresses
+can differ from one run to the next.
+
+An image moves only at a release: the Debian packages inside are the ones
+of the day the release was built.
+
+A second image, `ghcr.io/701-dev/landin-contributor:VERSION`, is for
+building the compiler itself. See
+[Building and checking](#building-and-checking).
+
 ### With nix
 
-This command builds `refine` from source and puts it on your `PATH`. The
-first build also fetches the pinned toolchain, which takes a few minutes:
+This command installs the prebuilt compiler and puts `refine` on your
+`PATH`:
 
 ```sh
 nix --extra-experimental-features 'nix-command flakes' \
     profile install github:701-dev/Landin
 ```
 
+It works on Linux x86-64, Linux arm64 and macOS arm64. It fetches the
+latest release archive, about 17 MB, and compiles nothing, so it takes
+seconds.
+
 You can leave the `--extra-experimental-features` option out once
 `experimental-features = nix-command flakes` is in `~/.config/nix/nix.conf`.
-In a clone, `nix build .#refine` builds the same into `result/`.
+
+To run `refine` without installing it, use `nix run`. Everything after
+`--` goes to `refine`:
+
+```sh
+nix run github:701-dev/Landin -- version
+nix run github:701-dev/Landin -- run main.ldn
+```
+
+The second line runs [the first program](#your-first-program).
+
+To build from source instead, for example to get unreleased changes from
+main, install `#refine`. The first source build also fetches the pinned
+toolchain, which takes a few minutes:
+
+```sh
+nix profile install github:701-dev/Landin#refine
+```
+
+In a clone, `nix build .#refine` builds the checkout into `result/`, and
+`nix build` alone fetches the release.
 
 ### From source
 
@@ -463,6 +592,19 @@ nix develop                  # or set LANDIN_GNAT_HOME and LANDIN_GPRBUILD_HOME
 ./scripts/test.sh            # the complete suite, on Linux
 ./scripts/dev-test.sh --suite='fixture execution'   # a FILTERED run while editing
 python3 check.py             # the mechanical checks over documents and fixtures
+```
+
+Without nix, the contributor image of a release,
+`ghcr.io/701-dev/landin-contributor:VERSION`, holds the GNAT and GPRbuild
+that release's `environments/pins.sh` names, already set up, with
+`python3`, `git`, Clang and GDB, for Linux amd64 and arm64. Use the image
+of the release whose pins your checkout has, and give its objects a build
+tag of their own:
+
+```sh
+docker run --rm -v "$PWD:/work" --user "$(id -u):$(id -g)" -e HOME=/tmp \
+  -e LANDIN_BUILD_TAG=image ghcr.io/701-dev/landin-contributor:VERSION \
+  ./scripts/build.sh --compiler-only
 ```
 
 `check.py` is not a parser. It is the set of invariants that are cheap to

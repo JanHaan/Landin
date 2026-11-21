@@ -35,9 +35,9 @@ test program like any fixture's.
 A firmware workload's size is measured on the image `refine` itself links,
 with the entry `compiler/tests/measure/entry.ldn` that runs the fixture's
 `main` and keeps its status: at the target's reference profile, the one a
-program importing no description gets, except on Xtensa, whose reference
-gives initialized data no load address at boot, so its workloads link
-against the ESP32's and the ESP32-S3's own descriptions, the boards'. Its
+program importing no description gets, except on Xtensa, whose workloads
+link against the ESP32's and the ESP32-S3's own descriptions, the boards'
+whose cycles the timing runs count. Its
 time is measured on the image the timing lane runs: an emulator lane's own
 profile, or a board's RAM layout.
 
@@ -245,9 +245,11 @@ The instruction counts, exact and a few minutes each, run on every push
 too: RV64's in the same job, Cortex-M's in the `cortex-m` job, which has
 the lanes' tools. Wall time and board cycles run on the weekly schedule
 and on a dispatch, `scope=boards` included, in timing jobs beside the
-boards. The pilot over the whole matrix, recorded in
+boards, unless a passed dispatch on the branch already timed the same key
+over the same base (D1649). The pilot over the whole matrix, recorded in
 `compiler/tests/measure/pilot.json`, gives each job's minutes, the jobs it
-adds against the limit it ran under, 20 concurrent jobs and 5 macOS, and
+adds against the limit it ran under, 20 concurrent jobs and 5 macOS (60
+and 15 since 2026-11-20), and
 each class's noise, before any tolerance is enforced.
 
 ## Reports

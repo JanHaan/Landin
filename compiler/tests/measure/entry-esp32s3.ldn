@@ -1,6 +1,6 @@
 --  The firmware entry a measured Xtensa workload is linked with, on the
---  chip its board runs it on (docs/measurement.md): the Xtensa reference
---  description has no load address for initialized data at boot.
+--  chip its board runs it on (docs/measurement.md), the board whose cycles
+--  the timing runs count.
 import descriptions/esp32s3
 
 mut observed: i32 = 0

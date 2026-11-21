@@ -238,8 +238,8 @@ also says where a program's compile time goes among its sources, and gives
 the build and depth reports one name for each frame quantity. A measured code-quality cost attributable to
 assembly's fixed memory effect is recorded against `SR-09` before any narrower
 effect is proposed. Its ranked list answers the activations of SR-231,
-`SR-387`, SR-596, SR-869 and SR-1023, and measures x86-64's two-instruction
-reach of a thread instance. This takes on `SR-996` and SR-275, and carries the
+`SR-387`, SR-596, SR-869 and `SR-1023`, and measures x86-64's two-instruction
+reach of a thread instance. This takes on `SR-996` and `SR-275`, and carries the
 fresh-copy requirement. The instruction count under emulation is the
 per-routine cost report `SR-1267` asked for.
 
@@ -281,7 +281,7 @@ timed again. `compiler/tests/measure/findings.md` is the ranked list:
 arm64's allocator unused at `size`, RV64's far jumps, Cortex-M's homes
 addressed through r6, then allocation. `SR-09` and `SR-1267` are settled;
 SR-596, SR-869, SR-231, `SR-996`, `SR-577`, SR-583 and `SR-1268` are R16.20's;
-SR-275, `SR-387` and SR-1023 are restated with their figures, and SR-1302
+`SR-275`, `SR-387` and `SR-1023` are restated with their figures, and `SR-1302`
 records the Xtensa reference's boot layout. Findings fixed on the way: the
 stack report names its frame quantities as the build report does (D1380),
 the stage report gives each source's scanning and parsing (D1381), and an
@@ -325,7 +325,7 @@ modes agree and the scaling bound holds. The candidate passed its
 [gate](https://github.com/JanHaan/Landin/actions/runs/44407003576) and
 [boards](https://github.com/JanHaan/Landin/actions/runs/44413857908).
 R16.21 to R16.24 took the other backends and their rows, `SR-586` and
-SR-1302 among them. Findings fixed on the way: LLDB's `GetValueAsSigned`
+`SR-1302` among them. Findings fixed on the way: LLDB's `GetValueAsSigned`
 read a zero-extended `i32` in a register whole, so the Darwin sessions read
 integers at their type's width; a failed Darwin LLDB session keeps its
 transcripts; a wall pair whose candidate image is the base's is no longer
@@ -382,7 +382,7 @@ Findings fixed on the way: the RV64 GDB session's source still assumed a
 dead argument stays readable, and is now the LLDB lanes' source, whose
 argument is read after the call; `runtime/directory-memory` now fits the
 RV32 lanes' 32 KiB and at `size` overruns their 4 KiB stack, recorded as a
-D698 lane limit. SR-1363 files what remains largest, selection's flag
+D698 lane limit. `SR-1363` files what remains largest, selection's flag
 emulation, 22% of RV64's instructions.
 
 ### R16.22 — Cortex-M register allocation
@@ -445,7 +445,7 @@ does not change.
 
 ### R16.23 — Xtensa selection
 
-Status: planned
+Status: complete
 Depends on: R16.10
 
 Xtensa's backend writes RISC-V-form words that its machine layer keeps in
@@ -454,13 +454,50 @@ instructions in `in_set` are `l32i` and `s32i` through the frame, and the
 report share is 53.5% at xtensa-esp32. An allocator over the RISC-V form
 does not remove that class. This item either selects natively from the IR,
 placing values as D1403 says, or records why Xtensa is left out. It takes on
-SR-1024's frame budget, SR-1178's test of the outgoing area D1110 counts and
-SR-1302's boot layout of the reference description.
+`SR-1024`'s frame budget, `SR-1178`'s test of the outgoing area D1110
+counts and `SR-1302`'s boot layout of the reference description.
 
 Exit evidence: the ESP32 and ESP32-S3 images measured smaller than their
 R16.10 baselines and their cycles no slower, with unchanged behavior and the
 board records made again; or the reason Xtensa is left out recorded with its
 measurement.
+
+Done: Xtensa places the words of every routine without an assembly block
+over the routine's own text (D1627). The emitter keeps its walk of the IR
+and its RISC-V-form words and gives each scalar value and each slot no
+address reaches a word of its own; the machine layer computes the words'
+liveness, joins their definitions into webs and places them by linear scan
+in a2-a6, which a call preserves, and a10-a15, the rest in their homes.
+Before placing it folds a word set once to a number into the `mul`, `add`,
+`divu` or `remu` that reads it, so a division or remainder by a power of
+two is a shift or a mask, which takes the Xtensa half of `SR-1429`, now
+restated for RISC-V alone; it drops what nothing reads and makes a flag
+and its zero test one branch; and a comparison only its branch reads is
+that branch (D1628). A routine of more than 150,000 lines, or whose text
+the analysis cannot follow, is selected word by word as before. Over the
+firmware set every image is smaller at every profile and both levels,
+`.text` 0.37 to 0.76 of R16.10's; the report share of stack loads and
+stores at xtensa-esp32 speed-auto is 11.1% against 53.5%, and the firmware
+mandelbrot's `in_set` 121 instructions against 545, 30 of them stack loads
+and stores against 414. On the boards every configuration runs faster: the
+ESP32 0.18 to 0.68 of R16.10's cycles and the ESP32-S3 0.17 to 0.67,
+mandelbrot, whose doubles are libgcc's, gaining least. The ESP32's and
+ESP32-S3's RAM and boot records were made again on the rig, and both chips'
+complete corpus lanes, native controls, boundaries and ABI peers pass.
+`SR-1024`: the frame budget counts no saves, the window making them, and
+the RISC-V save set is gone. `SR-1178`: a unit case holds a prepared
+stack's check to the outgoing area, and a negative fixture a firmware entry
+whose area alone exceeds the reference's stack. `SR-1302`: the measurement
+reads an Xtensa image as its loader writes it, as D1359 has it, so the
+reference's boot layout is measured, and an image it cannot measure is
+refused naming the segment, symbol or line it met (D1629). SR-1433 files
+the frame placement leaves: a bank and a home for every word. Findings
+fixed on the way: a lane's relative `--refine` was run from another
+directory, so `measure.py size` failed with a traceback; it is now made
+absolute where it is given; and the parser suite gave its one-file host
+the firmware library only for Cortex-M. The candidate passed its
+[gate](https://github.com/701-dev/Landin/actions/runs/44846399913) and
+[boards](https://github.com/701-dev/Landin/actions/runs/44849434198).
 
 ### R16.24 — The hosted backends' remaining costs
 
@@ -500,7 +537,7 @@ SR-1422 the nine registers x86-64 offers, SR-1423 the assembly block's
 rule, SR-1424 float constants made in each block, SR-1425 a loop's two
 jumps, SR-1426 the order D339 copies in, and R551-12 keeps the bounds
 check a loop's end does not name and the calls of `core/atomic`'s cells;
-SR-1427, SR-1428 and SR-1429 record what the work met, and SR-1430 the
+SR-1427, SR-1428 and `SR-1429` record what the work met, and SR-1430 the
 STM32H753's binary-search, 9.7% slower at size where the RP2040 and
 RP2350 run every configuration faster. Findings fixed on
 the way: the public exposure above, and a dead shift kept as if it could
@@ -512,14 +549,14 @@ included.
 
 ### R16.25 — RISC-V's remaining costs
 
-Status: planned
+Status: complete
 Depends on: R16.10
 
 After R16.21's allocation (D1503) the largest RISC-V cost is selection's
-emulation of Arm's condition flags, SR-1363: copies into x20 and x21 before
+emulation of Arm's condition flags, `SR-1363`: copies into x20 and x21 before
 every comparison and a carry and overflow computed for every addition, 22%
 of RV64's instructions over four hosted workloads, and five registers kept
-from the allocator. This takes on SR-1363 and SR-637, RV32's frames
+from the allocator. This takes on `SR-1363` and `SR-637`, RV32's frames
 reserving a home for every scratch register a routine might save, which
 R16.21 left as it was.
 
@@ -528,21 +565,82 @@ than their R16.21 baselines, RV32's frames no larger than their saves need,
 with unchanged behavior, ABI and debugger evidence and the board records
 made again.
 
+Done: D1687 copies no comparison: the branches after a check read its
+operands where they are, a comparison's result is `slt`, `sltu`, `seqz`
+or one float comparison, and a carry or overflow is computed only for a
+checked sum, into x30, so x20, x21 and x23-x25 are offered to the
+allocator. D1688 lays a routine's frame out again for the callee-saved
+registers its text names, at both XLENs, which takes `SR-637` and stops
+RV64 saving ten registers a routine. `SR-1429`, whose activation was this
+item's start, is D1689: an unsigned division by a constant power of two
+is a shift or a mask, and a remainder `rem` or `remu`. Against the base,
+RV64's `.text` falls 20.5% at `none`, 26.3% at `size` and 24.3% at
+`speed`, RV32's 5.9-6.2%, 9.3-10.1% and 9.9-10.8%, and RV64 executes 0.73
+of its instructions at `speed`, 0.68 at `size` (fasta 0.56,
+fannkuch-redux 0.59, mandelbrot 0.71, binary-trees 0.75 at `speed`); the
+lines naming the old flag registers fall from 22% to 1.1-1.4%, now held
+values. On the ESP32-C3, ESP32-C5 and Pico 2's Hazard3 all 162 timed
+configurations are faster, the integer workloads by 25-34% at
+speed-auto, SipHash by 15% and mandelbrot by 2%, and their six records
+were made again. The RV64 fixtures under QEMU, the RV32 lanes and the
+stack report pass; three corpus programs now fit the RV32 lanes at
+`none`, and their D698 limits are removed. Found on the way and fixed: a
+first draft computed a checked sum's carry into the register the sum was
+held in, which `Holds` cannot see, since a write after an operation's
+own result at its position looks like the result's; the measurement's
+oracles caught it, and selection's temporaries are now never offered.
+Filed: SR-1468, an `if`'s comparison computed into a register before its
+branch; SR-1465-SR-1467 record the friction met.
+
 ### R16.26 — The library's costs
 
-Status: planned
+Status: complete
 Depends on: R16.10
 
 R16.10 measured costs the library imposes rather than code generation: a
 `list` grown by allocate and copy where the text builder grows by `resize`
-(SR-275), and on Cortex-M0 `text.format` against `text.append` and
-`core/mem`'s byte loops (SR-1023), with the erased table, `diag.stream`
+(`SR-275`), and on Cortex-M0 `text.format` against `text.append` and
+`core/mem`'s byte loops (`SR-1023`), with the erased table, `diag.stream`
 and `core/README.md`'s Cortex-M size rows not yet measured. This takes on
-SR-275 and SR-1023.
+`SR-275` and `SR-1023`.
 
 Exit evidence: each cost measured, and either lowered against its R16.10
 baseline or recorded with its measurement, with the counter fixtures it
 changes re-decided.
+
+Done: D1727 grows a storage that holds a block through one call to the
+provider's `resize`, so `hosted/heap` moves a large list's pages rather
+than copying its bytes: R16.10's 4,000 appends of 64 KiB on x86-64 take
+190 ms through `vec.append_bytes` against 383 ms at the base, with 12
+`mremap` calls instead of 12 `mremap`, 13 `mmap` and 13 `munmap`, and the
+growing builder's 163 ms; an append of the list's own bytes reads them at
+the same offset in the grown block (D1122 amended), so no image links two
+ways of growing; this takes `SR-275`. A growth through
+`core/fault`'s injector is now one attempt and one success, and the
+fourteen fixtures and the derived containers' workload that pinned its
+counters were rewritten for it; one fixture's provider, which only moved
+on `resize`, now grows in place first, as the concept now says a provider
+that can should. `SR-1023`'s costs, measured again at its
+configurations after the register allocation work, had already fallen:
+the format line is 7,020 bytes and 3,889 instructions against 4,480 and
+2,259 through `append`, and the byte loops execute 35 instructions a byte
+at speed-auto, not 118. Word loops would take 10 instructions a byte on a
+4 KiB copy at 1.8 KB more flash, but a program copying short text runs 17%
+more instructions with them, so firmware keeps its byte loops, recorded
+with these figures in `core/mem/blocks.ldn`. An erased table links only
+the entries something projects, and `diag.stream` adds 3.2 KB and 1,000
+instructions to the four writes of one note, most of it the decimal
+position; recorded. Every Cortex-M size in `core/README.md` was measured
+again and corrected, about half what it said, and so were the corpus
+records of `runtime/network-addresses`, which now fits at size/auto, and
+`runtime/library-map-reserve-rollback`, which fits at size/auto and runs;
+this takes `SR-1023`. The k-nucleotide shape's map probe, 2.5 M 12-mers
+counted in a `u64` map, takes 2.45 s on x86-64, 39% in `rehash`, 27% in
+`locate` and 8% in SipHash, `locate`'s time on the loads after its bucket
+and key misses: the map's layout rather than its instructions, recorded in
+`compiler/tests/measure/findings.md` for the port. Found on the way and
+fixed: the Cortex-M lane's "unreviewed counterpart change" now says how a
+counterpart case is made from its hosted fixture.
 
 ### R16.27 — Cortex-M's remaining selection
 
@@ -555,7 +653,10 @@ levels' own registers and forms: SipHash and mandelbrot still spend about
 two fifths of their instructions on homes, and r8, r10 and r12 hold nothing.
 This takes on SR-581's high registers, SR-582's CBZ and CBNZ, SR-583's
 bitfield instructions, SR-596's float selection in VFP registers, SR-869's
-short `u64` routines on armv6-m and SR-231's atom `match` arms.
+short `u64` routines on armv6-m and SR-231's atom `match` arms, and SR-1430, the STM32H753's binary-search and merge-sort running
+more cycles after R16.24 while the M33 ran them faster: the cause found and
+the configurations no slower than R16.22's figures, or the cause recorded
+with its measurement.
 
 Exit evidence: each cost taken measured lower than its R16.10 baseline and
 R16.22's figures, the cycles on the boards no slower, with unchanged
@@ -599,7 +700,7 @@ Done: every moved row typed, the rows-to-be filed as `SR-1282` to `SR-1298`,
 `scripts/register_next.py` with its controls, and `check.py` refusing a
 register over its cap or a row past its age in controls. The maintainer's
 answers to Q-1 to Q-5 retired 43 rows and scheduled `SR-195` and `SR-768` on
-R17.50, SR-1178 on R16.20, SR-1237 on R19.10 and C3 on R20.10; a rig fix
+R17.50, `SR-1178` on R16.20, SR-1237 on R19.10 and C3 on R20.10; a rig fix
 rooting the GPIO shell retired one more, leaving 57 open with R17.50's
 fixes merged. The retired rows' standing facts moved to
 `docs/capabilities.md`, `docs/targets.md` and `devices/README.md`.
@@ -2017,7 +2118,7 @@ the first such item writes the whole recipe down.
 
 ### R23.10 — Container images on releases
 
-Status: planned
+Status: complete
 Depends on: none
 
 Two images under `ghcr.io/701-dev`, for Linux amd64 and arm64 in one
@@ -2048,9 +2149,34 @@ image step, and how to check a published image, written in
 `docs/process.md`. The first published images are the next release's
 evidence, not this item's.
 
+Done: `environments/images/user.Containerfile` unpacks a Linux
+release archive into `/usr/local` over Debian 13's own `gcc` and
+`libc6-dev`, whose driver names `refine` already asks for, so no
+`libexec/landin/<triplet>-gcc` link is made (D1667);
+`environments/images/contributor.Containerfile`, the former
+`environments/linux-amd64/Containerfile`, installs the toolchain through
+`pins.sh` for amd64 or arm64 and names no version, and `check.py` holds
+both recipes to the pins (D1668). `scripts/container_image.py` builds,
+checks, saves and publishes both; the gate builds the user image from its
+packaged compiler in `outside-user-stock` and `arm64-release` and runs
+the first program in it as the README says. `release.yml` builds and
+checks both images, the contributor one by building the compiler inside
+it, and assembles each into one two-platform index before the approval,
+then pushes and attests them after the release is public, tagged with the
+version alone (Q-65's default); a `rehearse` dispatch runs all of it on
+any ref and publishes nothing (D1669). Rehearsal run 44823357861 on
+bddf062e7 is the run whose push is withheld; its two predecessors found
+that an untagged commit's compiler is `refine dev` and that podman could
+not push a list made from loaded archives, now assembled with skopeo. It
+also measured that GDB in the user image stops at `main` without
+`--cap-add=SYS_PTRACE`, which then only leaves the address-randomisation
+warning in place, so the README says that instead. `docs/process.md`
+writes the whole release recipe down in a section of its own, image step
+and published-image checks included. Gate run 44823246775 on bddf062e7.
+
 ### R23.20 — Nix installs the prebuilt compiler
 
-Status: planned
+Status: complete
 Depends on: none
 
 `nix profile install github:701-dev/Landin` builds `refine` from source,
@@ -2069,9 +2195,24 @@ documentation giving both commands; the release recipe's flake-hash step
 in `docs/process.md` checking `nix run` against the newly published
 archives before that commit is promoted.
 
+Done: the flake's default package is `refine-bin`, the release archive,
+on every system whose release hash it records, all three today, and the
+source build stays `#refine`; `apps.default` runs `bin/refine` from the
+default, so `nix run github:701-dev/Landin -- ...` runs the released
+compiler (D1707). The README gives `nix profile install`, `nix run` and
+`#refine`, and keeps `profile install`, which Nix 2.34 calls an alias of
+`add`, because older Nix has no `add`. `scripts/nix_route.py` installs the
+flake into a scratch profile and holds it to the `refine-bin` store path
+and version, runs the first program through `nix run`, and refuses a
+`#refine` that is not the source build; the gate's `flake-compiler` leg runs it after building both
+packages, and `test_nix_route` holds its refusals. The release recipe's
+flake step runs it on the branch that moves the hashes and checks
+`nix run github:701-dev/Landin -- version` once that is on `main`. Gate
+run 44873069309 and boards run 44875115933 on the merged tree 9e62c8b88.
+
 ### R23.30 — A one-line install script
 
-Status: planned
+Status: complete
 Depends on: none
 
 A script a user pipes from `curl` into `sh`: it names the release archive
@@ -2091,9 +2232,33 @@ installing documentation's command; the release recipe's step that checks
 the script's archive names against the assets the release workflow
 publishes, in `docs/process.md`.
 
+Done: `install.sh`, served unchanged at `https://www.701.dev/install.sh`
+(Q-66's answer), which the site's render copies from the repository,
+installs the host's release archive into `~/.landin` or `--dir`, the
+newest release or `--version`, after checking it against its `.sha256`;
+it replaces an earlier install whole, refuses a directory holding anything
+else, edits no shell profile, prints the `PATH` line and, when `gh` is
+installed, the attestation commands; it refuses a host no archive serves,
+NixOS and a Linux without glibc's loader among them, naming nix and the
+source build (D1747). `scripts/install_check.py` serves a packaged
+compiler from 127.0.0.1 in a release's layout and runs the script against
+it: the newest and a named version installed and running the first
+program, a reinstall, a foreign directory, a damaged archive, a missing
+version and two unserved hosts refused; the gate runs it in `release`,
+`arm64-release` and `darwin-host-release`, and
+`test_install_script` runs the cases against a stand-in archive and holds
+the script's names to `release.yml`'s. The README gives the command first
+among six routes, and the release recipe's check of the published
+release runs `install_check.py --published`, holding the names to the
+release's assets, and the documented command. Met on the way and fixed:
+the links check would race the Pages deployment on the push that
+publishes the script, so `lychee.toml` leaves that one address to the
+render and the recipe. Q-65 is answered too: version tags only. Gate run
+44896732794 and boards run 44898787764 on the merged tree fcd9ada74.
+
 ### R23.40 — Whether a static Linux `refine` can be built
 
-Status: planned
+Status: complete
 Depends on: none
 
 A Linux `refine` linked statically, against musl, would run on Alpine,
@@ -2109,22 +2274,50 @@ that passed the release test program if one was built; R23.50 confirmed or
 rewritten to match, or, if it cannot be done at a cost worth paying, a
 question asking the maintainer to retire it.
 
+Done: the pinned GNAT links `refine`, its four split commands and the
+test program statically against glibc with no source change: the GNAT
+runtime was static already, nothing calls the name service, `dlopen` or
+`iconv`, and the build only adds `-largs -static` or `-static-pie`. On
+Linux x86-64 both builds passed the whole release test program, 1279
+cases each. The arm64 build, made under emulation, passed the suites it
+reached before runtime fixture execution, which emulation could not finish;
+R23.50's gate job runs it natively. Both architectures' archives ran in
+Alpine 3.24's minirootfs with no glibc, the first program through Alpine's
+`gcc` and five `--link=libc` fixtures against musl. The archive grows
+3.7 %. musl would need a GNAT 16.1 toolchain built and maintained by the
+project, since none is published, for no reach static glibc lacks; the
+finding is `roadmap/inputs/static-linux-refine.md`, R23.50 is rewritten to
+it, and Q-116 asks whether the static archive replaces the glibc ones,
+defaulting to yes. Met on the way and fixed: the flake's `aarch64-linux`
+shell and `refine` package did not build, GPRbuild's arm64 archive wanting
+`libgmp.so.10`, which the flake now supplies. Rows SR-1515 to SR-1517 hold
+what outlives the item.
+
 ### R23.50 — A static Linux archive
 
 Status: planned
 Depends on: R23.10, R23.30, R23.40
 
-The release workflow publishes a static Linux archive for x86-64 and
-arm64 as R23.40 found it can be built, beside the glibc archives or in
-their place as that finding argues. The install script takes it on a
-musl host, and the user image takes it where it makes the image simpler.
+The release workflow publishes a Linux `refine` linked statically against
+glibc with `-static-pie`, for x86-64 and arm64, as R23.40 found it builds
+with the pinned toolchain and no source change
+(`roadmap/inputs/static-linux-refine.md`); a musl build is not attempted,
+since no published GNAT targets musl. The static archive replaces the glibc
+archives under their names or is published beside them as Q-116 answers.
+The install script takes it on a musl or NixOS host, and the user image
+takes it where it makes the image simpler. The archive carries glibc's
+licence and names the glibc it holds, and the build is refused when a
+static link prints glibc's warning that a call needs that glibc's shared
+libraries at run time.
 
 Exit evidence: a gate job that runs the packaged static compiler on
 Alpine and in an image with no C library of its own beyond the linker it
-needs, compiling and running the first program; the release test program
-passed by the static build; the install script choosing it on Alpine in
-its control; the archive in the installing documentation; the release
-recipe's step for it in `docs/process.md`.
+needs, compiling and running the first program and the `--link=libc`
+runtime fixtures against musl, or a row for each that does not run there;
+the release test program passed by the static build on both
+architectures; the install script choosing it on Alpine in its control;
+the archive in the installing documentation; the release recipe's step for
+it in `docs/process.md`.
 
 ### R23 gate
 Every route in the installing documentation and exercised by the gate or,

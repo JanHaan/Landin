@@ -3,10 +3,13 @@
 
 A lane's verdict depends on its checkout.  Four top-level documents are in
 every checkout and are read by no lane that builds or runs the compiler:
-`README.md`, `ROADMAP.md`, `handoff.md` and `AGENTS.md`.  `check.py` and the
-`scripts/tests` modules read them, and those jobs always run.  So two trees
-that differ only in the CONTENT of those four files give the compiler,
-target and determinism lanes the same inputs.
+`README.md`, `ROADMAP.md`, `handoff.md` and `AGENTS.md`; nor are the
+derived guides DOCUMENTS names under `docs/`, the trees CONTENT_FREE_TREES
+names, `roadmap/` and the site's renderer `docs/site/`, or the boards'
+cycles baselines.  `check.py` and the `scripts/tests` modules read them,
+and those jobs always run.  So two trees that differ only in the CONTENT
+of those files, or in anything under those trees or patterns, give the
+compiler, target and determinism lanes the same inputs.
 
 That alone does not make an edit explanatory: a sentence in these files can
 change a target, language, scope or acceptance claim, and such a change
@@ -22,8 +25,9 @@ pass is reused only when all of these hold:
     the key below covers the workflow that run executed and every tool
     pin, so a run of a weakened workflow can only be reused by a tree that
     still carries the weakened workflow, as with identical-tree reuse;
-  - the tree differs from the base only in the content of the four files,
-    so a path, a mode or any other byte runs everything;
+  - the tree differs from the base only in the content of those files and
+    in those trees and patterns, so another path, a mode or any other byte
+    runs everything;
   - the base is an ancestor of every tip, and every commit since the base,
     on each side of what is checked out -- the pushed commit, or both
     parents of a pull request's merge commit, so main-side commits merged
@@ -53,6 +57,8 @@ cannot ask has no pass to point at.
     same A B                        succeed only when A and B have one key
     reuse WORKFLOW JOB ...          print reuse=true or reuse=false, and why;
                                     each JOB is an exact job name
+    physical WORKFLOW               print boards-reuse, timing-reuse and the
+                                    runs they come from
     scope                           print whether this event runs the
                                     software lanes and the physical boards
     bundles DIR REFINE              write DIR's provenance.json and
@@ -60,11 +66,17 @@ cannot ask has no pass to point at.
     verdict [--evidence DIR] [--always JOB ...]
                                     judge the `needs` context in $NEEDS
 
-Physical evidence is never reused.  The board jobs run on a board-scope
-event -- a push to main, the weekly schedule or a manual dispatch, in
-this repository and not a fork of it -- whatever the software lanes do, and on every other event
-they must be skipped.  On a board-scope event a skipped, cancelled or
-failed board job fails the gate: missing physical evidence is not a pass.
+The board jobs run on a board-scope event -- a push to main, the weekly
+schedule or a manual dispatch, in this repository and not a fork of it --
+whatever the software lanes do, and on every other event they must be
+skipped.  On a board-scope event a skipped, cancelled or failed board job
+fails the gate: missing physical evidence is not a pass.  One pass stands
+in for it (D1647): main's push takes the boards of a passed run of a
+board-scope event on the identical tree, or on a base the explanatory
+rule above accepts, under a week old, every board job run and passed; the
+schedule and a dispatch always run them.  A dispatch's timing jobs are
+left out when a dispatch of the same key on its branch was timed and
+passed (D1649); the schedule always times.
 """
 from datetime import datetime, timedelta, timezone
 import hashlib
@@ -92,12 +104,28 @@ PAUSE = 2.0
 
 #  Exact repository paths.  scripts/tests/test_gate_inputs.py names every
 #  file that mentions one of these by name, so a new reader is a decision.
-CONTENT_FREE = ("AGENTS.md", "README.md", "ROADMAP.md", "handoff.md")
+TOP_DOCUMENTS = ("AGENTS.md", "README.md", "ROADMAP.md", "handoff.md")
+#  The derived guides under docs/ that no lane reads (D1648).  Left out:
+#  docs/commands.md and docs/library.md, which test_cli_native reads in the
+#  compiler-checks and release lanes, and docs/format.md and docs/from-c.md,
+#  which the Ada test program reads.  The same test names every file that
+#  mentions one of these.
+DOCUMENTS = tuple("docs/%s.md" % name for name in (
+    "benchmarks", "capabilities", "diagnostics", "documents", "environments",
+    "ir", "measurement", "process", "server", "targets"))
+CONTENT_FREE = TOP_DOCUMENTS + DOCUMENTS
 #  Trees left out of the key whole, paths included: the roadmap's register,
 #  question and input files, a file each, which an item adds and deletes as
-#  often as it edits ROADMAP.md.  The same test names every file that
-#  mentions one of them.
-CONTENT_FREE_TREES = ("roadmap/",)
+#  often as it edits ROADMAP.md (D1373), and the site's renderer, which only
+#  pages.yml and scripts/site.sh run (D1648).  The same test names every
+#  file that mentions one of them.
+CONTENT_FREE_TREES = ("roadmap/", "docs/site/")
+#  Files left out of the key whole, by pattern: the boards' cycles
+#  baselines, which only environments/boards/timing.py reads, in the
+#  aggregate of an event that times the boards, from the base commit
+#  (D1650).  A commit that records them alone reuses the software pass.
+CONTENT_FREE_PATTERNS = (
+    re.compile(r"compiler/tests/measure/baselines/[^/]+\.cycles\.json"),)
 
 #  The jobs whose evidence is physical: never reused, run by the event's
 #  scope alone.  scripts/tests/test_gate_inputs.py holds gate.yml to these:
@@ -105,8 +133,12 @@ CONTENT_FREE_TREES = ("roadmap/",)
 #  board matrix is exactly BOARD_PORTS.
 PHYSICAL = ("board-bundles", "board")
 #  The jobs that time the emitted code (docs/measurement.md): they run on the
-#  schedule and on a dispatch, whatever its scope, and on no other event.
+#  schedule and on a dispatch, whatever its scope, and on no other event,
+#  unless the dispatch's key was timed on its branch already (D1649).
 TIMING = ("measure-time",)
+#  measure-time's legs by name, which a timed run must have passed.
+TIMING_LEGS = ("measure-time-linux-x86-64", "measure-time-linux-arm64",
+               "measure-time-darwin-arm64")
 BOARD_PORTS = ("rp2040", "pico2", "stm32h753", "esp32c3", "esp32c5", "esp32",
                "esp32s3")
 #  Only this repository's rig runs boards; a fork's runs never reach it.
@@ -134,7 +166,9 @@ def key(rev="HEAD", cwd=None, content_free=CONTENT_FREE):
     digest = hashlib.sha256()
     for mode, kind, name, path in entries(rev, cwd):
         decoded = path.decode("utf-8", "surrogateescape")
-        if content_free and decoded.startswith(CONTENT_FREE_TREES):
+        if content_free and (decoded.startswith(CONTENT_FREE_TREES) or any(
+                pattern.fullmatch(decoded)
+                for pattern in CONTENT_FREE_PATTERNS)):
             continue
         if decoded in content_free:
             name = b"-"
@@ -311,7 +345,7 @@ def decide(event_name, event, api, key_of, checked_out, workflow, required, now)
             continue
         base = run["head_sha"]
         if key_of(base) != here:
-            reasons.append("%s: more than the four documents' content differs"
+            reasons.append("%s: more than the explanatory files differ"
                            % base[:12])
             continue
         missing = [problem for tip in tips
@@ -322,6 +356,126 @@ def decide(event_name, event, api, key_of, checked_out, workflow, required, now)
         return True, "reusing %s, which ran every lane on %s of %s" % (
             run["html_url"], base[:12], run["head_branch"])
     return False, "; ".join(reasons) or "no recent push run ran every lane"
+
+
+def board_jobs():
+    """The jobs a boards pass consists of, every leg by its own name."""
+    return ("board-bundles",) + tuple("board-%s" % port for port in BOARD_PORTS)
+
+
+def passed_jobs(listing, names):
+    """Whether LISTING is complete and each of NAMES ran once and passed."""
+    jobs = complete(listing)
+    if jobs is None:
+        return False
+    for name in names:
+        found = [job for job in jobs if job["name"] == name]
+        if len(found) != 1 or found[0].get("conclusion") != "success":
+            return False
+    return True
+
+
+def recent_run(run, now):
+    started = datetime.fromisoformat(run["run_started_at"].replace("Z", "+00:00"))
+    return timedelta(0) <= now - started <= MAX_AGE
+
+
+def board_runs(api, workflow):
+    """This repository's successful runs of WORKFLOW on a board-scope
+    event, newest first: dispatches, main's pushes and the schedule."""
+    runs = []
+    for query in ("event=workflow_dispatch", "event=push&branch=main",
+                  "event=schedule"):
+        runs += api("actions/workflows/%s/runs?%s&status=success&per_page=30"
+                    % (workflow, query)).get("workflow_runs", [])
+    return sorted(runs, key=lambda run: run["run_started_at"], reverse=True)
+
+
+def decide_boards(event_name, event, api, key_of, candidate_key_of,
+                  checked_out, workflow, now):
+    """(reuse, reason, url): whether main's push may take its boards from
+    a passed board run (D1647).
+
+    The run is one of this repository's, on a board-scope event, under a
+    week old, successful, with board-bundles and every leg run and passed
+    in a complete listing; a run that itself reused boards skipped them and
+    is never one.  Its commit is the identical tree (every file, mode and
+    path), or the software-reuse rule's explanatory base: the same key, an
+    ancestor of the tip, every commit since it saying `Gate: explanatory`.
+    """
+    if event_name != "push" or event.get("ref") != "refs/heads/main":
+        return False, "only main's push takes a boards pass", ""
+    tips, why = tips_of(event_name, event, checked_out)
+    if tips is None:
+        return False, why, ""
+    whole, here = candidate_key_of("HEAD"), key_of("HEAD")
+    reasons = []
+    for run in board_runs(api, workflow):
+        board_scope = run.get("event") in ("workflow_dispatch", "schedule") or (
+            run.get("event") == "push" and run.get("head_branch") == "main")
+        if not board_scope or not recent_run(run, now) \
+                or run.get("conclusion") != "success":
+            continue
+        base = run["head_sha"]
+        if candidate_key_of(base) != whole:
+            if key_of(base) != here:
+                reasons.append("%s: the tree differs" % base[:12])
+                continue
+            missing = [problem for tip in tips
+                       for problem in undeclared(api("compare/%s...%s" % (base, tip)))]
+            if missing:
+                reasons.append("%s: %s" % (base[:12], ", ".join(missing)))
+                continue
+        if not passed_jobs(run_jobs(api, run["id"]), board_jobs()):
+            reasons.append("%s: run %s did not run and pass every board job"
+                           % (base[:12], run["id"]))
+            continue
+        return True, "reusing the boards of %s, which ran them on %s" % (
+            run["html_url"], base[:12]), run["html_url"]
+    return False, "; ".join(reasons) or "no recent run passed the boards", ""
+
+
+def timing_base(api, sha):
+    """The commit `measure.py base` times SHA against, as main stands now:
+    SHA's parent when SHA is main's tip, else its merge base with main."""
+    compared = api("compare/main...%s" % sha)
+    if compared["base_commit"]["sha"] == sha:
+        return api("commits/%s" % sha)["parents"][0]["sha"]
+    return compared["merge_base_commit"]["sha"]
+
+
+def decide_timing(event_name, branch, sha, api, key_of, workflow, now):
+    """(reuse, reason, url): whether a dispatch may leave out timing because
+    a dispatch of the same key was timed on its branch (D1649).
+
+    The run is a successful dispatch of this repository on BRANCH under a
+    week old, whose measure-time legs ran and passed in a complete listing;
+    its success says the boards' cycles comparison passed too.  The key
+    is the gate's, which leaves out only what no lane reads, so the timed
+    compiler, bundles and measuring scripts are the same; no declaration
+    is needed, because nothing the timing reads differs.  The timing also
+    reads its base, the compiler it is paired with and the baselines it is
+    held to, so the two runs' bases, found as `measure.py base` finds them,
+    must have the same key too.
+    """
+    if event_name != "workflow_dispatch":
+        return False, "only a dispatch takes an earlier timing", ""
+    here = key_of("HEAD")
+    runs = api("actions/workflows/%s/runs?event=workflow_dispatch&branch=%s"
+               "&status=success&per_page=30" % (workflow, branch))
+    for run in runs.get("workflow_runs", []):
+        if run.get("head_branch") != branch or not recent_run(run, now) \
+                or run.get("conclusion") != "success":
+            continue
+        if key_of(run["head_sha"]) != here:
+            continue
+        if key_of(timing_base(api, run["head_sha"])) != \
+                key_of(timing_base(api, sha)):
+            continue
+        if passed_jobs(run_jobs(api, run["id"]), TIMING_LEGS):
+            return True, "timed by %s on %s" % (
+                run["html_url"], run["head_sha"][:12]), run["html_url"]
+    return False, "no dispatch on %s timed this key" % branch, ""
 
 
 class Unanswered(Exception):
@@ -405,8 +559,13 @@ def scope(event_name, ref, repository_id, event):
     boards_only = event_name == "schedule" or (
         event_name == "workflow_dispatch" and requested == "boards")
     timing = event_name in ("schedule", "workflow_dispatch")
+    #  Which of those a pass may stand in for: main's boards, by a passed
+    #  boards run of the same tree (D1647), and a dispatch's timing, by a
+    #  timed run of the same key on its branch (D1649).
     return {"software": not boards_only, "boards": boards, "timing": timing,
-            "scope": "boards" if boards_only else "full"}
+            "scope": "boards" if boards_only else "full",
+            "boards_reusable": boards and event_name == "push",
+            "timing_reusable": timing and event_name == "workflow_dispatch"}
 
 
 def flag(value):
@@ -486,10 +645,20 @@ def verdict(needs, always, expected=None, evidence=None):
     if expected is None:
         expected = inputs_scope(needs)
     elif inputs.get("result") == "success":
+        expected = dict(expected)
         for name in ("software", "boards", "timing"):
-            if outputs.get(name) != flag(expected.get(name, False)):
-                problems.append("inputs says %s=%s, but this event's scope is %s=%s"
-                                % (name, outputs.get(name), name, flag(expected[name])))
+            said = outputs.get(name)
+            if said == flag(expected.get(name, False)):
+                continue
+            #  A pass stands in for main's boards or a dispatch's timing
+            #  only where the event's scope allows it (D1647, D1649).
+            if expected.get(name) and said == "false" \
+                    and outputs.get(name + "-reuse") == "true" \
+                    and expected.get(name + "_reusable"):
+                expected[name] = False
+                continue
+            problems.append("inputs says %s=%s, but this event's scope is %s=%s"
+                            % (name, said, name, flag(expected[name])))
     software, boards = expected["software"], expected["boards"]
     if not software and not boards:
         problems.append("a boards-only event outside repository %s runs no board "
@@ -509,7 +678,11 @@ def verdict(needs, always, expected=None, evidence=None):
         if result == wanted:
             continue
         problem = "%s is %s, not %s" % (name, result, wanted)
-        if name in PHYSICAL and boards:
+        if name in TIMING and wanted == "success":
+            problem += (": timing evidence, not a board failure; when every"
+                        " board leg passed and its log reads as noise,"
+                        " re-run only the failed jobs")
+        elif name in PHYSICAL and boards:
             problem += ": physical evidence missing is not a pass"
         elif name in PHYSICAL:
             problem += ": a board job ran for an event outside board scope"
@@ -534,12 +707,26 @@ def report(needs, problems, expected, evidence):
         lines.append("- software lanes: skipped for a verified reused pass")
     else:
         lines.append("- software lanes: every lane ran")
-    if not expected["boards"]:
+    if (inputs.get("outputs") or {}).get("boards-reuse") == "true":
+        lines.append("- physical boards: taken from %s, a passed boards run"
+                     " of this tree" % (inputs.get("outputs") or {}).get(
+                         "boards-from", "an earlier run"))
+    elif not expected["boards"]:
         lines.append("- physical boards: not run for this event")
     else:
         lines.append("- physical boards, never reused:")
         for port in BOARD_PORTS:
             lines.append("  - board-%s: %s" % (port, (evidence or {}).get(port, "not read")))
+    timing = sorted(name for name in needs if name in TIMING)
+    if (inputs.get("outputs") or {}).get("timing-reuse") == "true":
+        lines.append("- timing: taken from %s, a timed dispatch of this key"
+                     % (inputs.get("outputs") or {}).get("timing-from",
+                                                          "an earlier run"))
+    elif expected.get("timing") and timing:
+        failed = [name for name in timing
+                  if needs[name].get("result") != "success"]
+        lines.append("- timing, judged apart from the boards: %s" % (
+            "%s not passed" % ", ".join(failed) if failed else "passed"))
     lines.append("")
     lines.extend("- %s: %s" % (name, job.get("result")) for name, job in sorted(needs.items()))
     if problems:
@@ -672,6 +859,33 @@ def main(argv):
         print("gate_inputs: " + why, file=sys.stderr)
         print("reuse=" + ("true" if reuse else "false"))
         return 0
+    if len(argv) == 2 and argv[0] == "physical":
+        #  Each answer is false unless shown: any doubt runs the boards
+        #  and the timing.
+        with open(os.environ["GITHUB_EVENT_PATH"], encoding="utf-8") as stream:
+            event = json.load(stream)
+        name = os.environ["GITHUB_EVENT_NAME"]
+        now = datetime.now(timezone.utc)
+        found = event_scope(os.environ)
+        for what, wanted, decide_one in (
+                ("boards", found["boards_reusable"], lambda: decide_boards(
+                    name, event, github, fetched_key, fetched_candidate_key,
+                    checkout(), argv[1], now)),
+                ("timing", found["timing_reusable"], lambda: decide_timing(
+                    name, os.environ.get("GITHUB_REF_NAME", ""), checkout()[0],
+                    github, fetched_key, argv[1], now))):
+            reuse, why, url = False, "this event never takes one", ""
+            if wanted:
+                try:
+                    reuse, why, url = decide_one()
+                except Unanswered as error:
+                    why = "could not ask GitHub, so it runs (%s)" % error
+                except Exception as error:  # noqa: BLE001 -- doubt runs it
+                    why = "%s: %s" % (type(error).__name__, error)
+            print("gate_inputs: %s: %s" % (what, why), file=sys.stderr)
+            print("%s-reuse=%s" % (what, flag(reuse)))
+            print("%s-from=%s" % (what, url))
+        return 0
     if argv == ["scope"]:
         found = event_scope(os.environ)
         print("gate_inputs: software lanes %s, physical boards %s (%s)" % (
@@ -708,7 +922,8 @@ def main(argv):
                     stream.write(report(needs, problems, shown, evidence))
             return 1 if problems else 0
     print("usage: gate_inputs.py key [REV] | same A B"
-          " | reuse WORKFLOW JOB ... | scope | bundles DIR REFINE"
+          " | reuse WORKFLOW JOB ... | physical WORKFLOW | scope"
+          " | bundles DIR REFINE"
           " | verdict [--evidence DIR] [--always JOB ...]",
           file=sys.stderr)
     return 2

@@ -202,6 +202,118 @@ package body Landin.Backend.RiscV is
       return Count;
    end Save_Count;
 
+   --  D678, D1688: the text's lines that save, restore or describe a
+   --  callee-saved register, and the registers its other lines name, by
+   --  number or, in an assembly block's text, by ABI alias.
+   function Is_Digit (C : Character) return Boolean
+     is (C in '0' .. '9');
+   function Word_Character (C : Character) return Boolean
+     is (C in 'a' .. 'z' | 'A' .. 'Z' | '0' .. '9' | '_' | '.');
+
+   --  The callee-saved register a save, restore or its unwind
+   --  description names, or zero for any other line.
+   function Saved_Line (Line : String) return Natural;
+   function Saved_Line (Line : String) return Natural is
+      --  The register number after Prefix, ended by a comma or,
+      --  for an unwind restore, by the line's end.
+      function Number_After (Prefix : String) return Natural;
+      function Number_After (Prefix : String) return Natural is
+         First : constant Integer := Line'First + Prefix'Length;
+         Last : Natural := First - 1;
+      begin
+         if Line'Length <= Prefix'Length
+           or else Line (Line'First .. First - 1) /= Prefix
+         then
+            return 0;
+         end if;
+         while Last < Line'Last and then Is_Digit (Line (Last + 1))
+         loop
+            Last := Last + 1;
+         end loop;
+         if Last < First
+           or else (Last < Line'Last and then Line (Last + 1) /= ',')
+         then
+            return 0;
+         end if;
+         return Natural'Value (Line (First .. Last));
+      end Number_After;
+      Tab : constant String := [1 => Character'Val (9)];
+   begin
+      if Line'Length > 4
+        and then Line (Line'Last - 3 .. Line'Last) = "(sp)"
+      then
+         return Natural'Max
+           (Number_After (Tab & "sw x"), Number_After (Tab & "lw x"));
+      end if;
+      return Natural'Max
+        (Number_After (Tab & ".cfi_offset "),
+         Number_After (Tab & ".cfi_restore "));
+   end Saved_Line;
+
+   type Register_Names is array (0 .. 31) of Boolean;
+
+   procedure Mark (Line : String; Named : in out Register_Names);
+   procedure Mark (Line : String; Named : in out Register_Names) is
+      Index : Natural := Line'First;
+   begin
+      while Index <= Line'Last loop
+         if (Index = Line'First
+             or else not Word_Character (Line (Index - 1)))
+           and then Line (Index) in 'x' | 's'
+           and then Index < Line'Last
+           and then Is_Digit (Line (Index + 1))
+         then
+            declare
+               Last : Natural := Index + 1;
+            begin
+               while Last < Line'Last
+                 and then Is_Digit (Line (Last + 1))
+               loop
+                  Last := Last + 1;
+               end loop;
+               if Last = Line'Last
+                 or else not Word_Character (Line (Last + 1))
+               then
+                  declare
+                     Value : constant Natural :=
+                       Natural'Value (Line (Index + 1 .. Last));
+                  begin
+                     if Line (Index) = 'x' and then Value <= 31 then
+                        Named (Value) := True;
+                     elsif Line (Index) = 's' and then Value = 1 then
+                        Named (9) := True;
+                     elsif Line (Index) = 's'
+                       and then Value in 2 .. 11
+                     then
+                        Named (Value + 16) := True;
+                     end if;
+                  end;
+               end if;
+               Index := Last + 1;
+            end;
+         else
+            Index := Index + 1;
+         end if;
+      end loop;
+   end Mark;
+
+
+   function Named_Outside_Saves (Text : String) return Register_Names;
+   function Named_Outside_Saves (Text : String) return Register_Names is
+      Named : Register_Names := [others => False];
+      Start : Positive := Text'First;
+   begin
+      for Index in Text'Range loop
+         if Text (Index) = ASCII.LF then
+            if Saved_Line (Text (Start .. Index - 1)) = 0 then
+               Mark (Text (Start .. Index - 1), Named);
+            end if;
+            Start := Index + 1;
+         end if;
+      end loop;
+      return Named;
+   end Named_Outside_Saves;
+
    --  A set of the integer registers x0-x31, the Nth bit x(N).
    type Register_Mask is mod 2 ** 32;
    function Bit (Number : Natural) return Register_Mask
@@ -237,21 +349,25 @@ package body Landin.Backend.RiscV is
    --  D1503: the registers a slot or value may be held in, in the order
    --  they are offered: a7 down to a0, which cost no save and leave the
    --  parameters that arrive in the lowest longest where they arrive,
-   --  then x9, x18, x19 and x22, saved by every routine (D678 prunes an
-   --  unnamed one at XLEN 32).  Selection's other registers carry its
-   --  comparisons (x20, x21, x23-x25), far jumps (x26), RV32's high words
-   --  (x27) and its working values (x5-x7, x28-x31), and are never held.
+   --  then x9, x18, x19 and x22, and since D1687 x20, x21 and x23-x25,
+   --  which selection writes only in an atomic update's loop, since its
+   --  comparisons and flags are no longer copied there.  A callee-saved
+   --  register is saved only by a routine whose text names it (D1688).
+   --  Selection's other registers carry far jumps (x26), RV32's high
+   --  words (x27) and its working values (x5-x7, x28-x31), and are never
+   --  held.
    type Register_List is array (Positive range <>) of Natural;
    Offered : constant Register_List :=
-     [17, 16, 15, 14, 13, 12, 11, 10, 9, 18, 19, 22];
+     [17, 16, 15, 14, 13, 12, 11, 10, 9, 18, 19, 22, 20, 21, 23, 24, 25];
    subtype Argument_Register is Natural range 10 .. 17;
 
    --  At XLEN 32 an eight-byte location takes a pair, its low word in a
-   --  register Partner gives a high one: a0-a1 to a6-a7, x18-x19 and
-   --  x9-x22.  Zero for a register that is no pair's low word.
+   --  register Partner gives a high one: a0-a1 to a6-a7, x18-x19,
+   --  x20-x21, x24-x25 and x9-x22.  Zero for a register that is no pair's
+   --  low word.
    function Partner (Number : Natural) return Natural
      is (case Number is
-           when 10 | 12 | 14 | 16 | 18 => Number + 1,
+           when 10 | 12 | 14 | 16 | 18 | 20 | 24 => Number + 1,
            when 9 => 22,
            when others => 0);
 
@@ -1645,8 +1761,73 @@ package body Landin.Backend.RiscV is
       --  appends to the report once it keeps that emission.
       Pending : Landin.Build_Reports.Routine_Statistics;
 
+      --  D1687: a comparison is copied nowhere.  Compare records its
+      --  operands where they are, and the branches and predicates that
+      --  follow read them there; an addition or subtraction records its
+      --  result against zero and computes a carry or an overflow only
+      --  where its caller's check reads one.  Put marks the record stale
+      --  when a line writes an operand or calls, and at a label, so a
+      --  branch that would read a changed operand is a compiler defect
+      --  rather than a wrong program.
+      type Flag_Need is (No_Flags, Carry, Overflow);
+      Compared_Left, Compared_Right, Compared_Suffix :
+        Unbounded.Unbounded_String;
+      Compared_Mask : Register_Mask := 0;
+      Comparing, Compared_Float, Compared_Stale, Branching : Boolean :=
+        False;
+      Flags_Made : Flag_Need := No_Flags;
+      Borrow_Made : Boolean := False;
+
+      --  D1688: the registers the routine's lines name, its saves and
+      --  restores apart, which Save_Code marks while they are written, as
+      --  it does while Settle_Jumps writes lines named before again.
+      Naming : Register_Names := [others => False];
+      Save_Code : Boolean := False;
+
+      --  The integer register an operand names, as a mask; zero for a
+      --  float register or zero.
+      function Operand_Mask (Name : String) return Register_Mask is
+        (Written_By (Character'Val (9) & "mv " & Name & ", zero"));
+
+      --  Whether Line writes the float register Name or calls.
+      function Writes_Float (Line, Name : String) return Boolean;
+      function Writes_Float (Line, Name : String) return Boolean is
+         First : constant Natural := Line'First + 1;
+         Space : constant Natural :=
+           Ada.Strings.Fixed.Index (Line, " ");
+         Comma : constant Natural :=
+           Ada.Strings.Fixed.Index (Line, ",");
+         Mnemonic : constant String :=
+           (if Space = 0 then Line (First .. Line'Last)
+            else Line (First .. Space - 1));
+      begin
+         if Mnemonic in "call" | "jal" | "jalr" | "ecall" | "tail" then
+            return True;
+         end if;
+         return Space /= 0 and then Comma > Space
+           and then Ada.Strings.Fixed.Trim
+             (Line (Space + 1 .. Comma - 1), Ada.Strings.Both) = Name;
+      end Writes_Float;
+
       procedure Put (Line : String) is
       begin
+         if not Save_Code then
+            Mark (Line, Naming);
+         end if;
+         if Comparing and then not Branching and then not Compared_Stale
+         then
+            if Line'Length = 0 or else Line (Line'First) /= Character'Val (9)
+              or else (Written_By (Line) and Compared_Mask) /= 0
+              or else (Compared_Float
+                       and then
+                         (Writes_Float
+                            (Line, Unbounded.To_String (Compared_Left))
+                          or else Writes_Float
+                            (Line, Unbounded.To_String (Compared_Right))))
+            then
+               Compared_Stale := True;
+            end if;
+         end if;
          Unbounded.Append (Output, Line & LF);
          Last_Line := Unbounded.To_Unbounded_String (Line);
          if Recording /= null and then Record_At >= 0
@@ -1977,8 +2158,6 @@ package body Landin.Backend.RiscV is
          Emit ("bnez x7, " & Loop_Label);
       end Move_Words;
 
-      Float_Comparison : Boolean := False;
-
       procedure Compare
         (Left, Right : String; Literal : Boolean := False);
       procedure Compare_Float (Suffix, Left, Right : String);
@@ -1986,112 +2165,275 @@ package body Landin.Backend.RiscV is
       procedure Predicate (Destination, Condition : String);
       procedure Add_Sub
         (Destination, Left, Right : String; Subtract : Boolean;
-         Literal : Boolean := False);
+         Literal : Boolean := False; Flags : Flag_Need := No_Flags);
       procedure Extract
         (Destination, Source : String; First, Bits : Natural;
          Signed : Boolean := False);
       procedure Insert_Bits
         (Destination, Source : String; First, Bits : Natural);
 
-      procedure Compare (Left, Right : String; Literal : Boolean := False) is
+      procedure Record_Comparison (Left, Right : String);
+      procedure Record_Comparison (Left, Right : String) is
       begin
-         Float_Comparison := False;
-         Emit ("mv x20, " & Left);
-         if Literal then
-            Emit ("li x21, " & Right);
+         Comparing := True;
+         Compared_Float := False;
+         Compared_Stale := False;
+         Flags_Made := No_Flags;
+         Borrow_Made := False;
+         Compared_Left := Unbounded.To_Unbounded_String (Left);
+         Compared_Right := Unbounded.To_Unbounded_String (Right);
+         Compared_Mask := Operand_Mask (Left) or Operand_Mask (Right);
+      end Record_Comparison;
+
+      procedure Compare (Left, Right : String; Literal : Boolean := False) is
+         Scratch : constant String :=
+           (if Left = "x29" then "x28" else "x29");
+      begin
+         if Literal and then Right = "0" then
+            Record_Comparison (Left, "zero");
+         elsif Literal then
+            Emit ("li " & Scratch & ", " & Right);
+            Record_Comparison (Left, Scratch);
          else
-            Emit ("mv x21, " & Right);
+            Record_Comparison (Left, Right);
          end if;
       end Compare;
 
       procedure Compare_Float (Suffix, Left, Right : String) is
       begin
-         Float_Comparison := True;
-         Emit ("feq." & Suffix & " x20, " & Left & ", " & Right);
-         Emit ("flt." & Suffix & " x21, " & Left & ", " & Right);
-         Emit ("fle." & Suffix & " x23, " & Left & ", " & Right);
-         Emit ("fclass." & Suffix & " x24, " & Left);
-         Emit ("fclass." & Suffix & " x25, " & Right);
-         Emit ("or x24, x24, x25");
-         Emit ("andi x24, x24, 768");
+         Record_Comparison (Left, Right);
+         Compared_Float := True;
+         Compared_Suffix := Unbounded.To_Unbounded_String (Suffix);
       end Compare_Float;
 
+      --  The comparison Compare recorded, refused when a line since has
+      --  written one of its operands.
+      procedure Check_Comparison;
+      procedure Check_Comparison is
+      begin
+         if not Comparing or else Compared_Stale then
+            raise Compiler_Defect with
+              "a branch reads a comparison whose operands have changed";
+         end if;
+      end Check_Comparison;
+
       procedure Branch (Condition, Target : String) is
+         Left : constant String := Unbounded.To_String (Compared_Left);
+         Right : constant String := Unbounded.To_String (Compared_Right);
+         Suffix : constant String := Unbounded.To_String (Compared_Suffix);
          Test : Unbounded.Unbounded_String;
       begin
-         if Float_Comparison then
-            if Condition = "eq" then
-               Test := Unbounded.To_Unbounded_String ("bnez x20, ");
-            elsif Condition = "ne" then
-               Test := Unbounded.To_Unbounded_String ("beqz x20, ");
+         Check_Comparison;
+         Branching := True;
+         if Compared_Float then
+            if Condition in "eq" | "ne" then
+               Emit ("feq." & Suffix & " x28, " & Left & ", " & Right);
+               Test := Unbounded.To_Unbounded_String
+                 (if Condition = "eq" then "bnez x28, " else "beqz x28, ");
             elsif Condition in "mi" | "lt" then
-               Test := Unbounded.To_Unbounded_String ("bnez x21, ");
+               Emit ("flt." & Suffix & " x28, " & Left & ", " & Right);
+               Test := Unbounded.To_Unbounded_String ("bnez x28, ");
             elsif Condition = "ls" then
-               Test := Unbounded.To_Unbounded_String ("bnez x23, ");
+               Emit ("fle." & Suffix & " x28, " & Left & ", " & Right);
+               Test := Unbounded.To_Unbounded_String ("bnez x28, ");
             elsif Condition = "ge" then
-               Emit ("or x25, x21, x24");
-               Test := Unbounded.To_Unbounded_String ("beqz x25, ");
+               Emit ("fle." & Suffix & " x28, " & Right & ", " & Left);
+               Test := Unbounded.To_Unbounded_String ("bnez x28, ");
             elsif Condition = "gt" then
-               Emit ("or x25, x23, x24");
-               Test := Unbounded.To_Unbounded_String ("beqz x25, ");
+               Emit ("flt." & Suffix & " x28, " & Right & ", " & Left);
+               Test := Unbounded.To_Unbounded_String ("bnez x28, ");
             elsif Condition = "vs" then
-               Test := Unbounded.To_Unbounded_String ("bnez x24, ");
+               Emit ("feq." & Suffix & " x28, " & Left & ", " & Left);
+               Emit ("feq." & Suffix & " x29, " & Right & ", " & Right);
+               Emit ("and x28, x28, x29");
+               Test := Unbounded.To_Unbounded_String ("beqz x28, ");
             else
                raise Compiler_Defect with "invalid floating predicate";
             end if;
+         elsif Condition = "vs" then
+            if Flags_Made /= Overflow then
+               raise Compiler_Defect with "an overflow test without one";
+            end if;
+            Test := Unbounded.To_Unbounded_String ("bnez x30, ");
+         elsif Condition in "cs" | "cc" then
+            if Flags_Made /= Carry then
+               raise Compiler_Defect with "a carry test without one";
+            end if;
+            Test := Unbounded.To_Unbounded_String
+              (if (Condition = "cs") = Borrow_Made then "beqz x30, "
+               else "bnez x30, ");
          else
             Test := Unbounded.To_Unbounded_String
-              (if Condition = "eq" then "beq x20, x21, "
-               elsif Condition = "ne" then "bne x20, x21, "
-               elsif Condition = "lt" then "blt x20, x21, "
-               elsif Condition = "ge" then "bge x20, x21, "
-               elsif Condition = "le" then "bge x21, x20, "
-               elsif Condition = "gt" then "blt x21, x20, "
-               elsif Condition = "lo" then "bltu x20, x21, "
-               elsif Condition = "hs" then "bgeu x20, x21, "
-               elsif Condition = "hi" then "bltu x21, x20, "
-               elsif Condition = "ls" then "bgeu x21, x20, "
-               elsif Condition = "vs" then "bnez x24, "
-               elsif Condition = "cs" then "bnez x23, "
-               elsif Condition = "cc" then "beqz x23, "
+              (if Condition = "eq" then "beq " & Left & ", " & Right & ", "
+               elsif Condition = "ne" then "bne " & Left & ", " & Right & ", "
+               elsif Condition = "lt" then "blt " & Left & ", " & Right & ", "
+               elsif Condition = "ge" then "bge " & Left & ", " & Right & ", "
+               elsif Condition = "le" then "bge " & Right & ", " & Left & ", "
+               elsif Condition = "gt" then "blt " & Right & ", " & Left & ", "
+               elsif Condition = "lo" then
+                  "bltu " & Left & ", " & Right & ", "
+               elsif Condition = "hs" then
+                  "bgeu " & Left & ", " & Right & ", "
+               elsif Condition = "hi" then
+                  "bltu " & Right & ", " & Left & ", "
+               elsif Condition = "ls" then
+                  "bgeu " & Right & ", " & Left & ", "
                else raise Compiler_Defect with "invalid integer predicate");
          end if;
          Emit (Unbounded.To_String (Test) & Target);
+         Branching := False;
       end Branch;
 
+      --  D1687: a comparison's result is computed where RISC-V has an
+      --  instruction for it; only a carry or overflow test branches.
       procedure Predicate (Destination, Condition : String) is
-         Yes : constant String := Fresh;
-         Done : constant String := Fresh;
+         Left : constant String := Unbounded.To_String (Compared_Left);
+         Right : constant String := Unbounded.To_String (Compared_Right);
+         Suffix : constant String := Unbounded.To_String (Compared_Suffix);
+         D : String renames Destination;
       begin
-         Branch (Condition, Yes);
-         Emit ("li " & Destination & ", 0");
-         Emit ("j " & Done);
-         Put (Yes & ":");
-         Emit ("li " & Destination & ", 1");
-         Put (Done & ":");
+         Check_Comparison;
+         if Compared_Float then
+            if Condition in "eq" | "ne" then
+               Emit ("feq." & Suffix & " " & D & ", " & Left & ", " & Right);
+            elsif Condition in "mi" | "lt" then
+               Emit ("flt." & Suffix & " " & D & ", " & Left & ", " & Right);
+            elsif Condition = "ls" then
+               Emit ("fle." & Suffix & " " & D & ", " & Left & ", " & Right);
+            elsif Condition = "ge" then
+               Emit ("fle." & Suffix & " " & D & ", " & Right & ", " & Left);
+            elsif Condition = "gt" then
+               Emit ("flt." & Suffix & " " & D & ", " & Right & ", " & Left);
+            elsif Condition = "vs" then
+               Emit ("feq." & Suffix & " x28, " & Left & ", " & Left);
+               Emit ("feq." & Suffix & " x29, " & Right & ", " & Right);
+               Emit ("and " & D & ", x28, x29");
+            else
+               raise Compiler_Defect with "invalid floating predicate";
+            end if;
+            if Condition in "ne" | "vs" then
+               Emit ("xori " & D & ", " & D & ", 1");
+            end if;
+         elsif Condition in "eq" | "ne" then
+            if Right = "zero" then
+               Emit ((if Condition = "eq" then "seqz " else "snez ")
+                 & D & ", " & Left);
+            else
+               Emit ("xor " & D & ", " & Left & ", " & Right);
+               Emit ((if Condition = "eq" then "seqz " else "snez ")
+                 & D & ", " & D);
+            end if;
+         elsif Condition in "lt" | "ge" | "gt" | "le" | "lo" | "hs" | "hi"
+           | "ls"
+         then
+            declare
+               Swapped : constant Boolean :=
+                 Condition in "gt" | "le" | "hi" | "ls";
+            begin
+               Emit ((if Condition in "lt" | "ge" | "gt" | "le" then "slt "
+                      else "sltu ")
+                 & D & ", " & (if Swapped then Right else Left) & ", "
+                 & (if Swapped then Left else Right));
+               if Condition in "ge" | "le" | "hs" | "ls" then
+                  Emit ("xori " & D & ", " & D & ", 1");
+               end if;
+            end;
+         else
+            declare
+               Yes : constant String := Fresh;
+               Done : constant String := Fresh;
+            begin
+               Branch (Condition, Yes);
+               Emit ("li " & D & ", 0");
+               Emit ("j " & Done);
+               Put (Yes & ":");
+               Emit ("li " & D & ", 1");
+               Put (Done & ":");
+            end;
+         end if;
       end Predicate;
 
+      --  D1687: the carry or overflow is computed only when Flags asks
+      --  for it, into x30, from the operands as they were: an operand the
+      --  result overwrites is first copied to x7 or x28.  Selection's
+      --  temporaries here are never a held location's register, since a
+      --  write after an operation's own result, at its position, is one
+      --  the recorded writes cannot tell from the result's.
       procedure Add_Sub
         (Destination, Left, Right : String; Subtract : Boolean;
-         Literal : Boolean := False) is
+         Literal : Boolean := False; Flags : Flag_Need := No_Flags)
+      is
+         L : Unbounded.Unbounded_String :=
+           Unbounded.To_Unbounded_String (Left);
+         R : Unbounded.Unbounded_String :=
+           Unbounded.To_Unbounded_String (Right);
+         Kept : Unbounded.Unbounded_String;
+         Small : constant Boolean := Literal
+           and then Right'Length in 1 .. 6
+           and then Long_Long_Integer'Value (Right) in -2047 .. 2047;
+         function S (Text : Unbounded.Unbounded_String) return String
+           renames Unbounded.To_String;
       begin
-         Compare (Left, Right, Literal);
-         Emit ((if Subtract then "sub " else "add ")
-           & Destination & ", x20, x21");
-         if Subtract then
-            Emit ("sltu x23, x20, x21");
-            Emit ("xori x23, x23, 1");
-            Emit ("xor x24, x20, x21");
-            Emit ("xor x25, x20, " & Destination);
+         if Small and then Flags = No_Flags then
+            declare
+               Value : constant Long_Long_Integer :=
+                 Long_Long_Integer'Value (Right);
+            begin
+               Emit ("addi " & Destination & ", " & Left & ", "
+                 & Trimmed (Long_Long_Integer'Image
+                   (if Subtract then -Value else Value)));
+            end;
          else
-            Emit ("sltu x23, " & Destination & ", x20");
-            Emit ("xor x24, x20, " & Destination);
-            Emit ("xor x25, x21, " & Destination);
+            if Literal and then Flags /= No_Flags then
+               raise Compiler_Defect with "a checked sum with a literal";
+            elsif Literal then
+               R := Unbounded.To_Unbounded_String
+                 (if Left = "x29" then "x28" else "x29");
+               Emit ("li " & S (R) & ", " & Right);
+            end if;
+            if Flags = Carry and then Subtract then
+               --  The borrow, before the result can overwrite either.
+               Emit ("sltu x30, " & S (L) & ", " & S (R));
+            elsif Flags = Carry then
+               --  A sum carries when it is below either operand, so the
+               --  operand it does not overwrite is kept to be read.
+               if Destination /= Left then
+                  Kept := L;
+               elsif Destination /= S (R) then
+                  Kept := R;
+               else
+                  Emit ("mv x7, " & Left);
+                  Kept := Unbounded.To_Unbounded_String ("x7");
+               end if;
+            elsif Flags = Overflow then
+               if Destination = Left then
+                  Emit ("mv x7, " & Left);
+                  L := Unbounded.To_Unbounded_String ("x7");
+               end if;
+               if Destination = S (R) then
+                  Emit ("mv x28, " & S (R));
+                  R := Unbounded.To_Unbounded_String ("x28");
+               end if;
+            end if;
+            Emit ((if Subtract then "sub " else "add ")
+              & Destination & ", " & S (L) & ", " & S (R));
+            if Flags = Carry and then not Subtract then
+               Emit ("sltu x30, " & Destination & ", " & S (Kept));
+            elsif Flags = Overflow then
+               if Subtract then
+                  Emit ("xor x30, " & S (L) & ", " & S (R));
+                  Emit ("xor x29, " & S (L) & ", " & Destination);
+               else
+                  Emit ("xor x30, " & S (L) & ", " & Destination);
+                  Emit ("xor x29, " & S (R) & ", " & Destination);
+               end if;
+               Emit ("and x30, x30, x29");
+               Emit ("srli x30, x30, " & Image (Natural (Width) - 1));
+            end if;
          end if;
-         Emit ("and x24, x24, x25");
-         Emit ("srli x24, x24, " & Image (Natural (Width) - 1));
-         Emit ("mv x20, " & Destination);
-         Emit ("li x21, 0");
+         Record_Comparison (Destination, "zero");
+         Flags_Made := Flags;
+         Borrow_Made := Subtract;
       end Add_Sub;
 
       procedure Extract
@@ -2764,98 +3106,8 @@ package body Landin.Backend.RiscV is
             Text : constant String := Unbounded.Slice
               (Output, Routine_Start + 1, Unbounded.Length (Output));
             Kept : Unbounded.Unbounded_String;
-            Named : array (0 .. 31) of Boolean := [others => False];
+            Named : constant Register_Names := Named_Outside_Saves (Text);
             Start : Positive := Text'First;
-
-            function Is_Digit (C : Character) return Boolean
-              is (C in '0' .. '9');
-            function Word_Character (C : Character) return Boolean
-              is (C in 'a' .. 'z' | 'A' .. 'Z' | '0' .. '9' | '_' | '.');
-
-            --  The callee-saved register a save, restore or its unwind
-            --  description names, or zero for any other line.
-            function Saved_Line (Line : String) return Natural;
-            function Saved_Line (Line : String) return Natural is
-               --  The register number after Prefix, ended by a comma or,
-               --  for an unwind restore, by the line's end.
-               function Number_After (Prefix : String) return Natural;
-               function Number_After (Prefix : String) return Natural is
-                  First : constant Integer := Line'First + Prefix'Length;
-                  Last : Natural := First - 1;
-               begin
-                  if Line'Length <= Prefix'Length
-                    or else Line (Line'First .. First - 1) /= Prefix
-                  then
-                     return 0;
-                  end if;
-                  while Last < Line'Last and then Is_Digit (Line (Last + 1))
-                  loop
-                     Last := Last + 1;
-                  end loop;
-                  if Last < First
-                    or else (Last < Line'Last and then Line (Last + 1) /= ',')
-                  then
-                     return 0;
-                  end if;
-                  return Natural'Value (Line (First .. Last));
-               end Number_After;
-               Tab : constant String := [1 => Character'Val (9)];
-            begin
-               if Line'Length > 4
-                 and then Line (Line'Last - 3 .. Line'Last) = "(sp)"
-               then
-                  return Natural'Max
-                    (Number_After (Tab & "sw x"), Number_After (Tab & "lw x"));
-               end if;
-               return Natural'Max
-                 (Number_After (Tab & ".cfi_offset "),
-                  Number_After (Tab & ".cfi_restore "));
-            end Saved_Line;
-
-            procedure Mark (Line : String);
-            procedure Mark (Line : String) is
-               Index : Natural := Line'First;
-            begin
-               while Index <= Line'Last loop
-                  if (Index = Line'First
-                      or else not Word_Character (Line (Index - 1)))
-                    and then Line (Index) in 'x' | 's'
-                    and then Index < Line'Last
-                    and then Is_Digit (Line (Index + 1))
-                  then
-                     declare
-                        Last : Natural := Index + 1;
-                     begin
-                        while Last < Line'Last
-                          and then Is_Digit (Line (Last + 1))
-                        loop
-                           Last := Last + 1;
-                        end loop;
-                        if Last = Line'Last
-                          or else not Word_Character (Line (Last + 1))
-                        then
-                           declare
-                              Value : constant Natural :=
-                                Natural'Value (Line (Index + 1 .. Last));
-                           begin
-                              if Line (Index) = 'x' and then Value <= 31 then
-                                 Named (Value) := True;
-                              elsif Line (Index) = 's' and then Value = 1 then
-                                 Named (9) := True;
-                              elsif Line (Index) = 's'
-                                and then Value in 2 .. 11
-                              then
-                                 Named (Value + 16) := True;
-                              end if;
-                           end;
-                        end if;
-                        Index := Last + 1;
-                     end;
-                  else
-                     Index := Index + 1;
-                  end if;
-               end loop;
-            end Mark;
 
             function Dropped (Line : String) return Boolean is
               (Saved_Line (Line) in 9 | 18 .. 27
@@ -2864,24 +3116,13 @@ package body Landin.Backend.RiscV is
             if not Pairs then
                return;
             end if;
-            for Pass in 1 .. 2 loop
-               Start := Text'First;
-               for Index in Text'Range loop
-                  if Text (Index) = LF then
-                     declare
-                        Line : constant String := Text (Start .. Index - 1);
-                     begin
-                        if Pass = 1 then
-                           if Saved_Line (Line) = 0 then
-                              Mark (Line);
-                           end if;
-                        elsif not Dropped (Line) then
-                           Unbounded.Append (Kept, Line & LF);
-                        end if;
-                     end;
-                     Start := Index + 1;
+            for Index in Text'Range loop
+               if Text (Index) = LF then
+                  if not Dropped (Text (Start .. Index - 1)) then
+                     Unbounded.Append (Kept, Text (Start .. Index - 1) & LF);
                   end if;
-               end loop;
+                  Start := Index + 1;
+               end if;
             end loop;
             Unbounded.Replace_Slice
               (Output, Routine_Start + 1, Unbounded.Length (Output),
@@ -2916,6 +3157,8 @@ package body Landin.Backend.RiscV is
             Settling := False;
             Unbounded.Delete
               (Output, Routine_Start + 1, Unbounded.Length (Output));
+            --  The lines were named as they were first written.
+            Save_Code := True;
             for Index in Text'Range loop
                if Text (Index) = LF then
                   declare
@@ -2948,6 +3191,7 @@ package body Landin.Backend.RiscV is
                   Start := Index + 1;
                end if;
             end loop;
+            Save_Code := False;
             if Jump <= Provisional.Last_Index or else Start <= Text'Last then
                raise Compiler_Defect with "a provisional jump is not a line";
             end if;
@@ -3254,6 +3498,29 @@ package body Landin.Backend.RiscV is
             end if;
          end Check_Fit;
 
+         --  D1689: k when Value is the unsigned constant 2 ** k, k from 1
+         --  through Most, else zero.
+         function Constant_Power
+           (Value : Landin.IR.Value_Id; Most : Natural) return Natural;
+
+         function Constant_Power
+           (Value : Landin.IR.Value_Id; Most : Natural) return Natural is
+         begin
+            if Landin.IR.Op_Of (Of_Unit, Item, Value) = Landin.IR.Number
+              and then not Landin.IR.Is_Negated (Of_Unit, Item, Value)
+            then
+               for Bit in 1 .. Most loop
+                  if Landin.Types."="
+                    (Landin.IR.Number_Of (Of_Unit, Item, Value),
+                     Landin.Types."**" (2, Bit))
+                  then
+                     return Bit;
+                  end if;
+               end loop;
+            end if;
+            return 0;
+         end Constant_Power;
+
          --  D1503: the register an operation reads a value from: the
          --  value's own when it is held, else Default after loading it
          --  there.  Extended as Scalar asks, which a held value, kept
@@ -3424,6 +3691,7 @@ package body Landin.Backend.RiscV is
             Recorded_At : constant Integer := Record_At;
          begin
             Record_At := -1;
+            Save_Code := True;
             for Number in Saves'Range loop
                Scratch_From := Unbounded.Length (Output);
                if Saves (Number) and then Pairs
@@ -3452,6 +3720,7 @@ package body Landin.Backend.RiscV is
                     (Scratch_From, Unbounded.Length (Output)));
                end if;
             end loop;
+            Save_Code := False;
             Record_At := Recorded_At;
          end Restore_Saves;
 
@@ -6058,7 +6327,11 @@ package body Landin.Backend.RiscV is
                      Emit ("xor x5, x5, x6");
                   else
                      Extend ("x5", Kind (Value));
-                     Add_Sub ("x5", "zero", "x5", Subtract => True);
+                     Add_Sub ("x5", "zero", "x5", Subtract => True,
+                       Flags =>
+                         (if Unchecked then No_Flags
+                          elsif Landin.Types.Is_Signed (Kind (Value))
+                          then Overflow else Carry));
                      if not Unchecked then
                         Branch ((if Landin.Types.Is_Signed (Kind (Value))
                           then "vs" else "cc"), Trap);
@@ -6096,9 +6369,23 @@ package body Landin.Backend.RiscV is
                           Op in
                           Landin.IR.Add | Landin.IR.Subtract |
                             Landin.IR.Multiply;
+                        Need : constant Flag_Need :=
+                          (if not Checked then No_Flags
+                           elsif Signed then Overflow else Carry);
                         Bits : constant Natural := Natural
                           (Landin.Types.Width (Kind (Value), Facts));
                         Done : constant String := Fresh;
+                        --  D1689: an unsigned divisor that is a constant
+                        --  power of two, 2 ** Power, is a shift or a mask:
+                        --  the quotient the bits above Power, the remainder
+                        --  those below.  Zero otherwise.
+                        Power : constant Natural :=
+                          (if not Signed
+                             and then Op in Landin.IR.Divide
+                               | Landin.IR.Remainder
+                             and then Bits <= Natural (Width)
+                           then Constant_Power (Operand (2), Bits - 1)
+                           else 0);
                         --  D1503: the operations that read their operands
                         --  as they are and write their result last read
                         --  held operands in place and write a held result
@@ -6120,7 +6407,10 @@ package body Landin.Backend.RiscV is
                         Into : constant String :=
                           (if In_Place then Result_In (Value) else "x5");
                      begin
-                        if not In_Place then
+                        if Power > 0 then
+                           Load_Value (Operand (1));
+                           Extend ("x5", Kind (Value));
+                        elsif not In_Place then
                            Load_Value (Operand (1));
                            Load_Value (Operand (2), "x6");
                            Extend ("x5", Kind (Value));
@@ -6128,14 +6418,16 @@ package body Landin.Backend.RiscV is
                         end if;
                         case Op is
                            when Landin.IR.Add | Landin.IR.Wrapping_Add =>
-                              Add_Sub (Into, Left, Right, Subtract => False);
+                              Add_Sub (Into, Left, Right, Subtract => False,
+                                Flags => Need);
                               if Checked then
                                  Branch ((if Signed then "vs" else "cs"),
                                    Trap);
                               end if;
                            when Landin.IR.Subtract |
                              Landin.IR.Wrapping_Subtract =>
-                              Add_Sub (Into, Left, Right, Subtract => True);
+                              Add_Sub (Into, Left, Right, Subtract => True,
+                                Flags => Need);
                               if Checked then
                                  Branch ((if Signed then "vs" else "cc"),
                                    Trap);
@@ -6159,24 +6451,37 @@ package body Landin.Backend.RiscV is
                                  end if;
                               end if;
                            when Landin.IR.Divide | Landin.IR.Remainder =>
-                              Emit ("beqz x6, " & Trap);
-                              if Signed and then Op = Landin.IR.Divide then
-                                 Immediate ("x7", To_Pattern
-                                   (-Landin.Types.Folded (2 ** (Bits - 1)),
-                                     64));
-                                 Compare ("x5", "x7");
-                                 Branch ("ne", Done & "_divide");
-                                 Compare ("x6", "-1", Literal => True);
-                                 Branch ("eq", Trap);
-                                 Put (Done & "_divide:");
-                              end if;
-                              Emit ((if Signed then "div " else "divu ")
-                                & "x7, x5, x6");
-                              if Op = Landin.IR.Remainder then
-                                 Emit ("mul x18, x7, x6");
-                                 Emit ("sub x5, x5, x18");
+                              if Power > 0 then
+                                 if Op = Landin.IR.Divide then
+                                    Emit ("srli x5, x5, " & Image (Power));
+                                 elsif Power <= 11 then
+                                    Emit ("andi x5, x5, "
+                                          & Image (2 ** Power - 1));
+                                 else
+                                    Emit ("slli x5, x5, "
+                                          & Image (Natural (Width) - Power));
+                                    Emit ("srli x5, x5, "
+                                          & Image (Natural (Width) - Power));
+                                 end if;
                               else
-                                 Emit ("mv x5, x7");
+                                 Emit ("beqz x6, " & Trap);
+                                 if Signed and then Op = Landin.IR.Divide then
+                                    Immediate ("x7", To_Pattern
+                                      (-Landin.Types.Folded (2 ** (Bits - 1)),
+                                        64));
+                                    Compare ("x5", "x7");
+                                    Branch ("ne", Done & "_divide");
+                                    Compare ("x6", "-1", Literal => True);
+                                    Branch ("eq", Trap);
+                                    Put (Done & "_divide:");
+                                 end if;
+                                 --  D1689: RISC-V's remainder truncates as its
+                                 --  quotient does, and is zero for the one
+                                 --  signed quotient that overflows.
+                                 Emit ((if Op = Landin.IR.Remainder then "rem"
+                                        else "div")
+                                   & (if Signed then " " else "u ")
+                                   & "x5, x5, x6");
                               end if;
                            when Landin.IR.Bitwise_And =>
                               Emit ("and " & Into & ", " & Left & ", "
@@ -6732,6 +7037,7 @@ package body Landin.Backend.RiscV is
             end if;
          end if;
          Reserve (Extent (Layout));
+         Save_Code := True;
          for Number in Saves'Range loop
             Scratch_From := Unbounded.Length (Output);
             if Saves (Number) and then Pairs
@@ -6760,6 +7066,7 @@ package body Landin.Backend.RiscV is
                  (Scratch_From, Unbounded.Length (Output)));
             end if;
          end loop;
+         Save_Code := False;
          if Panic /= null and then Item = Landin.Panics.Handler (Panic.all)
          then
             declare
@@ -8519,9 +8826,22 @@ package body Landin.Backend.RiscV is
                   Count : constant Natural :=
                     Landin.IR.Value_Count (Of_Unit, Item);
 
+                  --  What the routine just emitted names: what its lines
+                  --  named as they were written, except x26, which
+                  --  Settle_Jumps may have taken out with its saves since.
+                  function Routine_Names return Register_Names;
+                  function Routine_Names return Register_Names is
+                     Result : Register_Names := Naming;
+                  begin
+                     Result (26) := Named_Outside_Saves (Unbounded.Slice
+                       (Output, Start + 1, Unbounded.Length (Output))) (26);
+                     return Result;
+                  end Routine_Names;
+
                   procedure Restore;
                   procedure Restore is
                   begin
+                     Naming := [others => False];
                      Unbounded.Delete
                        (Output, Start + 1, Unbounded.Length (Output));
                      Serial := Start_Serial;
@@ -8540,6 +8860,7 @@ package body Landin.Backend.RiscV is
                   then
                      Recording := new Write_Masks'(0 .. Count => 0);
                   end if;
+                  Naming := [others => False];
                   Emit_Routine
                     (Item, Homes, Frame_For
                        (Of_Unit, Item, Facts, Options, Homes,
@@ -8573,6 +8894,78 @@ package body Landin.Backend.RiscV is
                         end if;
                      end;
                      Free_Masks (Recording);
+                  end if;
+                  --  D1688: the frame is laid out again with homes only
+                  --  for the callee-saved registers the text names apart
+                  --  from their saves.  The emission is kept
+                  --  when it names no other and its held registers still
+                  --  hold, else the one before it is emitted again.
+                  if Landin.IR.Signature_Machine
+                      (Of_Unit, Landin.IR.Signature_Of (Of_Unit, Item))
+                        /= Landin.Machine.Naked_Routine
+                    and then
+                      (for all Value in 1 .. Count =>
+                         Landin.IR.Op_Of
+                           (Of_Unit, Item, Landin.IR.Value_Id (Value))
+                           /= Landin.IR.Assembly)
+                  then
+                     declare
+                        Named : constant Register_Names :=
+                          Routine_Names;
+                        Narrowed : Allocation_Plan := Chosen;
+                        Fewer : Boolean := False;
+                     begin
+                        for Number in 9 .. 27 loop
+                           if Number in 9 | 18 .. 27
+                             and then Narrowed.Saves (Number)
+                             and then not Named (Number)
+                           then
+                              Narrowed.Saves (Number) := False;
+                              Fewer := True;
+                           end if;
+                        end loop;
+                        if Fewer then
+                           Restore;
+                           if Narrowed.Held /= 0 then
+                              Recording := new Write_Masks'(0 .. Count => 0);
+                           end if;
+                           Emit_Routine
+                             (Item, Narrowed, Frame_For
+                                (Of_Unit, Item, Facts, Options, Narrowed,
+                                 16#7fff_ffff#));
+                           declare
+                              Again : constant Register_Names :=
+                                Routine_Names;
+                              Kept : Boolean :=
+                                (for all Number in 9 .. 27 =>
+                                   (if Number in 9 | 18 .. 27
+                                      and then Again (Number)
+                                    then Narrowed.Saves (Number)));
+                           begin
+                              if Kept and then Recording /= null then
+                                 Kept := Holds (Narrowed, Recording.all);
+                              end if;
+                              if Kept then
+                                 if Recording /= null then
+                                    Narrowed.Writes.Clear;
+                                    for Mask of Recording.all loop
+                                       Narrowed.Writes.Append (Mask);
+                                    end loop;
+                                 end if;
+                                 Chosen := Narrowed;
+                              else
+                                 Restore;
+                                 Emit_Routine
+                                   (Item, Chosen, Frame_For
+                                      (Of_Unit, Item, Facts, Options,
+                                       Chosen, 16#7fff_ffff#));
+                              end if;
+                           end;
+                           if Recording /= null then
+                              Free_Masks (Recording);
+                           end if;
+                        end if;
+                     end;
                   end if;
                   Landin.Build_Reports.Append (Report, Pending);
                   if Debug /= null and then not Pairs then

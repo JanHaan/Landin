@@ -230,6 +230,30 @@ what each selects.
 The README has [the commands in brief](../README.md#refine-in-brief);
 `refine help reference` prints the complete interface.
 
+### Installed forms
+
+- A release publishes an archive for Linux x86-64, Linux arm64 and macOS
+  arm64, an installed prefix of `bin/refine`, `libexec/landin` and
+  `lib/landin`, each attested by the release workflow; Homebrew's
+  `janhaan/tap/landin`, the flake's default package and the one-line
+  `install.sh` the site serves install it, the flake's `nix run` runs it,
+  and its `refine` package builds from source. The script picks the
+  host's archive, refuses one whose `.sha256` differs and a host no archive
+  serves, and the gate runs it on all three hosts against its own packaged
+  compiler served as a release would be. The
+  [README's installing section](../README.md#installing) gives each route.
+- From the release after 0.2.11, a release also publishes two container
+  images, each one tag of the version alone holding Linux amd64 and arm64
+  (D1667, D1668): `ghcr.io/701-dev/landin`, the Linux archive in
+  `/usr/local` over Debian 13's `gcc` and `libc6-dev`, which links native
+  Linux programs and holds no firmware or cross toolchain; and
+  `ghcr.io/701-dev/landin-contributor`, the pinned GNAT and GPRbuild with
+  the tools that build and test the compiler. The gate builds the user
+  image from its packaged release compiler on amd64 and arm64 and runs the
+  first program in it as the README says; the release workflow builds and
+  checks both images, the contributor one by building the compiler inside
+  it, before the approval and pushes them after it.
+
 ### Commands
 
 - `refine check program.ldn ...` runs the frontend, lowering and
@@ -1030,7 +1054,14 @@ process ignores SIGPIPE and gives its children the default back.
   and r1 at every level, eight-byte values and VFP floats keeping their
   homes (D1567), at the Thumb-2 levels branches directly and builds
   constants with MOVW and MOVT (D1564), and divides by a constant power of
-  two with shifts (D1626).
+  two with shifts (D1626). Xtensa places every word of a routine without
+  an assembly block, its selection's scratch words and each scalar value
+  and unaddressed slot, over the routine's own liveness in a2-a6, which a
+  call preserves, and a10-a15, dropping operations nothing reads, folding
+  constants into the operations that read them, dividing by a constant
+  power of two with shifts and masks, and making a comparison's flag and
+  its test one branch (D1627), and fuses a comparison with the branch
+  after it (D1628).
 - **At speed** a direct call to a small routine becomes a copy of its body,
   which the debuggers show as an inlined frame of that routine (D339);
   slices and small structs split into scalars; and a branch whose arms only

@@ -45,7 +45,8 @@ jobs:
         #  work of any other target's, and x86-64's longer part, 23.7
         #  minutes in run 44052328931, was the gate's last job.  Linux
         #  x86-64 takes three shards, its runners being plentiful; the
-        #  macOS runners are not, so Darwin keeps two.
+        #  macOS runners were not, five to an account until 2026-11-20, so
+        #  Darwin keeps two.
         include:
           - runner: ubuntu-24.04
             platform: x86_64-linux
