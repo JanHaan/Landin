@@ -432,10 +432,11 @@ package body Landin.Backend.Cortex_M is
    --  register where the value is that slot's content.  A location holds
    --  a register only where nothing else writes it, from the first
    --  position it is live at through the last, both included.  An
-   --  eight-byte scalar keeps its home, as a float does where the float
-   --  unit computes it.  A routine that calls offers r4-r7 first, which
-   --  it saves anyway, and r3 and r1, which a call writes; a leaf the
-   --  other way round, since each of r4-r7 it names costs it a save.
+   --  eight-byte scalar keeps its home; a float the float unit computes
+   --  takes a VFP register (D1771).  A routine that calls offers r4-r7
+   --  first, which it saves anyway, and r3 and r1, which a call writes; a
+   --  leaf the other way round, since each of r4-r7 it names costs it a
+   --  save.  High (D1772) adds r12, r8 and r10 after them.
    function Allocate_Registers
      (Of_Unit : Landin.IR.Unit; Item : Landin.IR.Item_Id;
       Facts : Landin.Targets.Target_Facts;

@@ -26521,7 +26521,7 @@ saves each it names; the routine is emitted again and keeps its first
 emission if any write meets a held register. A parameter may take any of
 them, since the entry stores the incoming registers before it reads any.
 An eight-byte scalar keeps its home, as does a float where the float unit
-computes it. A narrower scalar is held zero-extended. Held operands are
+computes it (D1771 now holds that float in a VFP register). A narrower scalar is held zero-extended. Held operands are
 read in place by word arithmetic, comparisons, branches, indirect accesses
 and indexing, and their results, constants and loads are written to their
 own register. Cortex-M's debugging information describes no local, so a
@@ -26530,9 +26530,9 @@ where D1503 holds it throughout; `Landin.Backend.Placement.Measure` takes
 that as a parameter.
 
 **The alternatives:** a fixed register set selection never names, which
-r0-r7's use as scratch leaves empty. High registers at the Thumb-2 levels,
-float values in VFP registers and pairs for eight-byte values are not
-taken here; the register records them.
+r0-r7's use as scratch leaves empty. High registers at the Thumb-2 levels
+(D1772), float values in VFP registers (D1771) and pairs for eight-byte
+values were not taken here.
 
 **Pinned by** the Cortex-M corpus at every level, the firmware and
 evidence lanes, and `compiler/tests/measure/baselines/`.
@@ -26675,6 +26675,177 @@ Xtensa, x86-64 and arm64 do not need for speed, each dividing by a
 constant already or in hardware.
 
 **Pinned by** the Cortex-M corpus and `compiler/tests/measure/baselines/`.
+
+### D1767 — Cortex-M makes a word constant where an operation reads it
+
+**The tour said** nothing. Cortex-M gave every integer constant a value
+of its own at its definition, in its home or a held register (D1567), so
+a loop's bound, a shift's count or an index's stride was loaded from
+memory or kept a register for every iteration, and a comparison of two
+constants zero against each other survived to the text.
+
+**Chosen:** at `size` and `speed`, in a routine without an
+`assembler.block`, an integer constant of at most a word that validates no
+atoms emits nothing at its definition: an operation that reads it makes
+it there, as an immediate where the operation has one. Thumb-2's
+eight-bit immediates take an addition, subtraction, comparison or bitwise
+operation's constant on either side where the operation commutes, and
+Thumb-1's three-bit addition and subtraction, and its eight-bit one into
+the same register; a constant no wider than a byte and not negative as
+its own type reads it compares as one. A shift by a constant count below
+the width is one `lsls`, `lsrs` or `asrs` with nothing to test, and a
+division or remainder by a constant tests neither for zero nor for minus
+one where the constant is neither. Any other reader loads it with
+`movs`, `mov.w`, `movw` and `movt` or a literal, as it loaded a home,
+and the allocator offers such a constant no register.
+
+**The alternatives:** keeping each constant in a register over its
+interval, which holds a register the allocator has six of for one
+`movs`; and folding constants into operations in the IR, which every
+backend would then have to take apart again where its forms differ.
+
+**Pinned by** `cortex ABI/Thumb-2 selection forms`, the Cortex-M corpus
+at every level and `compiler/tests/measure/baselines/`.
+
+### D1768 — At the Thumb-2 levels a test against zero is CBZ or CBNZ
+
+**The tour said** nothing. A branch on a truth value, and a comparison of
+a word with zero that only its branch reads, was a `cmp` and a
+conditional branch at every level.
+
+**Chosen:** at the Thumb-2 levels such a test of a low register is
+emitted as its comparison and branch and recorded; once the routine's
+text is complete it becomes one `cbz` or `cbnz` where the label is
+ahead, no literal pool or assembly lies between, and four bytes for
+each line between, with four more, stay within the 126 bytes CBZ
+reaches. Every other one stays as it was.
+
+**The alternatives:** relaxation by the assembler, which GNU as does not
+do for CBZ; and counting exact sizes, which needs the assembler's own
+choice of each instruction's width.
+
+**Pinned by** `cortex ABI/Thumb-2 selection forms` and the Cortex-M
+corpus at the Thumb-2 levels.
+
+### D1769 — Cortex-M reads and writes a frame part and a slot in place
+
+**The tour said** nothing. A field of a frame slot was read through its
+address formed in r2 (`mov r2, sp`, `adds r2, #N`) and a load from a slot
+or a field went to r0 and was copied to the value's register; a slice's
+element stride was multiplied in, one or a power of two alike.
+
+**Chosen:** a frame slot's aligned, unpacked part is read and written
+where D1563's homes are, from sp where an offset form reaches it, and a
+slot or part is loaded into its value's own register and stored from it,
+except from r6, the address register. A slice's stride of one adds
+nothing and a power of two shifts.
+
+**The alternatives:** an address-mode folding pass over the IR's paths,
+which no other backend needs.
+
+**Pinned by** the Cortex-M corpus at every level and
+`compiler/tests/measure/baselines/`.
+
+### D1770 — Cortex-M converts between integers of at most a word with one comparison
+
+**The tour said** nothing. Every integer conversion went through the
+64-bit form: the operand extended into r1:r0, the high word compared with
+its sign, and the low word shifted out and back to test its fit.
+
+**Chosen:** a conversion between integer types of 8, 16 or 32 bits reads
+its operand where it is and tests only what the source can hold and the
+result cannot: an unsigned upper bound with `cmp` and `bhi`, a signed
+narrowing with `sxtb` or `sxth` against the source, a sign with `cmp` and
+`blt`; a widening or a same-signed one of no smaller width tests nothing.
+
+**The alternatives:** the 64-bit form for every width, which the eight-
+byte conversions keep.
+
+**Pinned by** the Cortex-M corpus at every level and
+`compiler/tests/measure/baselines/`.
+
+### D1771 — With a float unit Cortex-M holds floats in VFP registers
+
+**The tour said** nothing. With a float unit every f32 and f64 was read
+from its home into s0 to s2 or d0 to d2 for each operation and its result
+stored again, and a comparison made a truth value before its branch read
+it (D1567).
+
+**Chosen:** the recorded writes of D1567 include d0-d15, a call writing
+d0-d7, and the allocator offers a float slot or value d7 to d3, then d2
+to d0, then d8 to d15, which the routine saves: a framed routine through
+its run of D1570, a leaf with `vstr` and `vldr` from sp. An f32 takes the
+even half of its register. A float a call passes or returns keeps its
+home, as D616 has it. Arithmetic, negation and comparison read held
+operands in place and write a held result directly; a move between a
+held float and core registers is one `vmov`; a constant VMOV encodes is
+made in its register with it; a float home is read and written from sp
+where VLDR's and VSTR's offset reaches. A comparison only its branch
+reads branches on the flags itself, as D1566's do. On the AN500
+description at armv7e-m and `speed` the firmware mandelbrot executes
+649,506 instructions under QEMU against 4,117,064, and `in_set` is 60
+instructions against 241.
+
+**The alternatives:** the caller-saved d0-d7 alone, which left the
+mandelbrot loop's temporaries in their homes; and a separate float
+allocator, where one placement over both files keeps a single record.
+
+**Pinned by** `cortex ABI/a float unit selects VFP code`, `cortex ABI/C
+records cross by value at both variants`, the AN500 lane's corpus and
+`compiler/tests/measure/baselines/`.
+
+### D1772 — At the Thumb-2 levels speed holds values in r8, r10 and r12
+
+**The tour said** nothing. D1567 offered r1, r3 and r4-r7 at every
+level, and the Thumb-2 levels, whose 32-bit encodings reach the high
+registers, still held nothing in them.
+
+**Chosen:** at the Thumb-2 levels and `speed` the allocator also offers
+r12, which a call writes and no routine saves, then r8 and r10, which a
+routine holding either saves as a pair, in its frame above the incoming
+register homes, with `strd` and `ldrd`. `size` keeps the low registers,
+since a high one's 32-bit forms cost it bytes, and armv6-m is unchanged.
+
+**The alternatives:** r9, which a platform may reserve, and r11, the
+frame record's; pushing r8 and r10 with r4-r7, which moves every frame
+offset the debugger and the stack report read.
+
+**Pinned by** `cortex ABI/Thumb-2 selection forms`, the Cortex-M corpus,
+the frame-stepping and source-debugging lanes and
+`compiler/tests/measure/baselines/`.
+
+### D1773 — At the Thumb-2 levels a packed field is UBFX and BFI
+
+**The tour said** nothing. A packed field was extracted and inserted
+through the 64-bit shift pair with its bit offset in r4, at every level.
+
+**Chosen:** at the Thumb-2 levels a field of a carrier of at most a word,
+with no atoms to translate and a value of at most a word, is read with
+one carrier load and `ubfx`, and written by testing the value's fit with
+`lsrs`, then one load, `bfi` and one store: the same carrier accesses the
+peripheral traces record. An indexed packed element keeps its shifts.
+
+**The alternatives:** shifts and masks of one word, which Thumb-1 still
+needs for want of the instructions.
+
+**Pinned by** `cortex ABI/Thumb-2 selection forms` and the packed and
+peripheral lanes.
+
+### D1774 — Cortex-M drops a register move that changes nothing
+
+**The tour said** nothing. Copies through held slots left moves into a
+register's own source, a move repeating the one before it, and a move
+back of what the move before it copied.
+
+**Chosen:** once a routine's text is complete those three are dropped,
+when no label or instruction but a debugging directive lies between the
+pair.
+
+**The alternatives:** teaching each copy where its value already is,
+which is the allocator's coalescing and a larger change.
+
+**Pinned by** the Cortex-M corpus at every level and
+`compiler/tests/measure/baselines/`.
 
 ### D1627 — Xtensa places every word of a routine over the routine's own text
 
