@@ -382,7 +382,7 @@ Findings fixed on the way: the RV64 GDB session's source still assumed a
 dead argument stays readable, and is now the LLDB lanes' source, whose
 argument is read after the call; `runtime/directory-memory` now fits the
 RV32 lanes' 32 KiB and at `size` overruns their 4 KiB stack, recorded as a
-D698 lane limit. SR-1363 files what remains largest, selection's flag
+D698 lane limit. `SR-1363` files what remains largest, selection's flag
 emulation, 22% of RV64's instructions.
 
 ### R16.22 — Cortex-M register allocation
@@ -470,7 +470,7 @@ liveness, joins their definitions into webs and places them by linear scan
 in a2-a6, which a call preserves, and a10-a15, the rest in their homes.
 Before placing it folds a word set once to a number into the `mul`, `add`,
 `divu` or `remu` that reads it, so a division or remainder by a power of
-two is a shift or a mask, which takes the Xtensa half of SR-1429, now
+two is a shift or a mask, which takes the Xtensa half of `SR-1429`, now
 restated for RISC-V alone; it drops what nothing reads and makes a flag
 and its zero test one branch; and a comparison only its branch reads is
 that branch (D1628). A routine of more than 150,000 lines, or whose text
@@ -537,7 +537,7 @@ SR-1422 the nine registers x86-64 offers, SR-1423 the assembly block's
 rule, SR-1424 float constants made in each block, SR-1425 a loop's two
 jumps, SR-1426 the order D339 copies in, and R551-12 keeps the bounds
 check a loop's end does not name and the calls of `core/atomic`'s cells;
-SR-1427, SR-1428 and SR-1429 record what the work met, and SR-1430 the
+SR-1427, SR-1428 and `SR-1429` record what the work met, and SR-1430 the
 STM32H753's binary-search, 9.7% slower at size where the RP2040 and
 RP2350 run every configuration faster. Findings fixed on
 the way: the public exposure above, and a dead shift kept as if it could
@@ -553,10 +553,10 @@ Status: active
 Depends on: R16.10
 
 After R16.21's allocation (D1503) the largest RISC-V cost is selection's
-emulation of Arm's condition flags, SR-1363: copies into x20 and x21 before
+emulation of Arm's condition flags, `SR-1363`: copies into x20 and x21 before
 every comparison and a carry and overflow computed for every addition, 22%
 of RV64's instructions over four hosted workloads, and five registers kept
-from the allocator. This takes on SR-1363 and SR-637, RV32's frames
+from the allocator. This takes on `SR-1363` and `SR-637`, RV32's frames
 reserving a home for every scratch register a routine might save, which
 R16.21 left as it was.
 

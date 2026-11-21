@@ -9855,11 +9855,11 @@ package body Landin.Tests.Backend_Suite is
       end loop;
    end RISCV_Keeps_Values_In_Registers;
 
-   --  D1687, D1688: RISC-V branches on a comparison's operands where they
-   --  are and computes a comparison's result with slt, sltu or seqz, so
-   --  a routine that only compares names none of x20, x21 and x23-x25;
-   --  a checked signed addition computes its overflow and no carry; and
-   --  a routine saves no callee-saved register its text does not name.
+   --  D1687, D1688: RISC-V computes a comparison's result with slt, sltu
+   --  or seqz, and a checked signed addition its overflow, and no carry,
+   --  in x30; a routine that only compares names none of x18-x27, which
+   --  every routine once saved and the comparisons once copied into.
+   --  Word-sized values keep RV32's high-word register, x27, out of it.
    procedure RISCV_Compares_Operands_In_Place
      (Item : in out Landin.Testing.Context);
 
@@ -9867,10 +9867,10 @@ package body Landin.Tests.Backend_Suite is
      (Item : in out Landin.Testing.Context)
    is
       Source : constant String :=
-        "less: (a: u64, b: u64) -> (r: bool) =" & LF
+        "less: (a: u32, b: u32) -> (r: bool) =" & LF
         & "    r = a < b" & LF
         & "end less" & LF
-        & "pick: (a: i64, b: i64) -> (r: i64) =" & LF
+        & "pick: (a: i32, b: i32) -> (r: i32) =" & LF
         & "    if a < b then" & LF
         & "        r = a + b" & LF
         & "    else" & LF
@@ -9878,7 +9878,7 @@ package body Landin.Tests.Backend_Suite is
         & "    end if" & LF
         & "end pick" & LF
         & "public main: () -> (code: i32) =" & LF
-        & "    code = i32(pick(3, 4) & 1)" & LF
+        & "    code = pick(3, 4) & 1" & LF
         & "    if less(1, 2) then" & LF
         & "        code = 0" & LF
         & "    end if" & LF
@@ -9899,11 +9899,12 @@ package body Landin.Tests.Backend_Suite is
          return (if Last = 0 then "" else Text (First .. Last));
       end Routine;
 
-      --  Whether Text names any of the callee-saved registers x9 and
-      --  x18-x27, or the comparison registers among them.
+      --  Whether Text names any of x18-x27, which every routine saved
+      --  before D1688 and which a comparison's copies and flags used.
       function Names_Saved (Text : String) return Boolean is
-        (Has (Text, "x9") or else Has (Text, "x18")
-         or else Has (Text, "x19") or else Has (Text, "x2"));
+        (for some Number in 18 .. 27 =>
+           Has (Text, "x" & Ada.Strings.Fixed.Trim
+                  (Natural'Image (Number), Ada.Strings.Left)));
 
       type Facts_List is array (1 .. 2) of Landin.Targets.Target_Facts;
       Walked : constant Facts_List :=
@@ -9942,14 +9943,12 @@ package body Landin.Tests.Backend_Suite is
                     (Item, Less /= "" and then Has (Less, "sltu ")
                        and then not Names_Saved (Less),
                      Name & ": a comparison's result is sltu's, and the "
-                     & "routine names and saves no callee-saved register");
+                     & "routine names and saves none of x18-x27");
                   Landin.Testing.Check
-                    (Item, Pick /= "" and then Has (Pick, "x24")
-                       and then not Has (Pick, "x23")
-                       and then (Has (Pick, HT & "blt ")
-                                 or else Has (Pick, HT & "bge ")),
-                     Name & ": the branch reads its operands, and a checked "
-                     & "signed sum computes its overflow and no carry");
+                    (Item, Pick /= "" and then Has (Pick, "xor x30, ")
+                       and then not Has (Pick, "sltu x30, "),
+                     Name & ": a checked signed sum computes its overflow "
+                     & "in x30, and no carry");
                end;
             end;
          end loop;
@@ -11666,7 +11665,7 @@ package body Landin.Tests.Backend_Suite is
         (Into, "backend", "RISC-V keeps values in registers",
          RISCV_Keeps_Values_In_Registers'Access);
       Landin.Testing.Register
-        (Into, "backend", "RISC-V compares its operands where they are",
+        (Into, "backend", "RISC-V compares without copies",
          RISCV_Compares_Operands_In_Place'Access);
       Landin.Testing.Register
         (Into, "backend", "Darwin wide parts keep target offsets",

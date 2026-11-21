@@ -3498,6 +3498,29 @@ package body Landin.Backend.RiscV is
             end if;
          end Check_Fit;
 
+         --  D1689: k when Value is the unsigned constant 2 ** k, k from 1
+         --  through Most, else zero.
+         function Constant_Power
+           (Value : Landin.IR.Value_Id; Most : Natural) return Natural;
+
+         function Constant_Power
+           (Value : Landin.IR.Value_Id; Most : Natural) return Natural is
+         begin
+            if Landin.IR.Op_Of (Of_Unit, Item, Value) = Landin.IR.Number
+              and then not Landin.IR.Is_Negated (Of_Unit, Item, Value)
+            then
+               for Bit in 1 .. Most loop
+                  if Landin.Types."="
+                    (Landin.IR.Number_Of (Of_Unit, Item, Value),
+                     Landin.Types."**" (2, Bit))
+                  then
+                     return Bit;
+                  end if;
+               end loop;
+            end if;
+            return 0;
+         end Constant_Power;
+
          --  D1503: the register an operation reads a value from: the
          --  value's own when it is held, else Default after loading it
          --  there.  Extended as Scalar asks, which a held value, kept
@@ -6352,6 +6375,17 @@ package body Landin.Backend.RiscV is
                         Bits : constant Natural := Natural
                           (Landin.Types.Width (Kind (Value), Facts));
                         Done : constant String := Fresh;
+                        --  D1689: an unsigned divisor that is a constant
+                        --  power of two, 2 ** Power, is a shift or a mask:
+                        --  the quotient the bits above Power, the remainder
+                        --  those below.  Zero otherwise.
+                        Power : constant Natural :=
+                          (if not Signed
+                             and then Op in Landin.IR.Divide
+                               | Landin.IR.Remainder
+                             and then Bits <= Natural (Width)
+                           then Constant_Power (Operand (2), Bits - 1)
+                           else 0);
                         --  D1503: the operations that read their operands
                         --  as they are and write their result last read
                         --  held operands in place and write a held result
@@ -6373,7 +6407,10 @@ package body Landin.Backend.RiscV is
                         Into : constant String :=
                           (if In_Place then Result_In (Value) else "x5");
                      begin
-                        if not In_Place then
+                        if Power > 0 then
+                           Load_Value (Operand (1));
+                           Extend ("x5", Kind (Value));
+                        elsif not In_Place then
                            Load_Value (Operand (1));
                            Load_Value (Operand (2), "x6");
                            Extend ("x5", Kind (Value));
@@ -6414,24 +6451,37 @@ package body Landin.Backend.RiscV is
                                  end if;
                               end if;
                            when Landin.IR.Divide | Landin.IR.Remainder =>
-                              Emit ("beqz x6, " & Trap);
-                              if Signed and then Op = Landin.IR.Divide then
-                                 Immediate ("x7", To_Pattern
-                                   (-Landin.Types.Folded (2 ** (Bits - 1)),
-                                     64));
-                                 Compare ("x5", "x7");
-                                 Branch ("ne", Done & "_divide");
-                                 Compare ("x6", "-1", Literal => True);
-                                 Branch ("eq", Trap);
-                                 Put (Done & "_divide:");
-                              end if;
-                              Emit ((if Signed then "div " else "divu ")
-                                & "x7, x5, x6");
-                              if Op = Landin.IR.Remainder then
-                                 Emit ("mul x18, x7, x6");
-                                 Emit ("sub x5, x5, x18");
+                              if Power > 0 then
+                                 if Op = Landin.IR.Divide then
+                                    Emit ("srli x5, x5, " & Image (Power));
+                                 elsif Power <= 11 then
+                                    Emit ("andi x5, x5, "
+                                          & Image (2 ** Power - 1));
+                                 else
+                                    Emit ("slli x5, x5, "
+                                          & Image (Natural (Width) - Power));
+                                    Emit ("srli x5, x5, "
+                                          & Image (Natural (Width) - Power));
+                                 end if;
                               else
-                                 Emit ("mv x5, x7");
+                                 Emit ("beqz x6, " & Trap);
+                                 if Signed and then Op = Landin.IR.Divide then
+                                    Immediate ("x7", To_Pattern
+                                      (-Landin.Types.Folded (2 ** (Bits - 1)),
+                                        64));
+                                    Compare ("x5", "x7");
+                                    Branch ("ne", Done & "_divide");
+                                    Compare ("x6", "-1", Literal => True);
+                                    Branch ("eq", Trap);
+                                    Put (Done & "_divide:");
+                                 end if;
+                                 --  D1689: RISC-V's remainder truncates as its
+                                 --  quotient does, and is zero for the one
+                                 --  signed quotient that overflows.
+                                 Emit ((if Op = Landin.IR.Remainder then "rem"
+                                        else "div")
+                                   & (if Signed then " " else "u ")
+                                   & "x5, x5, x6");
                               end if;
                            when Landin.IR.Bitwise_And =>
                               Emit ("and " & Into & ", " & Left & ", "
@@ -8847,7 +8897,7 @@ package body Landin.Backend.RiscV is
                   end if;
                   --  D1688: the frame is laid out again with homes only
                   --  for the callee-saved registers the text names apart
-                  --  from their saves (SR-637).  The emission is kept
+                  --  from their saves.  The emission is kept
                   --  when it names no other and its held registers still
                   --  hold, else the one before it is emitted again.
                   if Landin.IR.Signature_Machine
