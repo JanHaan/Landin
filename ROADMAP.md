@@ -549,7 +549,7 @@ included.
 
 ### R16.25 — RISC-V's remaining costs
 
-Status: planned
+Status: active
 Depends on: R16.10
 
 After R16.21's allocation (D1503) the largest RISC-V cost is selection's
