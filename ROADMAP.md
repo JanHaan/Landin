@@ -2174,7 +2174,7 @@ run 44873069309 and boards run 44875115933 on the merged tree 9e62c8b88.
 
 ### R23.30 — A one-line install script
 
-Status: planned
+Status: active
 Depends on: none
 
 A script a user pipes from `curl` into `sh`: it names the release archive
