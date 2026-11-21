@@ -2108,7 +2108,7 @@ and published-image checks included. Gate run 44823246775 on bddf062e7.
 
 ### R23.20 — Nix installs the prebuilt compiler
 
-Status: active
+Status: complete
 Depends on: none
 
 `nix profile install github:701-dev/Landin` builds `refine` from source,
@@ -2126,6 +2126,21 @@ source build still reachable, in the gate's flake jobs; the installing
 documentation giving both commands; the release recipe's flake-hash step
 in `docs/process.md` checking `nix run` against the newly published
 archives before that commit is promoted.
+
+Done: the flake's default package is `refine-bin`, the release archive,
+on every system whose release hash it records, all three today, and the
+source build stays `#refine`; `apps.default` runs `bin/refine` from the
+default, so `nix run github:701-dev/Landin -- ...` runs the released
+compiler (D1707). The README gives `nix profile install`, `nix run` and
+`#refine`, and keeps `profile install`, which Nix 2.34 calls an alias of
+`add`, because older Nix has no `add`. `scripts/nix_route.py` installs the
+flake into a scratch profile and holds it to the `refine-bin` store path
+and version, runs the first program through `nix run`, and refuses a
+`#refine` that is not the source build; the gate's `flake-compiler` leg runs it after building both
+packages, and `test_nix_route` holds its refusals. The release recipe's
+flake step runs it on the branch that moves the hashes and checks
+`nix run github:701-dev/Landin -- version` once that is on `main`. Gate
+run 44864695434 on 24ef33d56; boards run 44867340813 on the same tree.
 
 ### R23.30 — A one-line install script
 
