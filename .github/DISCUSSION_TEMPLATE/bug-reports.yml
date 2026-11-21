@@ -38,7 +38,7 @@ body:
       label: How you obtained refine
       options:
         - Release asset
-        - nix build .#refine-bin
+        - nix profile install, nix run or nix build .#refine-bin
         - nix build .#refine
         - Built from a checkout with scripts/build.sh
         - Another way (say which below)

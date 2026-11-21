@@ -810,14 +810,20 @@ python3 scripts/assemble_targets.py \
 # collide with the other environments; see docs/environments.md.
 nix develop
 
-# Build the compiler through the flake.  .#refine is the default and builds
-# this checkout from source -- about 140s on a fast Linux host, and the same
-# cold, because the 478MB of pinned toolchain fetches alongside the compile.
-# .#refine-bin fetches the published release asset instead, in about 5s, and
-# ignores the working tree: it answers "give me the compiler", not "build
-# what I have".
+# Build the compiler through the flake.  .#refine builds this checkout from
+# source -- about 140s on a fast Linux host, and the same cold, because the
+# 478MB of pinned toolchain fetches alongside the compile.  .#refine-bin, the
+# default package and what `nix run .` runs (D1707), fetches the published
+# release asset instead, in about 5s, and ignores the working tree: it
+# answers "give me the compiler", not "build what I have".
 nix build .#refine
 nix build .#refine-bin
+nix run . -- version
+
+# What the gate's flake job checks of the README's nix commands: the
+# default installs the release archive, `nix run` runs the first program,
+# and .#refine is the source build.
+python3 scripts/nix_route.py --work /tmp/nix-route
 
 # The release's container images on a host with docker (--engine podman
 # for another): the user image from a packaged compiler, run as the README
@@ -950,7 +956,7 @@ still succeed. The linked full run contains the target-test results.
 | `build-modes` matrix | `ubuntu-24.04` | the debug and the release compiler of one tree emit the positive and runtime corpora, the firmware corpus and the Cortex-M counterparts at the four standard profiles and must agree byte for byte, and a request both refuse must be one the emission manifest's refusal list or the firmware inventory records as refused there, with status 1, over Linux x86-64, Linux arm64, Cortex-M, RV32 and both Xtensa configurations; the requests are dealt to `build-modes-1` to `build-modes-3` by their keys' digests, `emit_manifest.py modes --shard=I/3`, so each job is a third of the work whatever target grows (D1365, D1374) |
 | `bindings` | `ubuntu-24.04` | `refine bindings`, with the debug compiler `linux-debug-build` made, against its pinned Clang |
 | `editor-grammar` | `ubuntu-24.04` | the structural grammar's integration pass with the pinned tree-sitter CLI, then the Neovim LSP preference smoke under the distribution's Neovim |
-| `flake` matrix | `ubuntu-24.04` | on every run that does not reuse a pass, a full-scope dispatch included (D585), in three jobs: `flake-compiler` runs `nix build .#refine .#refine-bin`, evaluates every flake output of every system and enters the development shell, `flake-ram-run` builds the native board RAM helper with its Rust controls and `flake-ram-run-rigpi` the Pi's |
+| `flake` matrix | `ubuntu-24.04` | on every run that does not reuse a pass, a full-scope dispatch included (D585), in three jobs: `flake-compiler` runs `nix build .#refine .#refine-bin`, evaluates every flake output of every system, enters the development shell and runs `scripts/nix_route.py` (D1707), `flake-ram-run` builds the native board RAM helper with its Rust controls and `flake-ram-run-rigpi` the Pi's |
 | `cortex-m` matrix | `ubuntu-24.04` | every Cortex-M and RV32 lane on the locked QEMU and GDB, at `LANDIN_CORTEX_JOBS=4`, as `run.py`'s three parts, which together are every lane once: the probes, firmware, device programs and debug evidence in `cortex-m-programs`, which also builds all eight board ports in boot and RAM layouts without hardware and keeps their build/drift evidence, the stack-switch consumer's capacity report (D470) and prototype 5's firmware counterpart's traces (D1035), and every firmware workload's instructions counted on each M-profile machine at all nine profiles and compared with the base commit's baselines (`docs/measurement.md`); the whole corpus on the M0, the M33 and the M7 in `cortex-m-corpus`; and the RV32 controls and corpora on Espressif's QEMU in `cortex-m-rv32` |
 | `xtensa` matrix | `ubuntu-24.04` | three jobs a chip, `xtensa-esp32-1` to `-3` and `xtensa-esp32s3-1` to `-3`: the first of each runs bounded chip-machine window, scalar, floating, assembly and completion-oracle controls, independent vendor-C layout/carrier probes, strict configured-assembler and baseline compatibility controls, and each runs its `corpus.py --shard` third of the complete freestanding inventory, the three together every run once, on the pinned Espressif QEMU's `sim` machine with the exact selected CPU and explicitly virtual RAM; logs and per-fixture verdicts are retained |
 | `measure-size` | `ubuntu-24.04` | with the checked release compiler, inside the pinned environment: every measured workload at every level and all nine profiles for Linux x86-64, arm64 and RV64, Cortex-M, RV32 and both Xtensa chips, each image's allocated sections compared with the base commit's baselines by `scripts/measure.py` (`docs/measurement.md`), then every hosted workload's instructions counted under the pinned `qemu-riscv64` at every RV64 level and profile and compared the same way; the figures kept 30 days as `measure-size-linux`, which `measure.py record --from-run` reads; Darwin's are measured in `darwin-host-release-2` and FreeBSD's in `freebsd-amd64-size` and `freebsd-arm64-size`, which link with the lane's cross driver and boot no guest |
@@ -1361,6 +1367,7 @@ environments/cortex-m/test.py`, which `check.py` runs.
 | `environments/cortex-m/test.py` | the `cortex-m` job's `part` matrix is the runner's parts, and it passes `--part`. |
 | `scripts/tests/test_rig_runner_hook.py` | nothing of the jobs: it passes the workflow's path to the rig runner's hook. |
 | `scripts/tests/test_release.py` | nothing of the jobs: it names the workflow in the API path the release check asks for main's run. |
+| `scripts/tests/test_nix_route.py` | `Gate`: the `flake-compiler` leg runs `scripts/nix_route.py` (D1707); it holds the matrix's `compiler` part by that step's condition. |
 | `scripts/tests/test_check_controls.py` | nothing of the jobs: `PinnedToolchain` copies the workflow, so that `check.py` can hold the scripts job's actionlint step to `scripts/actionlint.py --install` and to no literal pin. |
 
 ### Physical boards and promotion
@@ -1641,8 +1648,13 @@ comments of `.github/workflows/release.yml` and of `flake.nix` beside
    `flake.nix`'s `releaseVersion` to X.Y.Z and its `releaseHashes` to the
    sums in the published `.sha256` files, which the publishing job's log
    also prints. `nix build .#refine-bin` must then print `refine X.Y.Z`
-   from `result/bin/refine version` and run the first program. The commit
-   is gated and promoted like any other.
+   from `result/bin/refine version`, and `python3 scripts/nix_route.py
+   --work /tmp/nix-route` must pass on the branch: the default
+   `nix profile install` and `nix run` then fetch the newly published
+   archive, report X.Y.Z and run the first program (D1707). The commit is
+   gated, its flake job running the same check, and promoted like any
+   other; after it is on `main`, `nix run github:701-dev/Landin --
+   version` prints `refine X.Y.Z`.
 8. **Move Homebrew**, as the paragraph after the release settings says:
    run the tap's `bump-landin` workflow and check the formula.
 

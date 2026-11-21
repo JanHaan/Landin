@@ -40793,6 +40793,39 @@ hold the publishing job to being skipped on a rehearsal, to taking the
 archives' artifacts alone and to pushing nowhere but the registry, and the
 `images` job to the layout.
 
+### D1707 — The flake's default package is the release archive where a release covers the system
+
+**The tour said** nothing. The README's `nix profile install
+github:701-dev/Landin` installed the flake's default package, the source
+build, which fetches the pinned toolchain and compiles for minutes; the
+flake's `refine-bin`, the same release archive the other routes install,
+was named nowhere a reader looks, and the flake had no `apps`, so `nix run`
+had nothing to run.
+
+**Chosen:** `packages.default` is `refine-bin` on a system whose release
+hash the flake records, which is all three today, and `refine` elsewhere;
+`refine` stays the source build by name. `apps.default` runs `bin/refine`
+from the default package, so `nix run github:701-dev/Landin -- ARGS` runs
+the released compiler. The README gives `nix profile install`, `nix run`
+and the source build's `#refine`. The default follows `releaseVersion`,
+so between a release's tag and the commit that records its hashes it
+installs the previous release, which is what a reader asking for the
+compiler wants; a checkout's own compiler is `.#refine`. The docs say
+`nix profile install`, which Nix 2.34 calls a deprecated alias of `add`,
+because `add` is unknown to the Nix versions before it that readers still
+run.
+
+**The alternatives:** keeping the source build as the default and naming
+`#refine-bin` in the README, which keeps the slow route the one a reader
+types without thinking; and `apps` that build from source, which makes
+`nix run` take minutes the first time.
+
+**Pinned by** `scripts/nix_route.py`, run in the gate's `flake-compiler`
+job: `nix profile install .` must install the `refine-bin` store path and
+report its version, `nix run . -- run main.ldn` must print the first
+program's output, and `.#refine` must be a different derivation, which the
+same job builds; `scripts/tests/test_nix_route.py` holds its refusals.
+
 ### D571 — A round's yield calls nothing beneath it but its sweep, its idler and its switch
 
 **The tour said** nothing. `core/fibre/stacks`' round of turns is the one

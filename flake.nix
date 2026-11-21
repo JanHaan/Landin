@@ -919,11 +919,13 @@
 
       packages = builtins.mapAttrs (
         system: built: {
-          #  The source build is the default, because `nix build` on a
-          #  repository is expected to build it.  refine-bin is the fast
-          #  path for a consumer who wants the compiler rather than the
-          #  toolchain that made it.
-          default = built.refine;
+          #  The prebuilt compiler is the default where a release published
+          #  one (D1707): `nix profile install github:701-dev/Landin` and
+          #  `nix run` then fetch a 17 MB archive in seconds rather than
+          #  the pinned toolchain and minutes of compiling.  The source
+          #  build stays one name away, `.#refine`, for a contributor and
+          #  for a system no release covers, where it is the default.
+          default = if built.hasRelease then built.refineBin else built.refine;
           inherit (built) refine;
         }
         #  Only a system a release published an asset for, and whose hash
@@ -945,5 +947,16 @@
           };
         } else { })
       ) perSystem;
+
+      #  `nix run github:701-dev/Landin -- ARGS` runs refine from the
+      #  default package, the prebuilt one where a release covers the
+      #  system (D1707).
+      apps = builtins.mapAttrs (system: _: {
+        default = {
+          type = "app";
+          program = "${inputs.self.packages.${system}.default}/bin/refine";
+          meta.description = "refine, the Landin compiler";
+        };
+      }) perSystem;
     };
 }
