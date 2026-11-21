@@ -594,7 +594,7 @@ branch; SR-1465-SR-1467 record the friction met.
 
 ### R16.26 — The library's costs
 
-Status: active
+Status: complete
 Depends on: R16.10
 
 R16.10 measured costs the library imposes rather than code generation: a
@@ -607,6 +607,40 @@ and `core/README.md`'s Cortex-M size rows not yet measured. This takes on
 Exit evidence: each cost measured, and either lowered against its R16.10
 baseline or recorded with its measurement, with the counter fixtures it
 changes re-decided.
+
+Done: D1727 grows a storage that holds a block through one call to the
+provider's `resize`, so `hosted/heap` moves a large list's pages rather
+than copying its bytes: R16.10's 4,000 appends of 64 KiB on x86-64 take
+190 ms through `vec.append_bytes` against 383 ms at the base, with 12
+`mremap` calls instead of 12 `mremap`, 13 `mmap` and 13 `munmap`, and the
+growing builder's 163 ms; an append of the list's own bytes reads them at
+the same offset in the grown block (D1122 amended), so no image links two
+ways of growing; this takes `SR-275`. A growth through
+`core/fault`'s injector is now one attempt and one success, and the
+fourteen fixtures and the derived containers' workload that pinned its
+counters were rewritten for it; one fixture's provider, which only moved
+on `resize`, now grows in place first, as the concept now says a provider
+that can should. `SR-1023`'s costs, measured again at its
+configurations after the register allocation work, had already fallen:
+the format line is 7,020 bytes and 3,889 instructions against 4,480 and
+2,259 through `append`, and the byte loops execute 35 instructions a byte
+at speed-auto, not 118. Word loops would take 10 instructions a byte on a
+4 KiB copy at 1.8 KB more flash, but a program copying short text runs 17%
+more instructions with them, so firmware keeps its byte loops, recorded
+with these figures in `core/mem/blocks.ldn`. An erased table links only
+the entries something projects, and `diag.stream` adds 3.2 KB and 1,000
+instructions to the four writes of one note, most of it the decimal
+position; recorded. Every Cortex-M size in `core/README.md` was measured
+again and corrected, about half what it said, and so were the corpus
+records of `runtime/network-addresses`, which now fits at size/auto, and
+`runtime/library-map-reserve-rollback`, which fits at size/auto and runs;
+this takes `SR-1023`. The k-nucleotide shape's map probe, 2.5 M 12-mers
+counted in a `u64` map, takes 2.45 s on x86-64, 39% in `rehash`, 27% in
+`locate` and 8% in SipHash, `locate`'s time on the loads after its bucket
+and key misses: the map's layout rather than its instructions, recorded in
+`compiler/tests/measure/findings.md` for the port. Found on the way and
+fixed: the Cortex-M lane's "unreviewed counterpart change" now says how a
+counterpart case is made from its hosted fixture.
 
 ### R16.27 — Cortex-M's remaining selection
 
