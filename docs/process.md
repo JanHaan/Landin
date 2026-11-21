@@ -1463,8 +1463,8 @@ comments of `.github/workflows/release.yml` and of `flake.nix` beside
    `nix profile install` and `nix run` then fetch the newly published
    archive, report X.Y.Z and run the first program (D1707). The commit is
    gated, its flake job running the same check, and promoted like any
-   other; after it is on `main`, `nix run github:701-dev/Landin --
-   version` prints `refine X.Y.Z`.
+   other; after it is on `main`,
+   `nix run github:701-dev/Landin -- version` prints `refine X.Y.Z`.
 8. **Move Homebrew**, as [the installers](#the-installers) say: run the
    tap's `bump-landin` workflow and check the formula.
 
