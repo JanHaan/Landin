@@ -1452,6 +1452,24 @@ comments of `.github/workflows/release.yml` and of `flake.nix` beside
    for `landin-contributor`) must say `public`; if not, make it public
    under the package's settings on GitHub, once. The source label links
    each package to the repository.
+
+   Then the install script the README pipes from `curl`, which names
+   each archive itself:
+
+   ```sh
+   python3 scripts/install_check.py --published vX.Y.Z
+   curl -fsSL https://www.701.dev/install.sh | sh -s -- --dir /tmp/landin-X.Y.Z
+   /tmp/landin-X.Y.Z/bin/refine version   # refine X.Y.Z
+   ```
+
+   The first holds the names `install.sh --list` gives for X.Y.Z to the
+   release's assets as `gh release view` lists them: each must be
+   published, and each archive published must be one the script names.
+   A failure there means the release workflow and `install.sh` name a
+   platform differently, and `install.sh` is changed on `main` before the
+   release is announced. The scripts job holds the script's names to the
+   text of `release.yml` (`scripts/tests/test_install_script.py`); this
+   step holds them to what the release published.
 7. **Move the flake.** On a branch from `main`, one commit moves
    `flake.nix`'s `releaseVersion` to X.Y.Z and its `releaseHashes` to the
    sums in the published `.sha256` files, which the publishing job's log

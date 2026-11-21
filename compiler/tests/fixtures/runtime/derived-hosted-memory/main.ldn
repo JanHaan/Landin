@@ -295,8 +295,11 @@ failure_sweep: () -> (ok: bool) =
             0
         end
         region.release(ledger, counted)
+        --  Every block given is freed once, so none is live.  A growth is
+        --  one resize, a success with no free of its own, so the successes
+        --  are never fewer than the frees.
         return when fault.live(counted) <> 0 or files[0].state <> io.closed_slot or files[1].state <> io.closed_slot
-          or fault.successes(counted) <> fault.frees(counted)
+          or fault.successes(counted) < fault.frees(counted)
         if succeeded then
             ok = budget > 0 and budget == fault.attempts(counted)
             return

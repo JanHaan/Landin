@@ -477,11 +477,15 @@ growing_free: (self: growing, block: ptr mut u8, size: usize) -> none =
     self.state.val.released_size = size
 end growing_free
 
---  Resizing moves the block, through this provider's own allocation
---  and free.
+--  A resize grows the one block in place, as a container's growth asks
+--  it to, and otherwise moves it through this provider's own allocation
+--  and free, which refuses a second block.
 growing_resize: (self: growing, block: ptr mut u8,
                  old_size: usize, new_size: usize, alignment: usize)
                 -> (moved: ptr mut u8) ! mem.out_of_memory =
+    --  [0810]: the block borrows nothing, as an allocation does.
+    moved = ptr(usize(block))
+    return when growing_grow(self, block, old_size, new_size, alignment)
     moved = try mem.relocate(self, block, old_size, new_size, alignment)
 end growing_resize
 

@@ -37,8 +37,8 @@ exercise: (provider: type is mem.allocator, inner: provider,
     left.value = 11
     right.value = 23
     zero: usize = 0
-    four: usize = 4
-    ten: usize = 10
+    both: usize = 2
+    six: usize = 6
     mut space: fault.space = zeroed
     allocator := fault.over(space, inner, zero)
     mut pointers := vec.new(item: node_ptr)
@@ -55,12 +55,11 @@ exercise: (provider: type is mem.allocator, inner: provider,
       or vec.length(pointers) <> 0 or vec.capacity(pointers) <> 0
       or vec.length(erased) <> 0 or vec.capacity(erased) <> 0
       or fault.live(allocator) <> 0
-    --  Each list takes a first block and grows twice, and a growth asks to
-    --  grow in place before it allocates (D356): ten permits cover the two
-    --  first blocks and the four growths whichever way each provider
-    --  answers, and what they leave is taken back so that the reserves
-    --  below find none.
-    fault.permit(allocator, ten)
+    --  Each list takes a first block and grows twice, each growth one
+    --  resize the provider answers in place or by moving the block: six
+    --  permits cover the two first blocks and the four growths whichever
+    --  way each provider answers, and the reserves below find none left.
+    fault.permit(allocator, six)
     mut at: usize = 0
     while at < 17 do
         vec.push(pointers, allocator, addr left) else (problem)
@@ -87,9 +86,9 @@ exercise: (provider: type is mem.allocator, inner: provider,
     return when not pointer_failed or not erased_failed
       or vec.length(pointers) <> 17 or vec.capacity(pointers) <> 32
       or vec.length(erased) <> 17 or vec.capacity(erased) <> 32
-      or fault.live(allocator) <> 2
-      or fault.frees(allocator) + fault.growths(allocator) <> 4
-    fault.permit(allocator, four)
+      or fault.live(allocator) <> 2 or fault.successes(allocator) <> 6
+      or fault.frees(allocator) <> 0 or fault.growths(allocator) <> 0
+    fault.permit(allocator, both)
     vec.reserve(pointers, allocator, want) else (problem)
         _ = problem
         return
@@ -134,9 +133,10 @@ exercise: (provider: type is mem.allocator, inner: provider,
     okay = pointer_ok and dispatch_ok and tail_ok and left.value == 21
            and right.value == 41 and right.sentinel == 123 and other.value == 37
            and vec.capacity(pointers) == 0 and vec.capacity(erased) == 0
-           and fault.successes(allocator) + fault.growths(allocator) == 8
-           and fault.injected_failures(allocator) == 6
-           and fault.frees(allocator) == fault.successes(allocator)
+           and fault.successes(allocator) == 8
+           and fault.growths(allocator) == 0
+           and fault.injected_failures(allocator) == 4
+           and fault.frees(allocator) == 2
            and fault.live(allocator) == 0
 end exercise
 

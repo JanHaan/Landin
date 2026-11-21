@@ -37963,6 +37963,45 @@ which lets a test's permits be spent by a path it did not count; and
 `runtime/r420-tree-real-exhaustion`, `runtime/core-vec-pointer-storage`,
 `runtime/derived-hosted-memory` and `runtime/library-second-reading`.
 
+### D1727 — A storage with a block grows through the provider's `resize`
+
+**The tour said** at [1360] that allocators are passed to containers, and
+D356 made `mem.reserve_storage` their one way of taking slots: a growth
+asked in place, and when the provider refused, a fresh block, the prefix
+copied into it and the old block freed. The growing text builder already
+grew through `resize`, which lets `hosted/heap` move a large block's pages
+rather than copy its bytes: 4,000 appends of 64 KiB on Linux x86-64 at
+`--optimize speed` took 383 ms through `vec.append_bytes`, with 12
+`mremap`, 13 `mmap` and 13 `munmap` calls, against the builder's 163 ms.
+
+**Chosen:** a storage that holds a block with a positive extent grows by
+one call to the provider's `resize`, which grows it in place or moves it,
+the provider choosing; its first old extent of bytes, the prefix among
+them, are where the result is, and `out_of_memory` leaves the storage as
+it was. A storage with no block, or whose items have no size, still takes
+a fresh block. `mem.reserve_admit_copy`, which `vec.append_bytes` grows
+with, grows the same way, and when the bytes it appends are a view of the
+storage's own block it reads them where the block now is: the block keeps
+the old block's bytes whether it grew or moved, so what is appended is
+what they held when the call began (D1122). The list now takes 190 ms with 12 `mremap` calls, one
+`mmap` and one `munmap`. Through `core/fault`'s injector a growth is one
+attempt and, when it succeeds, one success and no free, whichever way the
+inner provider answers, so the fixtures that pinned an injector's
+counters were rewritten for it.
+
+**The alternatives:** keeping D356's growth asked in place before the
+`resize`, which asks the system twice for every block it cannot extend
+where it is; keeping D356's growth for an append of the list's own bytes,
+which links both ways of growing into every image that appends bytes and
+took `runtime/core-self-append` past Cortex-M0's 32 KiB at `none`; and a
+`resize` for byte lists alone, which leaves every other item type copying
+its slots.
+
+**Pinned by** the fixtures D356 names whose counters changed, among them
+`runtime/r420-vec-large-list`, `runtime/r420-failing-providers` and
+`runtime/core-vec-used-sort`, `runtime/core-self-append` and
+`runtime/hosted-heap-resize`.
+
 ### D357 — `file_system` refines `files`, and a member for another system says so
 
 **The tour said** at [1290] that a concept may refine another, and D325 made
@@ -38413,6 +38452,12 @@ place and overwrites every block it is given back, and which fails on each
 of the list's and the builder's cases without the rule;
 `runtime/core-text-builder` and `runtime/core-vec-bytes` hold the growth
 itself.
+
+D1727 amends how a list's append keeps the rule: its storage grows through
+the provider's `resize`, and a view of its own block is read at the same
+offset in the block `resize` returns, which holds the old block's bytes
+whether it grew or moved. A list's one view is a range of that block, so
+its offset is known, unlike a `format`'s values.
 
 ### D442 — `platform/linux`'s path parameters take `ptr u8`
 
@@ -40780,6 +40825,50 @@ job: `nix profile install .` must install the `refine-bin` store path and
 report its version, `nix run . -- run main.ldn` must print the first
 program's output, and `.#refine` must be a different derivation, which the
 same job builds; `scripts/tests/test_nix_route.py` holds its refusals.
+
+### D1747 — The install script installs one release archive into one directory, by the archive's own checksum
+
+**The tour said** nothing. The roadmap asked for a script a reader pipes
+from `curl` into `sh` that installs the release archive for the host, and
+left where it installs, what it does to a directory already there and
+which hosts it refuses to the item that wrote it.
+
+**Chosen:** `install.sh`, in the repository and served unchanged at
+`https://www.701.dev/install.sh`, the address the maintainer chose, is POSIX `sh` needing `curl`,
+`tar` and `sha256sum` or `shasum`. It names the archive
+`landin-VERSION-PLATFORM.tar.gz` by the release workflow's names, finds
+the newest release by following GitHub's `releases/latest` redirect to its
+tag, or takes `--version`, and refuses an archive whose digest is not the
+one its `.sha256` names. It unpacks into `--dir`, by default
+`$HOME/.landin`, a directory holding only that install, which a later run
+replaces whole once the new one is unpacked beside it; a directory that
+holds anything else is refused. It edits no shell profile and runs nothing
+as root: it prints the `export PATH` line and the driver `refine run`
+links with. It refuses a host no archive serves, Linux without glibc's
+loader and NixOS, whose loader path is a stub, among them, and names nix
+and the source build there. When `gh` is installed it prints the commands
+that check the archive's attestation, and does not run them. `--platform`
+names the archive for another host and `--list` prints the names a release
+publishes for every platform. `LANDIN_RELEASES` names another place
+releases are served from, which is how the gate serves its own archive.
+
+**The alternatives:** installing into `/usr/local` or another system
+directory, which needs root and mixes with the system's files; keeping
+earlier versions side by side under the directory, which nothing selects
+between yet and a build tool will own; appending to a shell profile,
+which changes a file the reader did not name; the GitHub API for the
+newest release, which is rate-limited without a token; and running
+`gh attestation verify` itself, which needs a login a fresh machine does
+not have.
+
+**Pinned by** `scripts/install_check.py`, run in the gate's `release`,
+`arm64-release` and `darwin-host-release` jobs against each host's
+packaged compiler served from 127.0.0.1 as a release is: the newest and a
+named version installed and running the first program, a reinstall, a
+foreign directory, a damaged archive, a missing version and two unserved
+hosts refused; `scripts/tests/test_install_script.py` runs the same cases
+against a stand-in archive and holds the script's names to
+`release.yml`'s.
 
 ### D571 — A round's yield calls nothing beneath it but its sweep, its idler and its switch
 

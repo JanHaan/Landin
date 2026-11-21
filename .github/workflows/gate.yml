@@ -620,6 +620,18 @@ jobs:
           python3 scripts/outside_user.py --prefix "$outside/prefix" \
             --work "$outside/work"
 
+      #  The one-line install script against the archive just packaged,
+      #  served from 127.0.0.1 as a release serves it: the newest and a
+      #  named version installed and running the first program, a damaged
+      #  archive, an unserved host and a missing version refused
+      #  (scripts/install_check.py).
+      - name: The install script
+        run: |
+          set -eu
+          PATH="$LANDIN_GNAT_HOME/bin:$PATH"
+          python3 scripts/install_check.py --archive "$RUNNER_TEMP/outside/landin.tar.gz" \
+            --work "$RUNNER_TEMP/install"
+
       - name: Object quality
         run: ./scripts/quality.sh
 
@@ -1829,6 +1841,18 @@ jobs:
           python3 scripts/outside_user.py --prefix "$outside/prefix" \
             --work "$outside/work"
 
+      #  The one-line install script against the archive just packaged,
+      #  served from 127.0.0.1 as a release serves it: the newest and a
+      #  named version installed and running the first program, a damaged
+      #  archive, an unserved host and a missing version refused
+      #  (scripts/install_check.py).
+      - name: The install script
+        if: matrix.shard == 1
+        run: |
+          set -eu
+          python3 scripts/install_check.py --archive "$RUNNER_TEMP/outside/landin.tar.gz" \
+            --work "$RUNNER_TEMP/install"
+
       #  The LLDB sessions: the three derived programs at three profiles,
       #  the panic sessions and the source-debugging contract, with every
       #  dSYM, DWARF and Mach-O identity check.  41 s on a Mac; as a job of
@@ -2213,6 +2237,18 @@ jobs:
           tar -xzf "$outside/landin.tar.gz" -C "$outside/prefix"
           python3 scripts/outside_user.py --prefix "$outside/prefix" \
             --work "$outside/work"
+
+      #  The one-line install script against the archive just packaged,
+      #  served from 127.0.0.1 as a release serves it: the newest and a
+      #  named version installed and running the first program, a damaged
+      #  archive, an unserved host and a missing version refused
+      #  (scripts/install_check.py).
+      - name: The install script
+        run: |
+          set -eu
+          PATH="$LANDIN_GNAT_HOME/bin:$PATH"
+          python3 scripts/install_check.py --archive "$RUNNER_TEMP/outside/landin.tar.gz" \
+            --work "$RUNNER_TEMP/install"
 
       #  The user image of arm64, from the archive just packaged (D1667).
       - name: The user image
