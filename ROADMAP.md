@@ -2108,7 +2108,7 @@ and published-image checks included. Gate run 44823246775 on bddf062e7.
 
 ### R23.20 — Nix installs the prebuilt compiler
 
-Status: planned
+Status: active
 Depends on: none
 
 `nix profile install github:701-dev/Landin` builds `refine` from source,
