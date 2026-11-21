@@ -326,6 +326,15 @@ Where things are:
 Running beside it:
 {beside}
 
+How to work: exact `dev-test.sh` selectors for what the item changes, all
+in one invocation, leaving the complete suite to the gate; the build's
+worker count and CPU placement at their defaults, no `-j` or `taskset`;
+the pinned environment by `. "$(./scripts/agent_env.sh)"` or `nix develop`;
+a long run through `item.py run`, waited on by the harness's completion
+notification, `run_logged.py --wait DIR` where there is none
+(docs/process.md, "Local agent feedback"). A brief you write for a
+subagent or a stream carries these rules itself.
+
 What you may do without asking: {authority} Releases and versions never.
 A decision only the maintainer can take is a question file
 (`python3 scripts/register_next.py --question --file --asked-by {item}`);

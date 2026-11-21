@@ -29,8 +29,8 @@
 #  every target.
 #  Cross-host determinism also contributes to the aggregate gate status.
 #
-#  docs/process.md's gate reference records observed job timings and their
-#  measurement limits.  Shared build artifacts are not acceptance records.
+#  docs/process.md's gate reference describes every job.  Shared build
+#  artifacts are not acceptance records.
 #
 #  The physical boards run on a board-scope event: a push to main, the
 #  weekly schedule and a manual dispatch, in this repository only.  The
