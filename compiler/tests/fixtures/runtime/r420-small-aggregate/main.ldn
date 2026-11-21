@@ -61,9 +61,12 @@ public main: () -> (code: i32) =
     end
     if spilled_removed.x <> 42 or spilled_removed.y <> 108 then return end if
     spill.release(values, allocator)
+    --  The spill took one block of four and resized it twice, to eight and
+    --  sixteen; a resize the heap answers by moving frees the old block
+    --  itself, so the release is the one free through the injector.
     if spill.length(addr values) <> 0 or spill.capacity(addr values) <> 2
-      or fault.live(allocator) <> 0
-      or fault.frees(allocator) <> fault.successes(allocator)
+      or fault.live(allocator) <> 0 or fault.successes(allocator) <> 3
+      or fault.frees(allocator) <> 1
     then return end if
     spill.push(values, allocator, first) else (problem)
         _ = problem

@@ -1,10 +1,12 @@
 --  Byte blocks: copying, filling and searching byte slices, with their
 --  lengths checked.  Comparing them is core/cmp's (D352).
 
---  On firmware, copy, fill and find move a byte at a time.  A 32 KiB flash
---  image has no room for the word loops below: at `--optimize none` they
---  take about 7 KiB more of it, and 2.5 KiB even as one loop apiece, and
---  a Cortex-M0 word is only four bytes.
+--  On firmware, copy, fill and find move a byte at a time.  The word
+--  loops below take about 1.8 KiB more of a 32 KiB flash image at
+--  Cortex-M0's size/auto, and gain only on long copies: a 4 KiB copy
+--  takes 10 instructions a byte against 35 to 49, but a program copying
+--  short text executes as many instructions or more, and a Cortex-M0 word
+--  is only four bytes.
 fixed if compiler.os == freestanding then
     --- Copy every byte of `source` to the start of `into`, as C's `memmove`
     --- does: the two may overlap, in either direction, and `into` then holds

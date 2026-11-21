@@ -60,7 +60,9 @@ public allocator: type = concept (provider: type)
     --- alignment, and it is freed with `new_size`; a moved block's old
     --- address is given back and is not used again. Report out_of_memory
     --- with the block and provider unchanged when there is no room for it.
-    --- A provider that cannot resize in place answers with `relocate`.
+    --- A provider that cannot resize in place answers with `relocate`; one
+    --- that can grows in place here first, since a container grows its
+    --- storage through `resize` alone.
     resize: (self: provider, block: ptr mut u8,
              old_size: usize, new_size: usize, alignment: usize)
             -> (moved: ptr mut u8) ! out_of_memory
@@ -156,29 +158,6 @@ public storage_over: (item: type, base: ptr mut u8, slots: usize)
     result = (base: base, capacity_count: slots, prefix: prefix)
 end storage_over
 
---  Extend the same positive-byte allocation in place to `slots`, from
---  extents `reserve_storage` computed: the provider validates the physical
---  extension before the private logical capacity changes, so a refusal
---  leaves the storage as it was, and a zero-byte allocation keeps its one
---  allocation per reserve.
-grow_storage: (item: type, provider: type is allocator,
-               inout store: storage(item), memory: provider,
-               old_size: usize, new_size: usize, slots: usize)
-              -> (grown: bool) =
-    grown = false
-    return when old_size == 0 or new_size <= old_size
-    match store.base
-        no_storage: return
-        ptr (base): begin
-            grown = provider.grow(memory, base, old_size, new_size,
-                                  alignof item)
-            if grown then
-                store.capacity_count = slots
-            end if
-        end
-    end match
-end grow_storage
-
 --- Return the bytes `slots` items take: zero for a zero-sized item, which
 --- still has its slots. Reports `out_of_memory` when they do not fit `usize`.
 public storage_extent: (item: type, slots: usize)
@@ -210,13 +189,53 @@ public release_storage: (item: type, provider: type is allocator,
     provider.free(memory, block, extent)
 end release_storage
 
+--  Grow a storage that holds a block of `old_extent` bytes to `slots`
+--  items, `extent` bytes, through the provider's `resize`, which grows it
+--  in place or moves it, a large block's pages where it can: the block's
+--  first `old_extent` bytes, the prefix among them, are where the result
+--  is.  `out_of_memory` leaves the storage as it was; a storage with a
+--  positive extent holds a block, so its absence is never the reason.
+resize_storage: (item: type, provider: type is allocator,
+                 inout store: storage(item), memory: provider,
+                 old_extent: usize, extent: usize, slots: usize)
+                -> none ! out_of_memory =
+    count: usize = length(store)
+    match store.base
+        no_storage: fail out_of_memory
+        ptr (base): begin
+            moved: ptr mut u8 = try provider.resize(memory, base, old_extent,
+                                                    extent, alignof item)
+            store.base = moved
+            store.capacity_count = slots
+            first: ptr mut [1]item = ptr(usize(moved))
+            mut kept: []mut item = first.val[0..<1]
+            unchecked begin
+                --  The block holds `slots` items, at least `count` and at
+                --  least one, and its first `count` are the prefix's.
+                kept = kept[0..<count]
+            end unchecked
+            store.prefix = kept
+        end
+    end match
+end resize_storage
+
+--  The address of a storage's block, or zero when it holds none.
+start_of: (item: type, store: storage(item)) -> (address: usize) =
+    address = 0
+    match store.base
+        no_storage: return
+        ptr (base): address = usize(base)
+    end match
+end start_of
+
 --  The containers' one way of taking slots: spec.md's D356.
 --- Make room for at least `want` items, keeping the initialized prefix.
---- The block grows in place where the provider can grow it.  Otherwise the
---- items move to a fresh block, which is published last, and the old one
---- is freed; a move invalidates views of the old block.  `out_of_memory`
---- leaves the storage, its prefix and its capacity as they were.  This is
---- the containers' one way of taking slots.
+--- A storage with a block asks the provider to `resize` it, which grows it
+--- in place or moves it; one without, or whose items have no size, takes a
+--- fresh block, the prefix copied into it and the old one freed.  A move
+--- invalidates views of the old block.  `out_of_memory` leaves the
+--- storage, its prefix and its capacity as they were.  This is the
+--- containers' one way of taking slots.
 public reserve_storage: (item: type, provider: type is allocator,
                          inout store: storage(item), memory: provider,
                          want: usize) -> none ! out_of_memory =
@@ -225,7 +244,10 @@ public reserve_storage: (item: type, provider: type is allocator,
     return when want <= old_capacity
     extent: usize = try storage_extent(item: item, slots: want)
     old_extent: usize = old_capacity * sizeof item
-    return when grow_storage(store, memory, old_extent, extent, want)
+    if old_extent > 0 then
+        try resize_storage(store, memory, old_extent, extent, want)
+        return
+    end if
     block: ptr mut u8 = try provider.alloc(memory, extent, alignof item)
     mut fresh := storage_over(item: item, base: block, slots: want)
     transfer_prefix(store, fresh, old_count) else (problem)
@@ -243,12 +265,13 @@ end reserve_storage
 --- Copy `bytes` after a byte storage's initialized prefix and count them
 --- in it, as `admit_copy` does, first making room for `want` bytes in all
 --- as `reserve_storage` does when the storage holds fewer.  `bytes` may be
---- a view of the storage's own block (D1122): where the block moves, they
---- are copied into the fresh block before the old one is freed, so what is
---- appended is what they held when the call began.  A move invalidates
---- views of the old block once the call has returned.  `out_of_memory`,
---- when the provider refuses or `want` bytes would not hold the prefix and
---- `bytes`, leaves the storage, its prefix and its capacity as they were.
+--- a view of the storage's own block (D1122): the block keeps its bytes
+--- when it grows or moves, so they are read where the block now is, and
+--- what is appended is what they held when the call began.  A move
+--- invalidates views of the old block once the call has returned.
+--- `out_of_memory`, when the provider refuses or `want` bytes would not
+--- hold the prefix and `bytes`, leaves the storage, its prefix and its
+--- capacity as they were.
 public reserve_admit_copy: (provider: type is allocator,
                             inout store: storage(u8), memory: provider,
                             want: usize, bytes: []u8)
@@ -257,35 +280,30 @@ public reserve_admit_copy: (provider: type is allocator,
     old_capacity: usize = capacity(store)
     slots: usize = if want > old_capacity then want else old_capacity end if
     fail out_of_memory when lenof bytes > slots - old_count
-    mut placed: bool = slots == old_capacity
-    if not placed then
-        placed = grow_storage(store, memory, old_capacity, slots, slots)
+    mut source: []u8 = bytes
+    if slots > old_capacity then
+        old_start: usize = start_of(store)
+        try reserve_storage(store, memory, slots)
+        if old_capacity > 0 and lenof bytes > 0 then
+            at: usize = usize(addr bytes[0])
+            if at >= old_start and at - old_start < old_capacity then
+                --  `bytes` lay in the old block, whose first
+                --  `old_capacity` bytes the block now holds from its
+                --  start: read them there.
+                first: ptr mut [1]u8 = ptr(start_of(store) + (at - old_start))
+                mut moved: []mut u8 = first.val[0..<1]
+                unchecked begin
+                    --  A view of the old block ends within its bytes.
+                    moved = moved[0..<lenof bytes]
+                end unchecked
+                source = moved
+            end if
+        end if
     end if
-    if placed then
-        --  The block is where it was, so a view of it still reads it.
-        admit_copy(store, bytes) else (problem)
-            _ = problem
-            fail out_of_memory
-        end
-        return
-    end if
-    block: ptr mut u8 = try provider.alloc(memory, slots, alignof u8)
-    mut fresh := storage_over(item: u8, base: block, slots: slots)
-    transfer_prefix(store, fresh, old_count) else (problem)
+    admit_copy(store, source) else (problem)
         _ = problem
-        release_storage(fresh, memory)
         fail out_of_memory
     end
-    --  The old block is still allocated and still holds its bytes, which
-    --  `transfer_prefix` copied and did not disturb: `bytes` is read here,
-    --  before the release below, whether or not it views that block.
-    admit_copy(fresh, bytes) else (problem)
-        _ = problem
-        release_storage(fresh, memory)
-        fail out_of_memory
-    end
-    release_storage(store, memory)
-    store = fresh
 end reserve_admit_copy
 
 --- Return the logical slot capacity, including slots for zero-sized items.
