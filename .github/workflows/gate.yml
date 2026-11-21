@@ -29,8 +29,8 @@
 #  every target.
 #  Cross-host determinism also contributes to the aggregate gate status.
 #
-#  docs/process.md's gate reference records observed job timings and their
-#  measurement limits.  Shared build artifacts are not acceptance records.
+#  docs/process.md's gate reference describes every job.  Shared build
+#  artifacts are not acceptance records.
 #
 #  The physical boards run on a board-scope event: a push to main, the
 #  weekly schedule and a manual dispatch, in this repository only.  The
@@ -850,7 +850,8 @@ jobs:
           echo "Neovim LSP preference smoke clean"
 
   #  The flake (D585): `nix build .#refine` and `.#refine-bin`, every
-  #  output of every system evaluated, and the development shell entered,
+  #  output of every system evaluated, the development shell entered, the
+  #  README's `nix profile install` and `nix run` checked (D1707),
   #  on every run that does not reuse a pass, so a change anywhere in the
   #  source that breaks `nix build .#refine` fails the commit that makes it,
   #  and the board RAM helpers built, the native one with its tests.
@@ -881,6 +882,13 @@ jobs:
           nix build -L --no-link .#refine .#refine-bin
           nix flake check --no-build --all-systems
           nix develop --command ./scripts/toolchain.sh
+
+      #  D1707: the README's nix commands fetch the release archive rather
+      #  than compile, `nix run` runs the first program, and the source
+      #  build is still `.#refine`.
+      - name: Install and run refine through nix as the README says
+        if: matrix.part == 'compiler'
+        run: python3 scripts/nix_route.py --work "$RUNNER_TEMP/nix-route"
 
       - name: Build the native board RAM helper
         if: matrix.part == 'ram-run'

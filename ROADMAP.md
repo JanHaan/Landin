@@ -619,7 +619,10 @@ levels' own registers and forms: SipHash and mandelbrot still spend about
 two fifths of their instructions on homes, and r8, r10 and r12 hold nothing.
 This takes on SR-581's high registers, SR-582's CBZ and CBNZ, SR-583's
 bitfield instructions, SR-596's float selection in VFP registers, SR-869's
-short `u64` routines on armv6-m and SR-231's atom `match` arms.
+short `u64` routines on armv6-m and SR-231's atom `match` arms, and SR-1430, the STM32H753's binary-search and merge-sort running
+more cycles after R16.24 while the M33 ran them faster: the cause found and
+the configurations no slower than R16.22's figures, or the cause recorded
+with its measurement.
 
 Exit evidence: each cost taken measured lower than its R16.10 baseline and
 R16.22's figures, the cycles on the boards no slower, with unchanged
@@ -2135,7 +2138,7 @@ and published-image checks included. Gate run 44823246775 on bddf062e7.
 
 ### R23.20 — Nix installs the prebuilt compiler
 
-Status: planned
+Status: complete
 Depends on: none
 
 `nix profile install github:701-dev/Landin` builds `refine` from source,
@@ -2153,6 +2156,21 @@ source build still reachable, in the gate's flake jobs; the installing
 documentation giving both commands; the release recipe's flake-hash step
 in `docs/process.md` checking `nix run` against the newly published
 archives before that commit is promoted.
+
+Done: the flake's default package is `refine-bin`, the release archive,
+on every system whose release hash it records, all three today, and the
+source build stays `#refine`; `apps.default` runs `bin/refine` from the
+default, so `nix run github:701-dev/Landin -- ...` runs the released
+compiler (D1707). The README gives `nix profile install`, `nix run` and
+`#refine`, and keeps `profile install`, which Nix 2.34 calls an alias of
+`add`, because older Nix has no `add`. `scripts/nix_route.py` installs the
+flake into a scratch profile and holds it to the `refine-bin` store path
+and version, runs the first program through `nix run`, and refuses a
+`#refine` that is not the source build; the gate's `flake-compiler` leg runs it after building both
+packages, and `test_nix_route` holds its refusals. The release recipe's
+flake step runs it on the branch that moves the hashes and checks
+`nix run github:701-dev/Landin -- version` once that is on `main`. Gate
+run 44873069309 and boards run 44875115933 on the merged tree 9e62c8b88.
 
 ### R23.30 — A one-line install script
 
