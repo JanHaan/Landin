@@ -180,6 +180,44 @@ binary-trees 478 / 1,195.
    loop on the M7 description is 237 instructions an iteration, 9 of them
    VFP arithmetic.
 
+### Cortex-M after its remaining selection
+
+R16.27's selection (D1767-D1774), measured with `measure.py size` and
+`measure.py instructions` over the firmware set against the commit it
+started from. Executed instructions, the geometric mean of the six
+workloads' ratios: armv6-m 0.897 at speed-auto, 0.863 at size-auto and
+0.959 at none-off; armv7-m and armv8-m.main 0.851, 0.857 and 0.951.
+`.text` summed over the set: armv6-m -5.6% at speed-auto and -6.1% at
+size-auto, the Thumb-2 levels -7.5% and -9.0%. By workload at armv7-m
+speed-auto: sieve 0.72, fannkuch-redux 0.81, merge-sort 0.81,
+binary-search 0.85, SipHash 0.96 and the soft-float mandelbrot 0.996,
+whose time is the C runtime's float helpers. With a float unit, the
+firmware mandelbrot on the AN500 description at armv7e-m speed-auto
+executes 649,506 instructions under QEMU against 4,117,064, `in_set` 60
+instructions against 241 (D1771). A loop of packed-field reads and writes
+at armv7-m speed executes 80,104 instructions against 254,113 before
+UBFX, BFI and the high registers (D1772, D1773).
+
+What is left, by what each measured, for whoever takes Cortex-M next:
+
+1. **Eight-byte values in homes.** SipHash moves 0.96 of its
+   instructions: its state is `u64`, kept in its homes and computed in
+   the r0:r1 and r2:r3 pairs. `core.line.divisor` is 924 bytes at armv6-m
+   size-auto and `frame_bits` 210, against gcc `-Os`'s 190 and 32
+   (`SR-869`). A held pair, as RV32's (D1503), is the step; not measured.
+2. **Small aggregates copied and cleared a byte at a time.** A two-byte
+   packed image and a sixteen-byte `[16]u8` are zeroed and copied by
+   `strb` loops of four instructions a byte, though their frame slots
+   could be word-aligned; in fannkuch-redux's `fannkuch` one such loop
+   runs for each permutation. Not measured.
+3. **The atom `match` chain.** `failure.words` at armv6-m size-auto is
+   1,132 bytes, about 33 an arm (`SR-231`); a table needs a multiway IR
+   terminator.
+4. **A framed routine's parameter stores.** The entry stores each
+   incoming register through `mov r6, r11; subs r6, #N` before sp is
+   known; from sp after the reservation would be one `str` each. Small:
+   once a call.
+
 ### RV32
 
 1. **Every value in a stack home.** Report share 53.9% at rv32imc
