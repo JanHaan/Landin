@@ -1243,9 +1243,11 @@ class RecipeChecksum(unittest.TestCase):
                     (scripts / "env.sh").write_text(
                         "set -eu\nLANDIN_ROOT=" + shlex.quote(tmp)
                         + "\nLANDIN_BUILD_MODE=debug\n")
-                    recipe = root / "environments/linux-amd64/Containerfile"
+                    recipe = root / "environments/images/contributor.Containerfile"
                     recipe.parent.mkdir(parents=True)
                     recipe.write_text("FROM scratch\n")
+                    pins = root / "environments/pins.sh"
+                    pins.write_text("LANDIN_GNAT_VERSION=0\n")
                     fake = root / "fake"
                     fake.mkdir()
                     calls = root / "container-calls"
@@ -1272,8 +1274,9 @@ class RecipeChecksum(unittest.TestCase):
                         rows = calls.read_text().splitlines()
                         self.assertEqual(len(rows), 2)
                         checksum = subprocess.check_output(
-                            ["cksum", str(recipe)], text=True,
-                            timeout=HANG).split()[0]
+                            ["cksum"], text=True, timeout=HANG,
+                            input=recipe.read_text() + pins.read_text()
+                            ).split()[0]
                         expected = override or "landin-linux-amd64:" + checksum
                         self.assertEqual(rows[0], "image inspect " + expected)
                         self.assertIn(expected + " true", rows[1])

@@ -230,6 +230,26 @@ what each selects.
 The README has [the commands in brief](../README.md#refine-in-brief);
 `refine help reference` prints the complete interface.
 
+### Installed forms
+
+- A release publishes an archive for Linux x86-64, Linux arm64 and macOS
+  arm64, an installed prefix of `bin/refine`, `libexec/landin` and
+  `lib/landin`, each attested by the release workflow; Homebrew's
+  `janhaan/tap/landin` and the flake's `refine-bin` install it, and the
+  flake's default package builds from source. The
+  [README's installing section](../README.md#installing) gives each route.
+- From the release after 0.2.11, a release also publishes two container
+  images, each one tag of the version alone holding Linux amd64 and arm64
+  (D1667, D1668): `ghcr.io/701-dev/landin`, the Linux archive in
+  `/usr/local` over Debian 13's `gcc` and `libc6-dev`, which links native
+  Linux programs and holds no firmware or cross toolchain; and
+  `ghcr.io/701-dev/landin-contributor`, the pinned GNAT and GPRbuild with
+  the tools that build and test the compiler. The gate builds the user
+  image from its packaged release compiler on amd64 and arm64 and runs the
+  first program in it as the README says; the release workflow builds and
+  checks both images, the contributor one by building the compiler inside
+  it, before the approval and pushes them after it.
+
 ### Commands
 
 - `refine check program.ldn ...` runs the frontend, lowering and

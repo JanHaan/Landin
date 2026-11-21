@@ -547,7 +547,7 @@ class LibraryConsumers(unittest.TestCase):
         self.assertIn("generated table", said[0][2])
 
 
-PINS = ["environments/linux-amd64/Containerfile",
+PINS = ["environments/images/contributor.Containerfile",
         "compiler/ada/TOOLCHAIN.md",
         "environments/pins.sh",
         "highlight/tree-sitter/package.json",
@@ -556,7 +556,9 @@ PINS = ["environments/linux-amd64/Containerfile",
         "flake.nix",
         "environments/cortex-m/setup.py",
         #  The workflow that runs the pinned actionlint.
-        ".github/workflows/gate.yml"]
+        ".github/workflows/gate.yml",
+        #  The user image's recipe, held to the same base image.
+        "environments/images/user.Containerfile"]
 
 
 class PinnedToolchain(unittest.TestCase):
@@ -569,11 +571,35 @@ class PinnedToolchain(unittest.TestCase):
     def test_a_recipe_that_names_another_version_is_reported(self):
         from check_controls import tree
         with tree(copied=PINS) as root:
-            recipe = root / PINS[0]
-            recipe.write_text(
-                recipe.read_text().replace("16.1.0", "16.2.0"))
+            pins = root / PINS[2]
+            pins.write_text(pins.read_text().replace(
+                "LANDIN_GNAT_VERSION=16.1.0-1", "LANDIN_GNAT_VERSION=16.2.0-1"))
             said = [why for _, _, why in checker.check_pinned_toolchain(True)]
-        self.assertTrue(said)
+        self.assertTrue(any("GNAT_VERSION 16.2.0-1 is not recorded" in why
+                            for why in said), said)
+
+    def test_the_image_recipes_are_held_to_the_pins(self):
+        #  D1668: the contributor recipe reads pins.sh and writes no
+        #  version; both recipes stand on its base image.  Each break is
+        #  named.
+        from check_controls import tree
+        for relative, old, new, fragment in (
+                (PINS[0], "ARG TARGETARCH\n",
+                 "ARG TARGETARCH\nARG GNAT_VERSION=16.1.0-1\n",
+                 "names GNAT_VERSION 16.1.0-1 literally"),
+                (PINS[0], "COPY pins.sh ", "COPY other.sh ",
+                 "no `COPY pins.sh`"),
+                (PINS[0], "landin_install_toolchain ", "install_somehow ",
+                 "no `landin_install_toolchain`"),
+                (PINS[-1], "debian@sha256:f", "debian@sha256:0",
+                 "is not pinned in environments/pins.sh")):
+            with self.subTest(fragment=fragment), tree(copied=PINS) as root:
+                path = root / relative
+                text = path.read_text()
+                self.assertIn(old, text)
+                path.write_text(text.replace(old, new))
+                said = [why for _, _, why in checker.check_pinned_toolchain(True)]
+                self.assertTrue(any(fragment in why for why in said), said)
 
     def test_a_missing_recipe_is_reported_rather_than_skipped(self):
         #  This check used to `return []` when the recipe or the record was

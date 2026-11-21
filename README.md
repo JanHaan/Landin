@@ -43,8 +43,8 @@ application is at the other. This is what it is like to write:
 ## Installing
 
 `refine` is one executable, with its standard library in a directory
-beside it. There are four ways to get both: with Homebrew, from a release,
-with nix, or from source.
+beside it. There are five ways to get both: with Homebrew, from a release,
+in a container, with nix, or from source.
 
 Use 0.2.9 or later: [the first program](#your-first-program) needs
 `refine run` and `hosted/blocking`, both newer than 0.2.8.
@@ -117,6 +117,77 @@ options.
 The archive leaves the compiler's debug information out and publishes it
 beside it as `landin-VERSION-PLATFORM-debug.tar.gz`. You need that file
 only to read a crash of the compiler itself.
+
+### In a container
+
+Each release publishes an image on GitHub's container registry,
+`ghcr.io/701-dev/landin:VERSION`. The tag is the release's version without
+the `v`: release `vVERSION` is tag `VERSION`. There is no `latest` tag, so
+name the version. Each tag holds Linux amd64 and arm64, and Docker or
+Podman picks the one for your host. Images start with the first release
+after 0.2.11; 0.2.11 and earlier have none.
+
+The image is Debian 13 with the release archive for its platform unpacked
+in `/usr/local`: `refine` in `/usr/local/bin`, its commands in
+`/usr/local/libexec/landin` and the library in `/usr/local/lib/landin`. It
+also holds Debian's `gcc` and `libc6-dev`, which `refine` links with.
+
+Its working directory is `/work`. Mount your directory there and run as
+your own user, so the files `refine` writes are yours:
+
+```sh
+docker run --rm -v "$PWD:/work" --user "$(id -u):$(id -g)" \
+  ghcr.io/701-dev/landin:VERSION refine run main.ldn
+```
+
+Compile and run a program the same way: give `refine compile main.ldn -o main`
+as the command, and then `./main`. `podman` takes the same arguments.
+
+With no command the image runs `refine version`, whose `library: ` line
+then says `/usr/local/lib/landin`.
+
+The release workflow attests each image. With the GitHub CLI, check one:
+
+```sh
+gh attestation verify oci://ghcr.io/701-dev/landin:VERSION --repo 701-dev/Landin \
+  --signer-workflow 701-dev/Landin/.github/workflows/release.yml \
+  --source-ref refs/tags/vVERSION --deny-self-hosted-runners
+```
+
+The image links only for Linux on its own architecture. It holds no
+toolchain for firmware (Cortex-M, RISC-V, Xtensa) or for the other Linux
+architecture. Add one from Debian in an image of your own, for example for
+Cortex-M:
+
+```dockerfile
+FROM ghcr.io/701-dev/landin:VERSION
+RUN apt-get update \
+ && apt-get install --no-install-recommends --yes gcc-arm-none-eabi libnewlib-arm-none-eabi \
+ && rm -rf /var/lib/apt/lists/*
+```
+
+`refine` also finds these Debian packages:
+
+- `gcc-riscv64-unknown-elf`, for RV32 firmware;
+- `gcc-aarch64-linux-gnu` and `libc6-dev-arm64-cross`, to link Linux
+  arm64 programs on amd64;
+- `gcc-x86-64-linux-gnu` and `libc6-dev-amd64-cross`, to link Linux
+  amd64 programs on arm64.
+
+Espressif's Xtensa compiler is not in Debian; it comes from Espressif.
+When a driver is missing, `refine`'s error names the package to install.
+
+To debug inside a container, install `gdb` the same way. It needs no
+extra capability. It warns that it cannot turn off address randomisation,
+which Docker's default security profile refuses, so a program's addresses
+can differ from one run to the next.
+
+An image moves only at a release: the Debian packages inside are the ones
+of the day the release was built.
+
+A second image, `ghcr.io/701-dev/landin-contributor:VERSION`, is for
+building the compiler itself. See
+[Building and checking](#building-and-checking).
 
 ### With nix
 
@@ -463,6 +534,19 @@ nix develop                  # or set LANDIN_GNAT_HOME and LANDIN_GPRBUILD_HOME
 ./scripts/test.sh            # the complete suite, on Linux
 ./scripts/dev-test.sh --suite='fixture execution'   # a FILTERED run while editing
 python3 check.py             # the mechanical checks over documents and fixtures
+```
+
+Without nix, the contributor image of a release,
+`ghcr.io/701-dev/landin-contributor:VERSION`, holds the GNAT and GPRbuild
+that release's `environments/pins.sh` names, already set up, with
+`python3`, `git`, Clang and GDB, for Linux amd64 and arm64. Use the image
+of the release whose pins your checkout has, and give its objects a build
+tag of their own:
+
+```sh
+docker run --rm -v "$PWD:/work" --user "$(id -u):$(id -g)" -e HOME=/tmp \
+  -e LANDIN_BUILD_TAG=image ghcr.io/701-dev/landin-contributor:VERSION \
+  ./scripts/build.sh --compiler-only
 ```
 
 `check.py` is not a parser. It is the set of invariants that are cheap to

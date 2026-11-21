@@ -2077,7 +2077,7 @@ the first such item writes the whole recipe down.
 
 ### R23.10 — Container images on releases
 
-Status: planned
+Status: complete
 Depends on: none
 
 Two images under `ghcr.io/701-dev`, for Linux amd64 and arm64 in one
@@ -2107,6 +2107,31 @@ installing documentation and `docs/capabilities.md`; the release recipe's
 image step, and how to check a published image, written in
 `docs/process.md`. The first published images are the next release's
 evidence, not this item's.
+
+Done: `environments/images/user.Containerfile` unpacks a Linux
+release archive into `/usr/local` over Debian 13's own `gcc` and
+`libc6-dev`, whose driver names `refine` already asks for, so no
+`libexec/landin/<triplet>-gcc` link is made (D1667);
+`environments/images/contributor.Containerfile`, the former
+`environments/linux-amd64/Containerfile`, installs the toolchain through
+`pins.sh` for amd64 or arm64 and names no version, and `check.py` holds
+both recipes to the pins (D1668). `scripts/container_image.py` builds,
+checks, saves and publishes both; the gate builds the user image from its
+packaged compiler in `outside-user-stock` and `arm64-release` and runs
+the first program in it as the README says. `release.yml` builds and
+checks both images, the contributor one by building the compiler inside
+it, and assembles each into one two-platform index before the approval,
+then pushes and attests them after the release is public, tagged with the
+version alone (Q-65's default); a `rehearse` dispatch runs all of it on
+any ref and publishes nothing (D1669). Rehearsal run 44823357861 on
+bddf062e7 is the run whose push is withheld; its two predecessors found
+that an untagged commit's compiler is `refine dev` and that podman could
+not push a list made from loaded archives, now assembled with skopeo. It
+also measured that GDB in the user image stops at `main` without
+`--cap-add=SYS_PTRACE`, which then only leaves the address-randomisation
+warning in place, so the README says that instead. `docs/process.md`
+writes the whole release recipe down in a section of its own, image step
+and published-image checks included. Gate run 44823246775 on bddf062e7.
 
 ### R23.20 — Nix installs the prebuilt compiler
 

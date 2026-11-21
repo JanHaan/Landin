@@ -102,8 +102,9 @@ The releases below are the ones the pins name. Each GNAT and GPRbuild
 checksum in the bootstrap table has been verified against its archive
 before unpacking: the
 macOS rows on the development machine, the Linux x86-64 rows inside the pinned
-linux/amd64 image built by `environments/linux-amd64/Containerfile`, which
-runs `sha256sum -c` before it unpacks anything, and the Linux arm64 rows by
+linux/amd64 image built by `environments/images/contributor.Containerfile`,
+which installs them through `environments/pins.sh` and so runs `sha256sum
+-c` before it unpacks anything, and the Linux arm64 rows by
 the gate's `ubuntu-24.04-arm` jobs, which do the same through
 `environments/pins.sh`. A host may build the same versions from source
 instead.

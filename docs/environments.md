@@ -267,9 +267,14 @@ wrong in it — the same source builds in release natively and on the x86-64
 gate. This is written down because the message reads exactly like a compiler
 defect in one file and cost an investigation once already.
 
-`environments/linux-amd64/Containerfile` pins its base image by digest and
-verifies both Ada toolchain archives against the checksums in
-`environments/pins.sh` before unpacking either of them. It also installs the
+`environments/images/contributor.Containerfile`, the contributor image's
+recipe (D1668), pins its base image by digest and installs GNAT and GPRbuild
+through `environments/pins.sh`'s `landin_install_toolchain`, which verifies
+both archives against their checksums before unpacking either of them, for
+the platform it is built for: `scripts/linux-loop.sh` builds it for
+`linux/amd64`, and the release workflow for amd64 and arm64, publishing it
+as `ghcr.io/701-dev/landin-contributor` at each release. Its build context
+is `environments/`, so the recipe can copy `pins.sh` in. It also installs the
 versioned Debian stable `clang-19` package beside `libc6-dev` for C header
 extraction and generated-adapter tests. The frontend is deliberately separate
 from the pinned GNAT that builds `refine`: Clang supplies an external JSON AST,

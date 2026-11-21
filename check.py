@@ -3237,16 +3237,18 @@ def check_site_documents(full_run):
 def check_pinned_toolchain(full_run):
     """Every file that installs or records the toolchain must name one.
 
-    The recipe pins it, compiler/ada/TOOLCHAIN.md records it for a reader,
-    and environments/pins.sh is the one place a value is written; the nix
-    shell and the workflows read that file rather than repeating it. Every
+    environments/pins.sh is the one place a value is written, and
+    compiler/ada/TOOLCHAIN.md records it for a reader; the contributor
+    image's recipe, the nix shell and the workflows read that file rather
+    than repeating it, and both image recipes stand on its base image. Every
     file naming a compiler version is another chance to be wrong, and the one
     that drifts is the one nobody reads.
     """
     if not full_run:
         return []
 
-    recipe = os.path.join(ROOT, "environments/linux-amd64/Containerfile")
+    recipe = os.path.join(ROOT, "environments/images/contributor.Containerfile")
+    user_recipe = os.path.join(ROOT, "environments/images/user.Containerfile")
     record = os.path.join(ROOT, "compiler/ada/TOOLCHAIN.md")
     pins = os.path.join(ROOT, "environments/pins.sh")
 
@@ -3254,43 +3256,62 @@ def check_pinned_toolchain(full_run):
     #  vacuous the moment either was renamed: the pins would stop being
     #  compared and the run would still say all clean.  That is the fault
     #  absent() was written for, and this check had it.
-    out = absent([recipe, record])
+    out = absent([recipe, user_recipe, record, pins])
     if out:
         return out
 
     recipe_text = read_file(recipe, encoding="utf-8")
     record_text = read_file(record, encoding="utf-8")
-    pins_text = (read_file(pins, encoding="utf-8")
-                 if os.path.exists(pins) else "")
+    pins_text = read_file(pins, encoding="utf-8")
 
+    def pinned(name):
+        found = re.search(r"^%s=(\S+)$" % name, pins_text, re.M)
+        return found.group(1) if found else None
+
+    #  The values a file could write by hand, as pins.sh writes them.  The
+    #  recipe used to repeat these four as build arguments; since the
+    #  contributor image (D1668) it copies pins.sh in and names none.
     wanted = {
-        "GNAT_VERSION": re.compile(r"ARG GNAT_VERSION=(\S+)"),
-        "GPRBUILD_VERSION": re.compile(r"ARG GPRBUILD_VERSION=(\S+)"),
-        "GNAT_SHA256": re.compile(r"ARG GNAT_SHA256=(\S+)"),
-        "GPRBUILD_SHA256": re.compile(r"ARG GPRBUILD_SHA256=(\S+)"),
+        "GNAT_VERSION": pinned("LANDIN_GNAT_VERSION"),
+        "GPRBUILD_VERSION": pinned("LANDIN_GPRBUILD_VERSION"),
+        "GNAT_SHA256": pinned("LANDIN_GNAT_SHA256_X86_64_LINUX"),
+        "GPRBUILD_SHA256": pinned("LANDIN_GPRBUILD_SHA256_X86_64_LINUX"),
     }
-    #  Two more places a fetch could diverge: where the archives come from
-    #  and which base image the recipe stands on.  Both are held to pins.sh
-    #  alone; TOOLCHAIN.md records compilers, not download sites.
-    pins_only = {
-        "RELEASES": re.compile(r"ARG RELEASES=(\S+)"),
-        "BASE_IMAGE": re.compile(r"FROM (\S+@sha256:[0-9a-f]+)"),
-    }
-
-    for name, pattern in list(wanted.items()) + list(pins_only.items()):
-        found = pattern.search(recipe_text)
-        if not found:
-            out.append((recipe, 1, "%s is not pinned in the recipe" % name))
-            continue
-        value = found.group(1)
-        if name in wanted and value not in record_text:
-            out.append((recipe, 1,
+    for name, value in wanted.items():
+        if value is None:
+            out.append((pins, 1, "%s is not pinned in environments/pins.sh"
+                        % name))
+        elif value not in record_text:
+            out.append((pins, 1,
                         "%s %s is not recorded in compiler/ada/TOOLCHAIN.md"
                         % (name, value)))
-        if pins_text and value not in pins_text:
-            out.append((recipe, 1,
-                        "%s %s is not pinned in environments/pins.sh"
-                        % (name, value)))
+    wanted = {name: value for name, value in wanted.items() if value}
+
+    #  Both image recipes stand on the base image pins.sh names.  The
+    #  contributor recipe installs the toolchain through pins.sh, for the
+    #  platform it is built for, and writes no version or checksum itself.
+    base = pinned("LANDIN_BASE_IMAGE")
+    if base is None:
+        out.append((pins, 1,
+                    "BASE_IMAGE is not pinned in environments/pins.sh"))
+    for path in (recipe, user_recipe):
+        text = read_file(path, encoding="utf-8")
+        found = re.search(r"^FROM (\S+@sha256:[0-9a-f]+)", text, re.M)
+        if not found:
+            out.append((path, 1, "BASE_IMAGE is not pinned in the recipe"))
+        elif base and found.group(1) != base:
+            out.append((path, 1, "BASE_IMAGE %s is not pinned in "
+                        "environments/pins.sh" % found.group(1)))
+        for name, value in wanted.items():
+            if value in text:
+                out.append((path, 1, "the recipe names %s %s literally "
+                            "instead of reading it from environments/pins.sh"
+                            % (name, value)))
+    for fragment in ("COPY pins.sh ", "landin_install_toolchain "):
+        if fragment not in recipe_text:
+            out.append((recipe, 1, "the recipe does not install the "
+                        "toolchain through environments/pins.sh: no `%s`"
+                        % fragment.strip()))
 
     #  The nix shell installs the toolchain itself, so it is a further place
     #  a version could be written.  It is held to reading the pins rather
@@ -3304,9 +3325,8 @@ def check_pinned_toolchain(full_run):
         if "environments/pins.sh" not in text:
             out.append((path, 1, "%s does not read environments/pins.sh"
                                  % relative))
-        for name, pattern in wanted.items():
-            found = pattern.search(recipe_text)
-            if found and found.group(1) in text:
+        for name, value in wanted.items():
+            if value in text:
                 out.append((path, 1,
                             "%s names %s literally instead of reading it "
                             "from environments/pins.sh" % (relative, name)))
@@ -3337,9 +3357,8 @@ def check_pinned_toolchain(full_run):
             path = os.path.join(directory, name_yml)
             relative = os.path.relpath(path, ROOT)
             text = read_file(path, encoding="utf-8")
-            for name, pattern in wanted.items():
-                found = pattern.search(recipe_text)
-                if found and found.group(1) in text:
+            for name, value in wanted.items():
+                if value in text:
                     out.append((path, 1,
                                 "%s names %s literally instead of reading it "
                                 "from environments/pins.sh" % (relative, name)))

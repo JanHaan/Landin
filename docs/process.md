@@ -818,6 +818,19 @@ nix develop
 # what I have".
 nix build .#refine
 nix build .#refine-bin
+
+# The release's container images on a host with docker (--engine podman
+# for another): the user image from a packaged compiler, run as the README
+# says; the contributor image, checked by building this checkout's
+# compiler inside it.  Nothing is published; see "Releasing a version".
+./scripts/package.sh compiler/ada/build/linux-amd64/release/bin/refine landin.tar.gz
+python3 scripts/container_image.py build user landin.tar.gz --tag landin-user
+python3 scripts/container_image.py check user landin-user
+python3 scripts/container_image.py build contributor --tag landin-contributor
+python3 scripts/container_image.py check contributor landin-contributor
+
+# The release workflow with nothing to publish, on a pushed ref.
+gh workflow run release.yml --repo 701-dev/Landin --ref BRANCH -f rehearse=true
 ```
 
 ## The mechanical gate
@@ -933,7 +946,7 @@ still succeed. The linked full run contains the target-test results.
 | `linux-release-compare` | `ubuntu-24.04` | require the two release builds' `refine` and `landin_tests` to be the same files, byte for byte, and their manifests to record the same inputs (`scripts/compare_builds.py`) |
 | `linux-release-cache` | `ubuntu-24.04` | on a push, once `linux-release-compare` has passed, save `linux-release-build`'s object tree to the cache for the next run; `gate` does not need it |
 | `release` | `ubuntu-24.04` | with the clean release compiler: the whole test program, the determinism closures, native report identity and the scripted server sessions, the compiler packaged and used outside the checkout, then object quality, the GDB sessions and the DAP session through `refine dap` over the same GDB |
-| `outside-user-stock` | `ubuntu-24.04` | the clean release compiler packaged and used outside the checkout on a stock Ubuntu with only its own GCC, installed by `scripts/apt_install.sh`, whose every attempt is bounded and which falls back from the image's mirrors to the official archive, refusing to run if the pinned driver is reachable: the first program, every `examples.md` program, the distribution's driver and a trap's report |
+| `outside-user-stock` | `ubuntu-24.04` | the clean release compiler packaged and used outside the checkout on a stock Ubuntu with only its own GCC, installed by `scripts/apt_install.sh`, whose every attempt is bounded and which falls back from the image's mirrors to the official archive, refusing to run if the pinned driver is reachable: the first program, every `examples.md` program, the distribution's driver and a trap's report; then the user image built from the same archive, `scripts/container_image.py`, and the first program compiled and run inside it as the README says (D1667) |
 | `build-modes` matrix | `ubuntu-24.04` | the debug and the release compiler of one tree emit the positive and runtime corpora, the firmware corpus and the Cortex-M counterparts at the four standard profiles and must agree byte for byte, and a request both refuse must be one the emission manifest's refusal list or the firmware inventory records as refused there, with status 1, over Linux x86-64, Linux arm64, Cortex-M, RV32 and both Xtensa configurations; the requests are dealt to `build-modes-1` to `build-modes-3` by their keys' digests, `emit_manifest.py modes --shard=I/3`, so each job is a third of the work whatever target grows (D1365, D1374) |
 | `bindings` | `ubuntu-24.04` | `refine bindings`, with the debug compiler `linux-debug-build` made, against its pinned Clang |
 | `editor-grammar` | `ubuntu-24.04` | the structural grammar's integration pass with the pinned tree-sitter CLI, then the Neovim LSP preference smoke under the distribution's Neovim |
@@ -955,7 +968,7 @@ still succeed. The linked full run contains the target-test results.
 | `arm64-debug-build` | `ubuntu-24.04-arm` | build the debug executables once for the `arm64-compiler` shards, `arm64-compiler-checks` and the Linux arm64 determinism manifest |
 | `arm64-compiler` matrix | `ubuntu-24.04-arm` | the debug compiler's whole test program on the Linux arm64 lane in two `--shard` jobs, `arm64-compiler-1` and `arm64-compiler-2` |
 | `arm64-compiler-checks` | `ubuntu-24.04-arm` | with the same debug compiler: representative verifier resources, the default target, the determinism closures, native report identity and the scripted server sessions |
-| `arm64-release` | `ubuntu-24.04-arm` | the same corpus with the release compiler, the default target, the server sessions, the GDB sessions with the pinned aarch64 GDB, the DAP session over the same GDB and the generated bindings for the standard AAPCS64 |
+| `arm64-release` | `ubuntu-24.04-arm` | the same corpus with the release compiler, the default target, the server sessions, the GDB sessions with the pinned aarch64 GDB, the DAP session over the same GDB and the generated bindings for the standard AAPCS64; the compiler packaged, used outside the checkout and built into the arm64 user image, which runs the first program (D1667) |
 | `freebsd-amd64-runtime`, `freebsd-arm64-runtime-1`, `freebsd-arm64-runtime-2` | `ubuntu-24.04` | emit with the checked Linux release compiler and locked sysroot, check source verdicts, assembler boundaries and linked instructions, then execute the applicable runtime corpus in a fresh FreeBSD 14.4 VM, amd64 under KVM and arm64 emulated, including guest CPU confirmation; the emulated arm64 lane runs as two shards of whole fixtures |
 | `freebsd-amd64-debugger`, `freebsd-arm64-debugger` | `ubuntu-24.04` | the same emission, then native FreeBSD LLDB source stops, frames, local values and unwinding in the VM, and the DAP session through `refine dap` on the runner, Ubuntu's `lldb-dap-19` attached to `lldb-server` in the guest |
 | `freebsd-amd64-abi`, `freebsd-arm64-abi` | `ubuntu-24.04` | the same emission, then nonempty C ABI fixture sets against independently compiled FreeBSD C peers in the VM |
@@ -1152,7 +1165,9 @@ checks changed documents on a push and every document weekly or manually.
 Changes to link checker configuration and unknown changed ranges also check
 every document.
 `release.yml` is tag-driven: a `v*` tag builds and publishes the `refine`
-assets that `nix build .#refine-bin` consumes. Its first job,
+assets that `nix build .#refine-bin` consumes, and the two container
+images; [releasing a version](#releasing-a-version) gives the recipe
+around it. Its first job,
 `scripts/release.py gated`, refuses a tag whose commit is not on `main` or
 whose own push gate on `main` did not succeed, so a tag on an unmerged or
 ungated commit publishes nothing. Its last, `scripts/release.py publish`,
@@ -1546,6 +1561,98 @@ each kind; the status is 0 only when both trees hold the same images and
 each loads the same bytes. It lists twelve names of each kind, and
 `--names=N` lists N. The Xtensa corpus compares the same way, with its `--chip`,
 `--memory-profile` and `--all` given to both runs alike.
+
+## Releasing a version
+
+A release is the maintainer's: the version, the declaration and the tag
+are named by the maintainer, never chosen by an item or an agent, and the
+project does not assume SemVer. The recipe below is the order every release
+since 0.2.8 has followed. Its settings, the tag ruleset, the `release`
+environment and the attestations, are described with the
+[release workflow in the gate reference](#the-mechanical-gate); the
+comments of `.github/workflows/release.yml` and of `flake.nix` beside
+`releaseVersion` say why each step is the way it is.
+
+1. **Declare.** One commit declares the version and changes nothing
+   else: the README's status line, `**Status: version X.Y.Z.`, which the
+   release workflow reads; the version `refine version` prints in
+   `docs/capabilities.md`; `VERSION_LINE` in `docs/site/render_html.py`;
+   `handoff.md`'s "Kept current" line and a new row of its version table
+   naming what the release brings and its decisions; the version line of
+   `tour.md`; and the "Current with" line of each of the five prototypes.
+   The flake's `releaseVersion` does not move: a tagged tree cannot hold
+   the hashes of archives built from itself. The release workflow refuses
+   a tag the README's version does not match.
+2. **Gate it.** The declaration is a candidate like any other: its push
+   gate, a `scope=boards` dispatch on the same tree, promotion to `main`
+   and `main`'s own push gate followed to its end. `scripts/release.py
+   gated` refuses a tag on a commit that is not on `main` or whose own
+   push gate there did not pass.
+3. **Rehearse.** On that commit of `main`, run the release workflow with
+   nothing to publish:
+
+   ```sh
+   gh workflow run release.yml --repo 701-dev/Landin --ref main -f rehearse=true
+   ```
+
+   It builds and checks the three archives, builds the user image from
+   each Linux archive and the contributor image from the tree and checks
+   them (`scripts/container_image.py check`), and assembles each image's
+   two platforms into one list pushed into a layout on the runner, whose
+   `index.json` the `images` job prints. The checks and the publishing
+   job are skipped, and nothing leaves the run but its artifacts. Debian's
+   archive and the toolchain downloads are what a rehearsal finds broken
+   before a tag has been made.
+4. **Tag.** An annotated tag `vX.Y.Z`, message `Landin X.Y.Z`, on that
+   commit, pushed to GitHub through `origin`, whose second push URL sends
+   it to the git.sr.ht mirror too. Only an administrator may push it, and
+   the push asks for no approval: the ruleset's bypass list must name the
+   role, as the release settings say.
+5. **Approve.** The tag's push runs `release.yml`: the checks, the three
+   builds and the image jobs, as in the rehearsal. The publishing job then
+   waits in the `release` environment. Read the builds' checksums and the
+   `images` job's list, then approve it under "Review deployments" on the
+   run's page. It attests the archives, publishes the release with the
+   verify command in its notes, pushes `ghcr.io/701-dev/landin:X.Y.Z` and
+   `ghcr.io/701-dev/landin-contributor:X.Y.Z` as one list each, and
+   attests each list in the registry. It moves no other tag, and a tag the
+   registry already holds is left as it is, so a run that stopped
+   part-way is completed by running the job again.
+6. **Check what was published.** The archives as the release notes say,
+   with `gh attestation verify`. Each image the same way, and by running
+   it:
+
+   ```sh
+   gh attestation verify oci://ghcr.io/701-dev/landin:X.Y.Z --repo 701-dev/Landin \
+     --signer-workflow 701-dev/Landin/.github/workflows/release.yml \
+     --source-ref refs/tags/vX.Y.Z --deny-self-hosted-runners
+   docker run --rm ghcr.io/701-dev/landin:X.Y.Z   # refine X.Y.Z, library: /usr/local/lib/landin
+   docker buildx imagetools inspect ghcr.io/701-dev/landin-contributor:X.Y.Z
+   ```
+
+   The last names `linux/amd64` and `linux/arm64`. A package the
+   organisation's registry has not held before is created private: on
+   the first publication of each image, `gh api
+   orgs/701-dev/packages/container/landin --jq .visibility` (and the same
+   for `landin-contributor`) must say `public`; if not, make it public
+   under the package's settings on GitHub, once. The source label links
+   each package to the repository.
+7. **Move the flake.** On a branch from `main`, one commit moves
+   `flake.nix`'s `releaseVersion` to X.Y.Z and its `releaseHashes` to the
+   sums in the published `.sha256` files, which the publishing job's log
+   also prints. `nix build .#refine-bin` must then print `refine X.Y.Z`
+   from `result/bin/refine version` and run the first program. The commit
+   is gated and promoted like any other.
+8. **Move Homebrew**, as the paragraph after the release settings says:
+   run the tap's `bump-landin` workflow and check the formula.
+
+The images are built only here (D1667, D1668): never from `main` or a
+commit, so the Debian packages inside one are those of the day its
+release was built. The gate builds the user image on every software run,
+from its own packaged compiler, in `outside-user-stock` on amd64 and
+`arm64-release` on arm64, and runs the first program inside it; the
+contributor image, whose build fetches the toolchain and builds the
+compiler, is built only by the release workflow and a rehearsal.
 
 ## Historical: choosing acceptance scope
 
