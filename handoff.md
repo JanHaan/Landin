@@ -266,7 +266,7 @@ names. The register is one file a row under `roadmap/register/`, and roadmap
 identities are cited in `ROADMAP.md` and the files under `roadmap/` and
 nowhere else.
 
-**Next roadmap item: R19.20 — How far the checker folds (planned).**
+**Current roadmap work: R19.20 — How far the checker folds.**
 
 ## Versions
 

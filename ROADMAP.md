@@ -1310,7 +1310,7 @@ from main, and does not reach main before R19's gate.
 
 ### R19.20 — How far the checker folds
 
-Status: planned
+Status: active
 Depends on: R19.10
 
 Taken only if the value-model fold (SC-24) is accepted. It reads the
