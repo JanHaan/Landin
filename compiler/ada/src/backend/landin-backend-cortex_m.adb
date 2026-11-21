@@ -4629,8 +4629,13 @@ package body Landin.Backend.Cortex_M is
             Register : String) is
             Above : constant Integer := Sp_Above (Offset);
          begin
-            --  D1771: from sp where VLDR's and VSTR's offset reaches.
-            if Above >= 0 and then Above mod 4 = 0 and then Above <= 1020
+            --  D1771: at size and speed, from sp where VLDR's and VSTR's
+            --  offset reaches.  At none, where each float moves through
+            --  its home, the M7 runs a load straight after the stores to
+            --  its doubleword slower than one two instructions later.
+            if (Recording /= null or else Registers /= null)
+              and then Above >= 0 and then Above mod 4 = 0
+              and then Above <= 1020
             then
                Emit ((if Store then "vstr " else "vldr ") & Register
                  & ", [sp, #" & Trimmed (Integer'Image (Above)) & "]");

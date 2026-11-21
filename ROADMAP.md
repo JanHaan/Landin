@@ -537,7 +537,7 @@ SR-1422 the nine registers x86-64 offers, SR-1423 the assembly block's
 rule, SR-1424 float constants made in each block, SR-1425 a loop's two
 jumps, SR-1426 the order D339 copies in, and R551-12 keeps the bounds
 check a loop's end does not name and the calls of `core/atomic`'s cells;
-SR-1427, SR-1428 and `SR-1429` record what the work met, and SR-1430 the
+SR-1427, SR-1428 and `SR-1429` record what the work met, and `SR-1430` the
 STM32H753's binary-search, 9.7% slower at size where the RP2040 and
 RP2350 run every configuration faster. Findings fixed on
 the way: the public exposure above, and a dead shift kept as if it could
@@ -653,7 +653,7 @@ levels' own registers and forms: SipHash and mandelbrot still spend about
 two fifths of their instructions on homes, and r8, r10 and r12 hold nothing.
 This takes on `SR-581`'s high registers, `SR-582`'s CBZ and CBNZ, `SR-583`'s
 bitfield instructions, `SR-596`'s float selection in VFP registers, SR-869's
-short `u64` routines on armv6-m and SR-231's atom `match` arms, and SR-1430, the STM32H753's binary-search and merge-sort running
+short `u64` routines on armv6-m and SR-231's atom `match` arms, and `SR-1430`, the STM32H753's binary-search and merge-sort running
 more cycles after R16.24 while the M33 ran them faster: the cause found and
 the configurations no slower than R16.22's figures, or the cause recorded
 with its measurement.

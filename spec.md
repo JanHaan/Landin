@@ -26779,8 +26779,14 @@ even half of its register. A float a call passes or returns keeps its
 home, as D616 has it. Arithmetic, negation and comparison read held
 operands in place and write a held result directly; a move between a
 held float and core registers is one `vmov`; a constant VMOV encodes is
-made in its register with it; a float home is read and written from sp
-where VLDR's and VSTR's offset reaches. A comparison only its branch
+made in its register with it; at `size` and `speed` a float home is read
+and written from sp where VLDR's and VSTR's offset reaches. At `none`,
+where every float moves through its home, it stays addressed through r6:
+the STM32H753's M7, running from uncached AXI SRAM, ran the firmware
+mandelbrot at `none` in 15,674,563 cycles with the sp form, its VFP load
+straight after the core stores to the same doubleword, and in 13,261,199
+with the two address instructions between them, against 13,556,897
+before. A comparison only its branch
 reads branches on the flags itself, as D1566's do. On the AN500
 description at armv7e-m and `speed` the firmware mandelbrot executes
 649,506 instructions under QEMU against 4,117,064, and `in_set` is 60
