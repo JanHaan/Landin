@@ -336,7 +336,7 @@
    "instructions": 7922864
   },
   "armv7e-m+fpv5-d16/none-all/mandelbrot": {
-   "instructions": 5480706
+   "instructions": 6616286
   },
   "armv7e-m+fpv5-d16/none-all/merge-sort": {
    "instructions": 9836
@@ -354,7 +354,7 @@
    "instructions": 7922864
   },
   "armv7e-m+fpv5-d16/none-auto/mandelbrot": {
-   "instructions": 5480706
+   "instructions": 6616286
   },
   "armv7e-m+fpv5-d16/none-auto/merge-sort": {
    "instructions": 9836
@@ -372,7 +372,7 @@
    "instructions": 7922864
   },
   "armv7e-m+fpv5-d16/none-off/mandelbrot": {
-   "instructions": 5480706
+   "instructions": 6616286
   },
   "armv7e-m+fpv5-d16/none-off/merge-sort": {
    "instructions": 9836
