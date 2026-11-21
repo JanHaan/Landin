@@ -40862,7 +40862,7 @@ newest release, which is rate-limited without a token; and running
 not have.
 
 **Pinned by** `scripts/install_check.py`, run in the gate's `release`,
-`arm64-release` and `darwin-host-release` jobs against each host's
+`arm64-release-checks` and `darwin-host-release` jobs against each host's
 packaged compiler served from 127.0.0.1 as a release is: the newest and a
 named version installed and running the first program, a reinstall, a
 foreign directory, a damaged archive, a missing version and two unserved
