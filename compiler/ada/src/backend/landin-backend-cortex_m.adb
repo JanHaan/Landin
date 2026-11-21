@@ -5936,15 +5936,26 @@ package body Landin.Backend.Cortex_M is
                               Check_Fit (Kind (Value));
                            end if;
                         else
-                           if Wide then
-                              Emit ("mov r4, r2");
-                              Emit ("orrs r4, r3");
-                           else
-                              Emit ("mov r4, r2");
+                           --  D1767: a constant divisor is known not zero,
+                           --  and not minus one, without a test.
+                           if Wide or else not Deferred (Operand (2))
+                             or else Constant_Of (Operand (2)) = 0
+                           then
+                              if Wide then
+                                 Emit ("mov r4, r2");
+                                 Emit ("orrs r4, r3");
+                              else
+                                 Emit ("mov r4, r2");
+                              end if;
+                              Emit ("cmp r4, #0");
+                              Branch ("eq", Trap);
                            end if;
-                           Emit ("cmp r4, #0");
-                           Branch ("eq", Trap);
-                           if Signed then
+                           if Signed
+                             and then (Wide or else not Deferred (Operand (2))
+                                       or else Constant_Of (Operand (2))
+                                         = 2 ** (8 * Landin.Targets.Bytes
+                                           (Size_Of_Value (Operand (2)))) - 1)
+                           then
                               declare
                                  Bits : constant Natural := Natural
                                    (Landin.Types.Width (Kind (Value), Facts));

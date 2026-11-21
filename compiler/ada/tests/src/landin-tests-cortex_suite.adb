@@ -220,6 +220,89 @@ package body Landin.Tests.Cortex_Suite is
          end;
       end loop;
    end Scalar_Spill_Homes;
+   --  D1767-D1774: R16.27's selection.  At the Thumb-2 levels a loop's
+   --  constants are immediates, a comparison with zero and its branch one
+   --  CBZ or CBNZ, a packed field UBFX and BFI, a shift by a constant one
+   --  instruction, a constant divisor needs no test and speed holds r12;
+   --  armv6-m keeps Thumb-1's forms with the same immediates.
+   procedure Thumb2_Selection (Item : in out Landin.Testing.Context);
+   procedure Thumb2_Selection (Item : in out Landin.Testing.Context) is
+      LF_Text : constant String := [1 => Character'Val (10)];
+      Program : constant String :=
+        "image: type = layout(packed) struct" & LF_Text
+        & "    flag: bool at 0" & LF_Text
+        & "    level: u8 at 4..11" & LF_Text
+        & "end image" & LF_Text
+        & "public main: () -> (code: i32) =" & LF_Text
+        & "    mut x: image = zeroed" & LF_Text
+        & "    mut i: u32 = 0" & LF_Text
+        & "    mut sum: u32 = 0" & LF_Text
+        & "    while i < 100 do" & LF_Text
+        & "        x.level = u8(i % 200)" & LF_Text
+        & "        sum = sum + u32(x.level) + (i << 3)" & LF_Text
+        & "        if sum == 0 then" & LF_Text
+        & "            sum = 7" & LF_Text
+        & "        end if" & LF_Text
+        & "        i = i + 1" & LF_Text
+        & "    end while" & LF_Text
+        & "    code = i32(sum % 100)" & LF_Text
+        & "end main" & LF_Text;
+
+      function Emitted (Level : String) return String;
+      function Emitted (Level : String) return String is
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         Args : Landin.Platform.Path_List;
+      begin
+         Host.Add_File ("p.ldn", Program);
+         Args.Append ("--target=cortex-m0");
+         Args.Append ("--level=" & Level);
+         Args.Append ("--optimize=speed");
+         Args.Append ("--emit=asm");
+         Args.Append ("-o");
+         Args.Append ("p.s");
+         Args.Append ("p.ldn");
+         declare
+            Result : constant Landin.Driver.Outcome :=
+              Landin.Driver.Execute (Args, Host, Tools);
+         begin
+            Landin.Testing.Check_Equal
+              (Item, Result.Status, Landin.Driver.Status_Success,
+               U.To_String (Result.Report));
+         end;
+         return Host.Written ("p.s");
+      end Emitted;
+
+      Wide : constant String := Emitted ("armv7-m");
+      Narrow : constant String := Emitted ("armv6-m");
+      HT : constant Character := Character'Val (9);
+   begin
+      Landin.Testing.Check
+        (Item, Contains (Wide, HT & "cmp r3, #100")
+           and then Contains (Narrow, ", #100" & LF_Text)
+           and then Contains (Wide, ", #3" & LF_Text),
+         "D1767: the loop's bound and shift count are immediates");
+      Landin.Testing.Check
+        (Item, Contains (Wide, HT & "udiv ")
+           and then not Contains (Wide, HT & "mov r4, r2" & LF_Text),
+         "D1767: a constant divisor is not tested for zero");
+      Landin.Testing.Check
+        (Item, Contains (Wide, HT & "cbz r")
+           and then not Contains (Narrow, "cbz")
+           and then not Contains (Narrow, "cbnz"),
+         "D1768: Thumb-2 compares with zero and branches in one CBZ");
+      Landin.Testing.Check
+        (Item, Contains (Wide, HT & "ubfx ")
+           and then Contains (Wide, HT & "bfi ")
+           and then not Contains (Narrow, "ubfx")
+           and then not Contains (Narrow, "bfi "),
+         "D1773: Thumb-2 extracts and inserts the field with UBFX and BFI");
+      Landin.Testing.Check
+        (Item, Contains (Wide, "r12")
+           and then not Contains (Narrow, ", r12" & LF_Text),
+         "D1772: speed holds a value in r12 at Thumb-2 only");
+   end Thumb2_Selection;
+
    procedure Outgoing_Calls (Item : in out Landin.Testing.Context);
 
    procedure Outgoing_Calls (Item : in out Landin.Testing.Context) is
@@ -5343,6 +5426,9 @@ package body Landin.Tests.Cortex_Suite is
       Landin.Testing.Register
         (Into, "cortex ABI", "a float variant link refusal names the flags",
          Float_Variant_Refusal'Access);
+      Landin.Testing.Register
+        (Into, "cortex ABI", "Thumb-2 selection forms",
+         Thumb2_Selection'Access);
    end Register;
 
 end Landin.Tests.Cortex_Suite;
