@@ -644,7 +644,7 @@ counterpart case is made from its hosted fixture.
 
 ### R16.27 — Cortex-M's remaining selection
 
-Status: planned
+Status: active
 Depends on: R16.10
 
 R16.22 left where its allocation found them the Cortex-M values it does not
