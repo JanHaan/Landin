@@ -3191,7 +3191,7 @@
     "runtime/library-map-reserve-rollback": {
       "mode": "execute",
       "profile_limit": "selected-image",
-      "reason": "The full map composition exceeds the selected 32 KiB flash profile in every measured optimization profile. Each profile still attempts execution; only measured flash/RAM/stack limits can exclude it. The separate library-shared consumers and library-builtin-evidence require execution; this image limit is not runtime evidence."
+      "reason": "The full map composition exceeds the selected 32 KiB flash profile at every measured optimization profile but size/auto, where it is 31,584 bytes and executes. Each profile still attempts execution; only measured flash/RAM/stack limits can exclude it. The separate library-shared consumers and library-builtin-evidence require execution; this image limit is not runtime evidence."
     },
     "runtime/library-platform-riscv": {
       "mode": "execute"
@@ -3637,7 +3637,7 @@
     "runtime/network-addresses": {
       "mode": "execute",
       "profile_limit": "selected-image",
-      "reason": "Every form of address text the fixture reads and writes, with text.format and its two conformances, needs about 47 KiB of flash at size/auto and 56 KiB at none/off, overflowing the 32 KiB profile by 15 and 23 KiB; the address code is about 19 KiB of it, ipv6_octets alone 4.8 KiB, most of it the Cortex-M0 backend's frame homes and copies between them. Each profile still attempts execution; runtime/network-addresses-firmware reads an IPv4, an IPv6 and a zoned address and runtime/network-addresses-written-firmware writes them, each within its image, and both require execution; this image limit is not runtime evidence."
+      "reason": "Every form of address text the fixture reads and writes, with text.format and its two conformances, is 26,200 bytes of flash at size/auto, within the 32 KiB profile, and overflows it by 6,632 bytes at none/off. Each profile still attempts execution; runtime/network-addresses-firmware reads an IPv4, an IPv6 and a zoned address and runtime/network-addresses-written-firmware writes them, each within its image, and both require execution; this image limit is not runtime evidence."
     },
     "runtime/network-addresses-firmware": {
       "mode": "execute"

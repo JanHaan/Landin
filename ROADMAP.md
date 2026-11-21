@@ -238,8 +238,8 @@ also says where a program's compile time goes among its sources, and gives
 the build and depth reports one name for each frame quantity. A measured code-quality cost attributable to
 assembly's fixed memory effect is recorded against `SR-09` before any narrower
 effect is proposed. Its ranked list answers the activations of SR-231,
-`SR-387`, SR-596, SR-869 and SR-1023, and measures x86-64's two-instruction
-reach of a thread instance. This takes on `SR-996` and SR-275, and carries the
+`SR-387`, SR-596, SR-869 and `SR-1023`, and measures x86-64's two-instruction
+reach of a thread instance. This takes on `SR-996` and `SR-275`, and carries the
 fresh-copy requirement. The instruction count under emulation is the
 per-routine cost report `SR-1267` asked for.
 
@@ -281,7 +281,7 @@ timed again. `compiler/tests/measure/findings.md` is the ranked list:
 arm64's allocator unused at `size`, RV64's far jumps, Cortex-M's homes
 addressed through r6, then allocation. `SR-09` and `SR-1267` are settled;
 SR-596, SR-869, SR-231, `SR-996`, `SR-577`, SR-583 and `SR-1268` are R16.20's;
-SR-275, `SR-387` and SR-1023 are restated with their figures, and `SR-1302`
+`SR-275`, `SR-387` and `SR-1023` are restated with their figures, and `SR-1302`
 records the Xtensa reference's boot layout. Findings fixed on the way: the
 stack report names its frame quantities as the build report does (D1380),
 the stage report gives each source's scanning and parsing (D1381), and an
@@ -599,10 +599,10 @@ Depends on: R16.10
 
 R16.10 measured costs the library imposes rather than code generation: a
 `list` grown by allocate and copy where the text builder grows by `resize`
-(SR-275), and on Cortex-M0 `text.format` against `text.append` and
-`core/mem`'s byte loops (SR-1023), with the erased table, `diag.stream`
+(`SR-275`), and on Cortex-M0 `text.format` against `text.append` and
+`core/mem`'s byte loops (`SR-1023`), with the erased table, `diag.stream`
 and `core/README.md`'s Cortex-M size rows not yet measured. This takes on
-SR-275 and SR-1023.
+`SR-275` and `SR-1023`.
 
 Exit evidence: each cost measured, and either lowered against its R16.10
 baseline or recorded with its measurement, with the counter fixtures it

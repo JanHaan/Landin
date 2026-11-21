@@ -155,8 +155,8 @@ failing_path: () -> (ok: bool) =
              and pool.live(inner) == 1
     end
 
-    --  A growth asks to grow in place before it allocates (D356), and the
-    --  pool grows the block in its slot: one permit, and no second block.
+    --  A growth is one resize, and the pool grows the block in its slot:
+    --  one permit, and no second block.
     fault.permit(counted, one)
     spill.push(values, counted, 53) else none
     begin
@@ -165,12 +165,12 @@ failing_path: () -> (ok: bool) =
              and spill.capacity(addr values) == 4 and view[2] == 53
     end
     spill.release(values, counted)
-    ok = ok and fault.attempts(counted) == 5
+    ok = ok and fault.attempts(counted) == 4
          and fault.delegated(counted) == 2
-         and fault.successes(counted) == 1
-         and fault.injected_failures(counted) == 3
+         and fault.successes(counted) == 2
+         and fault.injected_failures(counted) == 2
          and fault.inner_failures(counted) == 0
-         and fault.growths(counted) == 1
+         and fault.growths(counted) == 0
          and fault.frees(counted) == 1 and fault.live(counted) == 0
          and pool.allocations(inner) == 1
          and pool.frees(inner) == 1 and pool.live(inner) == 0

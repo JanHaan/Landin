@@ -41,13 +41,14 @@ public main: () -> (code: i32) =
     left: ptr node = vec.get(values, first_index) else addr third
     right: ptr node = vec.get(values, second_index) else addr third
 
-    --  The two permits went to the first block and to growing it in place
-    --  to sixteen, which the arena does for its latest block, so nothing was
-    --  freed; the refused reserve was refused growth and allocation alike.
+    --  The two permits went to the first block and to one resize of it to
+    --  sixteen, which the provider answers in place or by moving the block,
+    --  so nothing was freed through the injector; the refused reserve's
+    --  resize found the budget spent and left the list as it was.
     if failed and vec.length(values) == 2 and vec.capacity(values) == wanted
       and left.val.value == 7 and right.val.value == 11
-      and removed_value == 24 and fault.successes(counted) == 1
-      and fault.growths(counted) == 1 and fault.frees(counted) == 0
+      and removed_value == 24 and fault.successes(counted) == 2
+      and fault.growths(counted) == 0 and fault.frees(counted) == 0
     then
         vec.release(values, counted)
         if vec.length(values) == 0 and vec.capacity(values) == 0

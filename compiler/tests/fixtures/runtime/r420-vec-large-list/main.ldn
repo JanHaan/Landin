@@ -31,15 +31,15 @@ public main: () -> (code: i32) =
         vec.push(values, counted, u32(index)) else none
     end for
 
-    --  One first block of eight and thirteen doublings, each grown in place,
-    --  since the list is always the arena's latest block (D356): the
-    --  fourteen permits go to one allocation and thirteen growths, and
-    --  nothing is freed until the release.
+    --  One first block of eight and thirteen doublings, each one resize,
+    --  which the arena answers in place for its latest block: the fourteen
+    --  permits go to one allocation and thirteen resizes, and nothing is
+    --  freed through the injector until the release.
     if not (vec.length(values) == total)
       or not (vec.capacity(values) == total)
       or not contents_ok(values, middle, last)
-      or not (fault.successes(counted) == 1)
-      or not (fault.growths(counted) == allowance - 1)
+      or not (fault.successes(counted) == allowance)
+      or not (fault.growths(counted) == 0)
       or not (fault.frees(counted) == 0)
     then
         code = 1

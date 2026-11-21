@@ -302,7 +302,18 @@ rows. Recommendation: restated with these figures; the copy loops on the
 register allocation work's Cortex-M selection (a word loop is 4.4 times
 fewer instructions but 4 KB the 32 KiB reference cannot spare until the
 homes shrink), formatting and the remaining three on the continuous item
-that takes the library's costs.
+that takes the library's costs. Re-measured after the register allocation
+work, at the same configurations: the format line 7,020 bytes and 3,889
+instructions against 4,480 and 2,259 through `append`, 2,540 bytes and
+1.72 times the instructions; the byte loops 18.4 M instructions at
+speed-auto, 35 a byte, against 5.2 M with word loops at 1,772 bytes more
+flash, while `runtime/core-text-format-firmware`, which copies short text,
+executes 17% more instructions with them, so firmware keeps its byte
+loops; an erased table links only the entries something projects (D374);
+and `diag.stream` writing one note through `any io.writer` is 5,056 bytes
+and 2,703 instructions against 1,860 and 1,709 for its four writes made
+directly, most of the difference the decimal position. `core/README.md`'s
+Cortex-M rows carry the re-measured figures.
 
 **The counterpart's flash.** Built as `environments/cortex-m/
 counterpart.py` builds it (micro:bit description): size-auto 56,468 bytes,
@@ -329,7 +340,23 @@ costs, with these two programs as its measure: a `main` that appends a 64
 KiB module array 4,000 times to `vec.new(item: u8)` through
 `vec.append_bytes` over `heap.new()`, and one that appends it to
 `text.growing(any(addr memory))` through `text.append`, each returning 42
-when the length is 262,144,000.
+when the length is 262,144,000. Taken (D1727): a storage with a block
+grows through `resize`; on the same host the list takes 189.6 ms against
+383.1 before and the builder's 163.2 (`perf stat -r 7`), with 12
+`mremap`, one `mmap` and one `munmap`.
+
+**The map's probe path.** k-nucleotide's counting core, 2,500,000
+pseudo-random nucleotides counted as 12-mers in a `map.map(u64, u32)`
+through `map.at` and `map.insert` over `hosted/heap`, takes 2.45 s on
+x86-64 v1 speed-auto: 10.7 G instructions in 7.2 G cycles. `perf` puts
+39% in `rehash`, 27% in `locate`, 8% in `siphash` and 6% in
+`search_for_insert`; `locate`'s samples sit on the loads after its bucket
+read and its key read, two cache misses a probe, since a bucket of 32
+bytes names the key's place in a separate dense array. The cost is the
+map's layout rather than its instructions or its hash. Recommendation:
+recorded for the k-nucleotide port, which may declare its own `hashable`;
+a layout keeping a key's hash or the key beside its bucket is a change to
+`core/map`'s design, not a cost item's.
 
 **Assembly's fixed memory effect.** No measured cost is attributable to
 the memory effect. The cost a block causes comes from how the allocators

@@ -60,7 +60,9 @@ public allocator: type = concept (provider: type)
     --- alignment, and it is freed with `new_size`; a moved block's old
     --- address is given back and is not used again. Report out_of_memory
     --- with the block and provider unchanged when there is no room for it.
-    --- A provider that cannot resize in place answers with `relocate`.
+    --- A provider that cannot resize in place answers with `relocate`; one
+    --- that can grows in place here first, since a container grows its
+    --- storage through `resize` alone.
     resize: (self: provider, block: ptr mut u8,
              old_size: usize, new_size: usize, alignment: usize)
             -> (moved: ptr mut u8) ! out_of_memory
@@ -210,13 +212,43 @@ public release_storage: (item: type, provider: type is allocator,
     provider.free(memory, block, extent)
 end release_storage
 
+--  The block a storage holds.  A storage with a positive capacity extent
+--  holds one, so `out_of_memory`, which leaves the storage as it was, is
+--  never reported.
+held_block: (item: type, store: storage(item))
+            -> (base: ptr mut u8 from store) ! out_of_memory =
+    match store.base
+        no_storage: fail out_of_memory
+        ptr (block): base = block
+    end match
+end held_block
+
+--  Put a storage over the block a resize gave, `slots` items of it with its
+--  first `count` the prefix the old block held.  An item here has a size,
+--  since its storage had a positive extent.
+settle: (item: type, inout store: storage(item),
+         escaping into store block: ptr mut u8, slots: usize, count: usize)
+        -> none =
+    store.base = block
+    store.capacity_count = slots
+    first: ptr mut [1]item = ptr(usize(block))
+    mut kept: []mut item = first.val[0..<1]
+    unchecked begin
+        --  The block holds `slots` items, at least `count` and at least
+        --  one, and its first `count` are the ones the prefix held.
+        kept = kept[0..<count]
+    end unchecked
+    store.prefix = kept
+end settle
+
 --  The containers' one way of taking slots: spec.md's D356.
 --- Make room for at least `want` items, keeping the initialized prefix.
---- The block grows in place where the provider can grow it.  Otherwise the
---- items move to a fresh block, which is published last, and the old one
---- is freed; a move invalidates views of the old block.  `out_of_memory`
---- leaves the storage, its prefix and its capacity as they were.  This is
---- the containers' one way of taking slots.
+--- A storage with a block asks the provider to `resize` it, which grows it
+--- in place or moves it; one without, or whose items have no size, takes a
+--- fresh block, the prefix copied into it and the old one freed.  A move
+--- invalidates views of the old block.  `out_of_memory` leaves the
+--- storage, its prefix and its capacity as they were.  This is the
+--- containers' one way of taking slots.
 public reserve_storage: (item: type, provider: type is allocator,
                          inout store: storage(item), memory: provider,
                          want: usize) -> none ! out_of_memory =
@@ -225,7 +257,17 @@ public reserve_storage: (item: type, provider: type is allocator,
     return when want <= old_capacity
     extent: usize = try storage_extent(item: item, slots: want)
     old_extent: usize = old_capacity * sizeof item
-    return when grow_storage(store, memory, old_extent, extent, want)
+    if old_extent > 0 then
+        --  The provider grows the block in place where it can and
+        --  otherwise moves it, a large block's pages where it can: its
+        --  first `old_extent` bytes, the prefix among them, are where
+        --  `moved` is.
+        base: ptr mut u8 = try held_block(store)
+        moved: ptr mut u8 = try provider.resize(memory, base, old_extent,
+                                                extent, alignof item)
+        settle(store, moved, want, old_count)
+        return
+    end if
     block: ptr mut u8 = try provider.alloc(memory, extent, alignof item)
     mut fresh := storage_over(item: item, base: block, slots: want)
     transfer_prefix(store, fresh, old_count) else (problem)
@@ -239,6 +281,16 @@ public reserve_storage: (item: type, provider: type is allocator,
     release_storage(store, memory)
     store = fresh
 end reserve_storage
+
+--  Whether `bytes` lies within the `size` bytes at `block`, wholly or in
+--  part.
+views_block: (block: ptr mut u8, size: usize, bytes: []u8) -> (yes: bool) =
+    yes = false
+    return when lenof bytes == 0
+    start: usize = usize(block)
+    first: usize = usize(addr bytes[0])
+    yes = first < start + size and start < first + lenof bytes
+end views_block
 
 --- Copy `bytes` after a byte storage's initialized prefix and count them
 --- in it, as `admit_copy` does, first making room for `want` bytes in all
@@ -258,8 +310,21 @@ public reserve_admit_copy: (provider: type is allocator,
     slots: usize = if want > old_capacity then want else old_capacity end if
     fail out_of_memory when lenof bytes > slots - old_count
     mut placed: bool = slots == old_capacity
-    if not placed then
-        placed = grow_storage(store, memory, old_capacity, slots, slots)
+    if not placed and old_capacity > 0 then
+        base: ptr mut u8 = try held_block(store)
+        if views_block(base, old_capacity, bytes) then
+            --  `bytes` is read before the old block is given back, so the
+            --  block grows only where it is here.
+            placed = grow_storage(store, memory, old_capacity, slots, slots)
+        else
+            --  Nothing reads the old block again, so the provider may grow
+            --  it in place or move it, a large block's pages where it can.
+            moved: ptr mut u8 = try provider.resize(memory, base,
+                                                    old_capacity, slots,
+                                                    alignof u8)
+            settle(store, moved, slots, old_count)
+            placed = true
+        end if
     end if
     if placed then
         --  The block is where it was, so a view of it still reads it.

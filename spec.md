@@ -37963,6 +37963,41 @@ which lets a test's permits be spent by a path it did not count; and
 `runtime/r420-tree-real-exhaustion`, `runtime/core-vec-pointer-storage`,
 `runtime/derived-hosted-memory` and `runtime/library-second-reading`.
 
+### D1727 — A storage with a block grows through the provider's `resize`
+
+**The tour said** at [1360] that allocators are passed to containers, and
+D356 made `mem.reserve_storage` their one way of taking slots: a growth
+asked in place, and when the provider refused, a fresh block, the prefix
+copied into it and the old block freed. The growing text builder already
+grew through `resize`, which lets `hosted/heap` move a large block's pages
+rather than copy its bytes: 4,000 appends of 64 KiB on Linux x86-64 at
+`--optimize speed` took 383 ms through `vec.append_bytes`, with 12
+`mremap`, 13 `mmap` and 13 `munmap` calls, against the builder's 163 ms.
+
+**Chosen:** a storage that holds a block with a positive extent grows by
+one call to the provider's `resize`, which grows it in place or moves it,
+the provider choosing; its first old extent of bytes, the prefix among
+them, are where the result is, and `out_of_memory` leaves the storage as
+it was. A storage with no block, or whose items have no size, still takes
+a fresh block. `mem.reserve_admit_copy`, which `vec.append_bytes` grows
+with, does the same unless the bytes it appends are a view of the
+storage's own block, which must be read before the old block is given
+back: then it grows in place where the provider can and otherwise moves
+as before (D1122). The list now takes 190 ms with 12 `mremap` calls, one
+`mmap` and one `munmap`. Through `core/fault`'s injector a growth is one
+attempt and, when it succeeds, one success and no free, whichever way the
+inner provider answers, so the fixtures that pinned an injector's
+counters were rewritten for it.
+
+**The alternatives:** keeping D356's growth asked in place before the
+`resize`, which asks the system twice for every block it cannot extend
+where it is; and a `resize` for byte lists alone, which leaves every other
+item type copying its slots.
+
+**Pinned by** the fixtures D356 names whose counters changed, among them
+`runtime/r420-vec-large-list`, `runtime/r420-failing-providers` and
+`runtime/core-vec-used-sort`, and `runtime/hosted-heap-resize`.
+
 ### D357 — `file_system` refines `files`, and a member for another system says so
 
 **The tour said** at [1290] that a concept may refine another, and D325 made
