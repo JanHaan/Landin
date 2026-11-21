@@ -2167,7 +2167,7 @@ and version, runs the first program through `nix run`, and refuses a
 packages, and `test_nix_route` holds its refusals. The release recipe's
 flake step runs it on the branch that moves the hashes and checks
 `nix run github:701-dev/Landin -- version` once that is on `main`. Gate
-run 44864695434 on 24ef33d56; boards run 44867340813 on the same tree.
+run 44873069309 and boards run 44875115933 on the merged tree 9e62c8b88.
 
 ### R23.30 — A one-line install script
 
