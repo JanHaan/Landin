@@ -1,6 +1,6 @@
 {
   "status": "passed",
-  "image_sha256": "92e6a55677605b2e04c228e6b6263f1f70367192bfe2893ef80c035716f5bd3a",
+  "image_sha256": "10ea0f4cc0fd0a50cf354143f04e45f90aa1b6ac34a8aae4e99b84b88225c8b2",
   "image_name": "board.elf",
   "second_stage_crc32": "e5e96a65",
   "second_stage_sha256": "bb2162f7be7e4aeb609c398074206139e53a83696702a404021297271f3cd140",
@@ -33,7 +33,7 @@
       "held_by_fifo": 32,
       "restarts": 3,
       "dma_completions": 2,
-      "timer_events": 8321,
+      "timer_events": 9905,
       "echoed": 11202,
       "sent": 11572
     },
@@ -48,100 +48,23 @@
     "usb_events": 1,
     "trans_count": 1094
   },
-  "uart_sha256": "4d8b7b966d5a6f9d6e4252a9b6253da02cae3f0b6dba784d97746c76a96566d3",
+  "uart_sha256": "cb8ba96ffe56241437d4618129292542785a89e23133eda9c7b361e6dbe4aae2",
   "mode": "boot",
   "fixed_restore": {
     "status": "passed",
-    "sha256": "f426ae6eb654887dee13385e477c8168f3398100c959836c5c65ecda18fa33ce",
+    "sha256": "9badb062ed95e960626b0a7e0d5381e4c869c4b13f91c16146dc8aeaa239a0f8",
     "marker": {
       "symbol": "_landin_fixed_ready",
       "address": 536870912,
       "value": 1279678513,
-      "elf_sha256": "f426ae6eb654887dee13385e477c8168f3398100c959836c5c65ecda18fa33ce"
+      "elf_sha256": "9badb062ed95e960626b0a7e0d5381e4c869c4b13f91c16146dc8aeaa239a0f8"
     }
   },
-  "seconds": 120.757,
+  "seconds": 29.595,
   "kernel_usb": {
-    "since": 1795075239.1060727,
-    "until": 1795075359.8445714,
-    "lines": [
-      {
-        "time": 1795075240.980681,
-        "text": "rigpi kernel: usb 1-1.2.3.2: new high-speed USB device number 100 using xhci_hcd"
-      },
-      {
-        "time": 1795075241.130835,
-        "text": "rigpi kernel: usb-storage 1-1.2.3.2:1.1: USB Mass Storage device detected"
-      },
-      {
-        "time": 1795075241.134391,
-        "text": "rigpi kernel: scsi host0: usb-storage 1-1.2.3.2:1.1"
-      },
-      {
-        "time": 1795075241.148694,
-        "text": "rigpi kernel: cdc_acm 1-1.2.3.2:1.2: ttyACM1: USB ACM device"
-      },
-      {
-        "time": 1795075265.700817,
-        "text": "rigpi kernel: usb 1-1.2.3.2: USB disconnect, device number 100"
-      },
-      {
-        "time": 1795075267.608677,
-        "text": "rigpi kernel: usb 1-1.2.3.2: new high-speed USB device number 101 using xhci_hcd"
-      },
-      {
-        "time": 1795075267.758231,
-        "text": "rigpi kernel: usb-storage 1-1.2.3.2:1.1: USB Mass Storage device detected"
-      },
-      {
-        "time": 1795075267.762241,
-        "text": "rigpi kernel: scsi host0: usb-storage 1-1.2.3.2:1.1"
-      },
-      {
-        "time": 1795075267.776698,
-        "text": "rigpi kernel: cdc_acm 1-1.2.3.2:1.2: ttyACM1: USB ACM device"
-      },
-      {
-        "time": 1795075304.540926,
-        "text": "rigpi kernel: usb 1-1.2.3.2: USB disconnect, device number 101"
-      },
-      {
-        "time": 1795075306.436681,
-        "text": "rigpi kernel: usb 1-1.2.3.2: new high-speed USB device number 102 using xhci_hcd"
-      },
-      {
-        "time": 1795075306.585419,
-        "text": "rigpi kernel: usb-storage 1-1.2.3.2:1.1: USB Mass Storage device detected"
-      },
-      {
-        "time": 1795075306.589694,
-        "text": "rigpi kernel: scsi host0: usb-storage 1-1.2.3.2:1.1"
-      },
-      {
-        "time": 1795075306.600662,
-        "text": "rigpi kernel: cdc_acm 1-1.2.3.2:1.2: ttyACM1: USB ACM device"
-      },
-      {
-        "time": 1795075331.284719,
-        "text": "rigpi kernel: usb 1-1.2.3.2: USB disconnect, device number 102"
-      },
-      {
-        "time": 1795075333.192674,
-        "text": "rigpi kernel: usb 1-1.2.3.2: new high-speed USB device number 103 using xhci_hcd"
-      },
-      {
-        "time": 1795075333.343064,
-        "text": "rigpi kernel: usb-storage 1-1.2.3.2:1.1: USB Mass Storage device detected"
-      },
-      {
-        "time": 1795075333.347116,
-        "text": "rigpi kernel: scsi host0: usb-storage 1-1.2.3.2:1.1"
-      },
-      {
-        "time": 1795075333.360706,
-        "text": "rigpi kernel: cdc_acm 1-1.2.3.2:1.2: ttyACM1: USB ACM device"
-      }
-    ],
+    "since": 1795267971.6040487,
+    "until": 1795268001.179695,
+    "lines": [],
     "status": "captured"
   },
   "sent_sha256": "862543372c500f893b20ccce8a53c22a29917e5b561e86a0fe674a64666d86ba",
@@ -157,7 +80,7 @@
       "h": "00002bc2",
       "c": "00000003",
       "d": "00000002",
-      "m": "00002081",
+      "m": "000026b1",
       "u": "00000001",
       "p": "00000015",
       "n": "00000446",

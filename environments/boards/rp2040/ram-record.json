@@ -1,6 +1,6 @@
 {
   "status": "passed",
-  "image_sha256": "a47890a6be5469a113e76b0ca67d722dbba5a7a03701b8e7536e99c3fe50d106",
+  "image_sha256": "18dcb1103655936c7b390630e7cb945c278d69a51c364bf6f1b3d029fd22b298",
   "image_name": "board.elf",
   "verdicts": {
     "boot": {
@@ -30,7 +30,7 @@
       "held_by_fifo": 32,
       "restarts": 3,
       "dma_completions": 2,
-      "timer_events": 9313,
+      "timer_events": 8332,
       "echoed": 11202,
       "sent": 11572
     },
@@ -45,7 +45,7 @@
     "usb_events": 1,
     "trans_count": 1094
   },
-  "uart_sha256": "59eb45c741b761e1e925a5ba612e340e474769e51cf0f6873af3d9cce99b48aa",
+  "uart_sha256": "700b191e891fafd02102ac4f6740b03e6e3d41191ba3e9ecee9b0a976cd9e75b",
   "mode": "ram",
   "warm_load": {
     "board": "rp2040",
@@ -55,28 +55,28 @@
       "peripheral_sources_stopped": true,
       "rom_reset": false
     },
-    "elf_sha256": "a47890a6be5469a113e76b0ca67d722dbba5a7a03701b8e7536e99c3fe50d106",
+    "elf_sha256": "18dcb1103655936c7b390630e7cb945c278d69a51c364bf6f1b3d029fd22b298",
     "entry": 536871105,
     "flash_written": false,
     "format_version": 1,
     "helper_source_sha256": "fc2f5b5081e7f4778195e621b04081bd05ac04dee304934a44bab3475aff0880",
     "mode": "warm",
-    "previous_pc": 268436062,
+    "previous_pc": 268436046,
     "segments": [
       {
         "address": 536870912,
-        "bytes": 13704,
-        "sha256": "0901efcfc0221ad77ba2ec78987e709f4a4edcf784e03d134cf9fcbabdafb3f5"
+        "bytes": 12040,
+        "sha256": "d9a30fa3431cfc3de451bf5b748d0c59a729ca0409403bad1d8e39b053e900ef"
       }
     ],
     "stack": 537141248,
     "status": "passed",
     "vector": 536870912
   },
-  "seconds": 46.46,
+  "seconds": 14.926,
   "kernel_usb": {
-    "since": 1795075077.4324985,
-    "until": 1795075123.8763034,
+    "since": 1795267948.6648808,
+    "until": 1795267963.5750542,
     "lines": [],
     "status": "captured"
   },
@@ -93,7 +93,7 @@
       "h": "00002bc2",
       "c": "00000003",
       "d": "00000002",
-      "m": "00002461",
+      "m": "0000208c",
       "u": "00000001",
       "p": "00000015",
       "n": "00000446",
