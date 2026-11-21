@@ -594,7 +594,7 @@ branch; SR-1465-SR-1467 record the friction met.
 
 ### R16.26 — The library's costs
 
-Status: planned
+Status: active
 Depends on: R16.10
 
 R16.10 measured costs the library imposes rather than code generation: a
