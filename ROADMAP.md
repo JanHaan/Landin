@@ -700,7 +700,7 @@ Done: every moved row typed, the rows-to-be filed as `SR-1282` to `SR-1298`,
 `scripts/register_next.py` with its controls, and `check.py` refusing a
 register over its cap or a row past its age in controls. The maintainer's
 answers to Q-1 to Q-5 retired 43 rows and scheduled `SR-195` and `SR-768` on
-R17.50, `SR-1178` on R16.20, SR-1237 on R19.10 and C3 on R20.10; a rig fix
+R17.50, `SR-1178` on R16.20, `SR-1237` on R19.10 and C3 on R20.10; a rig fix
 rooting the GPIO shell retired one more, leaving 57 open with R17.50's
 fixes merged. The retired rows' standing facts moved to
 `docs/capabilities.md`, `docs/targets.md` and `devices/README.md`.
@@ -1268,7 +1268,7 @@ until R19.10 decides it.
 
 ### R19.10 — Decide the candidates
 
-Status: active
+Status: complete
 Depends on: R18
 
 The maintainer takes each candidate in or leaves it out, and groups the
@@ -1285,11 +1285,28 @@ that a superseded boundary no longer reads as a live rule. SC-27 is
 decided on a count, not an estimate: R19.10 counted the constructs over
 the library, the examples and the corpus on checked trees with
 `./scripts/dev-test.sh --census`, which completed `SR-1286`.
-R19.10 also decides SR-1237 itself, whether a type application's fixed
+R19.10 also decides `SR-1237` itself, whether a type application's fixed
 actual folds compiler facts and `sizeof` as an array length does or D135
 stands, rather than leave it to R19.20, which runs only if SC-24 is taken.
 Its answers are asked as Q-80 (the candidates and their groups), Q-81
 (the value-model fold) and Q-82 (fixed actuals).
+Done: the maintainer answered Q-80, Q-81 and Q-82 on 2026-11-21, and
+each answer is a decision in `spec.md`. Ten candidates leave: SC-01
+(D1651, which keeps labels and `when` and says what D157, D158, D159,
+D234 and D430 keep), SC-05 (D1652), SC-03 (D1654), SC-22 (D1655), SC-09
+(D1656), SC-04 (D1657), SC-08 (D1658), SC-10 (D1659), SC-13 (D1660) and
+SC-06 (D1662); SC-16 is recorded as D1661. SC-02, SC-07, SC-11, SC-12,
+SC-14, SC-15, SC-19, SC-20, SC-21, SC-23, SC-27, SC-28 and SC-29 stay,
+SC-17 and SC-18 wait on R20, and SC-26 is R19.30's (D1653). SC-24 and
+SC-25 fold (D1664), so R19.20 runs. A fixed actual folds as an array
+length does (D1663), which settles `SR-1237`; D1651 and D1653 settle
+`E1`; SR-1288 moves to the fold's item. The maintainer named no groups,
+and the five below group the removals by the part of the compiler each
+touches, the declaration spellings taking D1663 with them. The census,
+`./scripts/dev-test.sh --census`, completed `SR-1286`; the checker's
+reading is `roadmap/inputs/value-model-reading.md`. The item's closing
+commit is the first on R19's integration branch, `r19-integration`, made
+from main, and does not reach main before R19's gate.
 
 ### R19.20 — How far the checker folds
 
@@ -1323,8 +1340,98 @@ group item, which lands its rewrite with it. The same command applies the
 exact fix a diagnostic carries, which SR-1242 asks for.
 
 ### Groups accepted in R19.10
-Written after R19.10, one item per group, each depending on R19.10 and on
-R19.40; the fold's item also depends on R19.20.
+One item per group, each depending on R19.10 and on R19.40; the fold's
+item also depends on R19.20. Each removes its forms from the grammar, the
+highlighters, the tour and `spec.md`'s rules, marks every decision the
+removal withdraws as superseded by the one that took it, refuses each
+removed form with its replacement named, lands its `refine fix` rewrite in
+R19.40's command, and rewrites the corpus, the examples, the library and
+the prototypes' live text that wrote the form.
+
+### R19.50 — Loops are statements
+
+Status: planned
+Depends on: R19.10, R19.40
+
+SC-01 and SC-05: `break with` and `complete` leave (D1651), and so does
+`try for` (D1652). Labels and `when` stay, so D157, D159, D234 and D430
+are amended rather than withdrawn, as D1651 says clause by clause, and
+L0332 becomes the refusal of `with` after any `break`.
+
+Exit evidence: a negative fixture for each removed form naming its
+replacement; `refine fix` rewriting a `break with` search loop into a
+mutable local and a plain `break` where the rewrite is mechanical; the
+labelled-loop and labelled-block fixtures unchanged and passing; the
+complete gate on the item's commit.
+
+### R19.60 — One spelling for each declaration
+
+Status: planned
+Depends on: R19.10, R19.40
+
+SC-03, SC-04, SC-08, SC-09 and SC-22: anonymous functions (D1654), a
+written `in` (D1655), several names in one declaration (D1656), the
+inline named struct (D1657) and selected-name imports (D1658) leave. With
+them the additive rule that a fixed actual folds as an array length does
+(D1663), which amends D135 and D1321.
+
+Exit evidence: a negative fixture for each removed form naming its
+replacement and a `refine fix` rewrite for each, all five being
+mechanical; [1795]'s `->` lookahead gone from the grammar and the
+tree-sitter grammar; a positive fixture applying a type to
+`compiler.word_size` and to `sizeof` of a scalar; the complete gate on the
+item's commit.
+
+### R19.70 — Range subtypes become distinct types
+
+Status: planned
+Depends on: R19.10, R19.40
+
+SC-16, as D1661 records: `T range a .. b` leaves, and a value known to lie
+in a range is a `distinct` type made by a checking function. D188, D236,
+D1086, D1087, D1088 and D1100 are withdrawn, [1730] is rewritten around
+the checking function, and prototype 1's `baud_rate` is rewritten so. The
+compile-time refusal of an out-of-range constant goes with them.
+
+Exit evidence: the negative fixture refusing `range` in a type names the
+distinct type and its constructor; a runtime fixture whose checking
+constructor fails outside the range; the complete gate on the item's
+commit.
+
+### R19.80 — One-atom pointer unions, written layout and named operands
+
+Status: planned
+Depends on: R19.10, R19.40
+
+SC-10, SC-13 and SC-06, the three that reach the backends: a pointer union
+holds one atom (D1659), so the two-cell form leaves every backend's IR,
+call convention and widening; `layout(optimal)` leaves (D1660); and the
+positional `assembler.block(text, value)` leaves (D1662), with the two
+probe call sites in `environments/cortex-m/probes/core-cpu.ldn` rewritten
+to the operand form.
+
+Exit evidence: a negative fixture for each removed form naming its
+replacement; the build-modes comparison and the emit manifest unchanged
+for every program that wrote none of the three; the Cortex-M lanes passing
+with the rewritten probes; the complete gate and a `scope=boards` run on
+the item's commit.
+
+### R19.90 — The value model folded
+
+Status: planned
+Depends on: R19.10, R19.20, R19.40
+
+SC-24 and SC-25, as D1664 records, scoped by R19.20's reading: every
+decision of D24 to D109 that only admitted one more cell is marked as
+superseded, the checker's four per-slice places and lowering's
+`Lower_Binding_Statement` collapse into the general path, and a counted
+repetition and `lenof` of a literal take any element shape. This takes on
+SR-1288.
+
+Exit evidence: no fixture pinning a surviving rule of D24 to D109
+changed in meaning; diagnostic changes from L0304 to L0301 listed in the
+commit; positive fixtures for a repetition and a `lenof` of a non-scalar
+element; the complete gate on the item's commit.
 
 ### R19 gate
 R19's breaking window: every accepted group, R19.30 and R19.40 integrate on

@@ -511,7 +511,7 @@ run records and what the gate checks for each target.
   manager, self-hosting, a browser target, dates and times in the library
   and every release decision stay outside it.
 
-**Current roadmap work: R19.10 — Decide the candidates.**
+**Next roadmap item: R19.20 — How far the checker folds (planned).**
 
 ## Questions, bugs and ideas
 

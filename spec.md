@@ -2885,6 +2885,16 @@ type was declined for the destructuring reading.
 `negative/shared-type-names-nothing`, `negative/shared-packed-fields-overlap`
 and `negative/shared-link-symbol-duplicates`.
 
+### D1656 — One name per declaration: `a, b: T = v` leaves
+
+**The tour said** at [0100] that `a, b: T = v` declares each name with its own copy of one value, and D233 made it one declaration per name with one evaluation of the initializer and a shared `mut` warning. The library and the bindings write none.
+
+**Chosen:** the form leaves. Each name is declared on its own line, which is what [0100] already said it meant; D233's one-evaluation rule and its shared warning go with it. A parameter, result or payload list keeps its own form. The maintainer chose this on 2026-11-21, answering the candidate list the third roadmap's simplification phase decides.
+
+**The alternatives:** keeping it for atom lists in examples, three lines that read as well written out. Declined.
+
+**Pinned by** nothing that runs yet: the change that removes the form adds the fixture that refuses it, naming its replacement, and the rewrite that replaces it, and marks each decision it withdraws as superseded by this one.
+
 ### D246 — A refusal by name says what the form is, not which work decided it
 
 **The discrepancy:** [1830] required a named refusal's second note to say
@@ -5021,6 +5031,16 @@ subject keeps its type, and no binding is made.
 **Pinned by** `runtime/pointer-union-atom-comparison`, and by
 `negative/pointer-union-comparison` and `negative/pointer-union-many-comparison`,
 which compare two unions.
+
+### D1659 — A pointer union holds one atom
+
+**The tour said** at [0480] that a pointer may share its storage with atoms instead of a null. D235 gave two or more atoms a code word beside the pointer, and D429, D874 and D1115 build on it. All 28 of the library's pointer unions hold one atom.
+
+**Chosen:** a pointer union holds exactly one atom, stored as the zero address (D189); the form with two or more leaves, and the two-cell aggregate it needs leaves every backend's IR, call convention and widening. A pointer with several states is a one-atom union with an error set, or a record of a state and a pointer. The maintainer chose this on 2026-11-21, answering the candidate list the third roadmap's simplification phase decides.
+
+**The alternatives:** keeping the several-atom form, whose second cell every target carries for programs nobody has written. Declined.
+
+**Pinned by** nothing that runs yet: the change that removes the form adds the fixture that refuses it, naming its replacement, and the rewrite that replaces it, and marks each decision it withdraws as superseded by this one.
 
 ## DECISIONS: ARRAYS, SLICES AND TEXT
 
@@ -7460,6 +7480,16 @@ useful on the 32 KB end of the target range.
 layout cases and the `backend plans` layout-consumer cases. Synthetic-32 cases
 are target-layout evidence, never native 32-bit execution evidence.
 
+### D1660 — Fields are placed as written: `layout(optimal)` leaves
+
+**The tour said** at [0750] that `layout(optimal)` lets the compiler reorder a struct's fields to make it smaller, and D210 made the placement explicit, stable and strictly smaller. The library writes none.
+
+**Chosen:** `layout(optimal)` leaves. A struct's fields are placed in the order written; a program that wants the smaller layout writes its fields largest alignment first. The maintainer chose this on 2026-11-21, answering the candidate list the third roadmap's simplification phase decides.
+
+**The alternatives:** keeping it, a second layout rule a reader of a struct has to apply in their head. Declined.
+
+**Pinned by** nothing that runs yet: the change that removes the form adds the fixture that refuses it, naming its replacement, and the rewrite that replaces it, and marks each decision it withdraws as superseded by this one.
+
 ### D213 — Distinct types have opaque identity and transparent representation
 
 **The tour said** that [0650] preserves representation, creates a different
@@ -7894,6 +7924,16 @@ program: the conflict is with D188 and [0440], not with cost.
 `negative/range-subtype-external-signature`,
 `negative/r491-refused-operand-cascades`, whose recorded reports carry the
 boundary note, and the `subtype.range` guarantee row.
+
+### D1661 — Range subtypes leave; a `distinct` type with a checking constructor replaces one
+
+**The tour said** at [0660] that `T range a .. b` is its base type constrained, and at [1730] that a range subtype carries a proof. D188, D236, D1086, D1087, D1088 and D1100 give it a list of positions it constrains and a list it does not, and D236 says it does not compose. The library and the device descriptions write none; prototype 1's `baud_rate` is one.
+
+**Chosen:** range subtypes leave. A value known to lie in a range is a `distinct` type over the base, made only by a function that checks the range and fails, or traps, outside it; [1730]'s proof is that function's result, as `dma_buffer` already is. The compile-time refusal of an out-of-range constant goes with them: the check runs where the value is made. The maintainer decided this on 2026-11-16, before the rest of the list was put to the maintainer.
+
+**The alternatives:** keeping range subtypes, the heaviest rule set in their section; and extending them to the positions D236 leaves out. Both were declined.
+
+**Pinned by** nothing that runs yet: the change that removes the form adds the fixture that refuses it, naming its replacement, and the rewrite that replaces it, and marks each decision it withdraws as superseded by this one.
 
 ### D239 — Byte order is converted where bytes cross, and the machine attribute words are withdrawn
 
@@ -10432,6 +10472,16 @@ public seams; `positive/variant-part-measured`;
 target-layout records; the backend seam against both target descriptions; and
 `runtime/variant-part-measurements-answer-for-the-target` on Linux x86-64.
 
+### D1657 — A struct type is declared with `struct … end`: the inline `t: type = (a: T)` leaves
+
+**The tour said** at [0670] and the grammar at [1795] that `t: type = (a: T)` declares a named struct in one line, which needs a lookahead for `->` to tell it from a function type. D73, D74 and D189 cite it. The library writes none, against 183 block declarations.
+
+**Chosen:** the inline spelling of a named struct leaves; `struct … end` declares every struct type, and [1795] loses its lookahead. Parameter, result and payload lists keep their parenthesised form, which is not a type declaration. The maintainer chose this on 2026-11-21, answering the candidate list the third roadmap's simplification phase decides.
+
+**The alternatives:** keeping both spellings, which is two ways to declare one thing and a grammar ambiguity. Declined.
+
+**Pinned by** nothing that runs yet: the change that removes the form adds the fixture that refuses it, naming its replacement, and the rewrite that replaces it, and marks each decision it withdraws as superseded by this one.
+
 ### D75 — A variant-bearing struct has storage and one zero image
 
 **The tour said** that [0540]'s `zeroed` writes the all-bits-zero image of a
@@ -12063,6 +12113,16 @@ a note that promises nobody's work.
 `negative/r491-inferred-repetition-refusals` and
 `negative/array-repetition-countless-inferred-initializer-not-enabled`.
 
+### D1664 — The value-model admissions fold into the rules that still decide
+
+**The tour said** at [1880] which contexts give a value form its type, and D241 admitted every form in every governed position, leaving a short list of boundaries. D24 to D109 record the first roadmap's admissions one cell at a time, and most of their chosen paragraphs describe boundaries that no longer exist. A reading of the checker found about 950 lines of per-slice checking in four places, copies of the general dispatch, and two boundaries that still lag: a counted repetition infers only a scalar element, and `lenof` of a literal (D31) takes only scalar elements.
+
+**Chosen:** the register and the checker fold. Each decision of D24 to D109 that only admitted one more cell is marked as superseded by the rule that now holds; about eleven statements still decide something (D29's write order, the static images, definite assignment of a whole array, the case before its payload, arm aliasing, nested layout, by-value transport, D241's boundaries, D31, the layout decisions and D72's construction syntax). The checker's per-slice paths collapse into the general one, and both lags are lifted: a repetition and `lenof` take any element shape, as a literal does. How far the checker folds is read first, against every citation. The maintainer chose this on 2026-11-21, answering the candidate list the third roadmap's simplification phase decides.
+
+**The alternatives:** marking each superseded boundary without touching the checker, which leaves the duplicated checking for every later value-form change to edit twice; and leaving both as they are, where a superseded boundary reads as a live rule. Both were declined.
+
+**Pinned by** nothing that runs yet: the change that folds them keeps every fixture that pins D24 to D109's surviving rules and adds a positive fixture for a repetition and a `lenof` of a non-scalar element.
+
 ### D405 — One match arm names several cases, and none of them binds
 
 **The tour said** at [1210] "No fallthrough; list several labels instead",
@@ -12176,6 +12236,16 @@ modifier. Either is workable, and neither was selected by the tour.
 
 **Pinned by** the parser case `reference signature syntax is represented` and
 the resolution case `return sources retain parameter positions`.
+
+### D1655 — `in` is never written on a parameter
+
+**The tour said** at [0900] that a parameter is `in` unless it says `inout` or `sink`, and D140 kept a written `in` only as a distinct syntax fact. The library writes none.
+
+**Chosen:** `in` is no longer written: a parameter without a convention is read-only, as it always meant, and a written `in` is refused naming that. `escaping` keeps its place before `inout` and `sink`. The maintainer chose this on 2026-11-21, answering the candidate list the third roadmap's simplification phase decides.
+
+**The alternatives:** keeping the word as optional emphasis, two spellings of one meaning. Declined.
+
+**Pinned by** nothing that runs yet: the change that removes the form adds the fixture that refuses it, naming its replacement, and the rewrite that replaces it, and marks each decision it withdraws as superseded by this one.
 
 ### D149 — `inout` exclusivity is checked only for a provably identical place
 
@@ -13930,6 +14000,16 @@ records through `positive/infallible-function-values`; the negative fixtures
 `module-function-without-image` and `module-function-image-cycle`; and
 `runtime/infallible-function-values` on
 Linux x86-64.
+
+### D1654 — A function is declared by name: anonymous functions leave
+
+**The tour said** at [1010] that an anonymous function is a function value written in place, capturing nothing. D123, D187 and D464 cite it, and lowering gives it an item kind of its own. The library, the examples and the prototypes write none.
+
+**Chosen:** anonymous functions leave. A function value is a declared function passed by name; since an anonymous function captured nothing, the declared one says the same with a name. [1000] and [1010] become one paragraph. The maintainer chose this on 2026-11-21, answering the candidate list the third roadmap's simplification phase decides.
+
+**The alternatives:** keeping them for short callbacks, which a named declaration beside the call already serves. Declined.
+
+**Pinned by** nothing that runs yet: the change that removes the form adds the fixture that refuses it, naming its replacement, and the rewrite that replaces it, and marks each decision it withdraws as superseded by this one.
 
 ### D128 — Multiple named returns form one anonymous structural aggregate
 
@@ -15809,6 +15889,36 @@ which refuses programs the checker has already proved.
 **Pinned by** `runtime/r491-loop-assignment` (the negative fixture that
 pinned the ceiling, turned) and `negative/loop-exit-skips-assignment`.
 
+### D1651 — Loops are statements: `break with` and `complete` leave the language
+
+**The tour said** at [1190] that `break with` makes a loop an expression whose value every break gives, and at [1170] that `complete` runs when a conditional loop runs out without a `break`. D157, D158, D159, D234 and D430 implement them. The library, the examples and the derived programs use neither: a count over the checked corpus found them only in the fixtures that pin them.
+
+**Chosen:** both leave. A loop is a statement and has no value; a search loop writes its result to a mutable local or a named return and leaves with a plain `break`, or is a helper that `return`s it. A loop has no exhaustion block, so every exit of a `while` or `for`, its false test, its exhaustion and each `break`, reaches the statement after it. Labels on loops and bare blocks ([1180], D234) stay, and so does `when` on every exit ([0970]): `break name` and `continue name` keep their targets and cleanup, and `break name when c` its guard. What D157 says of labels stands and its completion edge goes; D158 goes whole; D159 keeps its bounds and loses its completion and value clauses; D234's refusal of `break name with v` becomes the refusal of `with` after any `break`, naming the local that replaces it; D430's join of the edges that leave a loop stands without the edge through `complete`. `with` and `complete` leave the keyword lists. The maintainer chose this on 2026-11-21, answering the candidate list the third roadmap's simplification phase decides.
+
+**The alternatives:** keeping both, as the inherited rule that non-use is evidence, not automatic removal, kept D234's labelled blocks; and removing labels with them, since with no loop value a label only breaks outward, which a helper's `return` does. The maintainer kept labels and declined both.
+
+**Pinned by** nothing that runs yet: the change that removes the form adds the fixture that refuses it, naming its replacement, and the rewrite that replaces it, and marks each decision it withdraws as superseded by this one.
+
+### D1652 — A fallible traversal is a `while` over `try next`: `try for` leaves
+
+**The tour said** at [1320] that `try for` walks a `fallible_iterable`, each step a call that may fail into the enclosing function. D180, D293, D382, D497, D1037 and D1308 cite it. The library has no `try for`; one match is a comment.
+
+**Chosen:** `try for` leaves. A fallible traversal is written as a `while` whose body takes each item with `try next(…)`, or with a call-site `else`, which already says where a failure goes. `for` keeps its forms over ranges, slices and an `iterable`; whether containers keep the traversal protocol at all is the library review's decision, not this one. The maintainer chose this on 2026-11-21, answering the candidate list the third roadmap's simplification phase decides.
+
+**The alternatives:** keeping `try for` beside `for`, a second loop form for one kind of step; and removing the whole traversal protocol now, which waits on whether the library's containers iterate. Both were declined.
+
+**Pinned by** nothing that runs yet: the change that removes the form adds the fixture that refuses it, naming its replacement, and the rewrite that replaces it, and marks each decision it withdraws as superseded by this one.
+
+### D1653 — The simplification keeps the forms it left out, and two wait on the library review
+
+**The tour said** each of the forms below and the third roadmap's candidate list proposed removing or reducing it, with a count of its use over the checked library, examples and corpus.
+
+**Chosen:** these stay as they are: labels on loops and blocks ([1180]); a declaration in an `if` or `while` condition ([1070]); every array fill, `[of v]` and `[e1, …, of v]` as well as `[n of v]` ([0560]); every struct literal `of` fill, not only `of zeroed` ([0720]); `inout` and `sink` bindings in a `match` arm ([1220]); block comments ([0020]); an atom union written in place ([0640]); positional arguments followed by named ones ([0980]); inclusive `..` in `for` and slices ([0360]); `held` in a `from` result; arithmetic on whole arrays ([0590], D209, D240); array fields in packed structs ([0730]); and hexadecimal float literals ([0230]). `when` on an exit ([0970]) was never a candidate and stays. The `iterable` protocol and concepts with several inputs ([1320], [1270]), and `zeroable` as a user-visible bound ([0550]), wait on the library review, which decides whether containers iterate and what generic containers need. The order in which an aggregate assignment writes, D29 against D209, is taken as one rule by its own change. The maintainer chose this on 2026-11-21, answering the candidate list the third roadmap's simplification phase decides.
+
+**The alternatives:** removing each, as the candidate list recommended for labels, the declaration in a condition, the fills, block comments, whole-array arithmetic and the packed array fields. The maintainer declined each for this roadmap; a later proposal needs evidence beyond the counts the list already gave.
+
+**Pinned by** the fixtures that pin each form today, which stay: `runtime/loop-control-flow` and `positive/r720-labelled-bare-blocks` among them, and the `control.loops` guarantee row.
+
 ### D431 — A final control whose only answers diverge is a statement
 
 **The tour said** at [1800] that a final expression fills the named return,
@@ -15970,6 +16080,16 @@ module and `runtime/core-vec-pointer-storage`; the
 `negative/nominal-struct-recursive-layout` fixtures; the generated lexical,
 construct and IR records; and `runtime/parameterized-type-alias-fixed-array`
 and `runtime/parameterized-struct-values` on Linux x86-64.
+
+### D1663 — A fixed actual folds as an array length does
+
+**The tour said** nothing about how far a type application's fixed actual folds. D135 kept it to an integer literal or a forwarded fixed formal, while an array length folds D136's closed forms, an integer compiler fact (D1321) and `sizeof` or `alignof` of a scalar (D1321, D1340), so `[compiler.word_size]u8` was a type and `buf(compiler.word_size)` was refused.
+
+**Chosen:** one rule: a fixed actual is any expression an array length folds, with the same refusals and the same target-dependent identity (D139). D135 and D1321 are amended by this decision when the change that lands it marks them. The maintainer chose this on 2026-11-21, answering the candidate list the third roadmap's simplification phase decides.
+
+**The alternatives:** keeping D135 as it stood, two rules for one kind of value. Declined.
+
+**Pinned by** nothing that runs yet: the change that lands the rule adds a positive fixture applying a type to `compiler.word_size` and `sizeof` of a scalar, and a negative one for each refusal an array length gives.
 
 ### D137 — A parameterized struct application is one canonical nominal instance
 
@@ -17892,6 +18012,16 @@ withheld.
 `negative/import-selected-namespace-unbound` and
 `runtime/import-alias-selected-identities`.
 
+### D1658 — A module is imported whole: `import m (a, b)` leaves
+
+**The tour said** at [1440] that `import m (a, b)` binds selected names of a module into the file. D150, D191, D201 and D242 cite it. The library writes none, against 188 plain imports.
+
+**Chosen:** selected-name imports leave. A file imports a module whole and names its members `m.a`; `as` still renames the module. The maintainer chose this on 2026-11-21, answering the candidate list the third roadmap's simplification phase decides.
+
+**The alternatives:** keeping selected names, which makes a name's module invisible where it is used and shares its refusals with every other import. Declined.
+
+**Pinned by** nothing that runs yet: the change that removes the form adds the fixture that refuses it, naming its replacement, and the rewrite that replaces it, and marks each decision it withdraws as superseded by this one.
+
 ### D247 — A routine and a struct each hold at most 16,384 of what they declare
 
 **The tour said** nothing about size. A program may be as large as its host
@@ -19585,6 +19715,16 @@ above, `negative/assembly-operands-on-another-call`,
 fixtures, `backend/assembly blocks keep their registers`,
 `negative/assembly-operand-without-register` and
 `negative/assembly-output-with-value`.
+
+### D1662 — Assembly names its operands: the positional `assembler.block(text, value)` leaves
+
+**The tour said** at [1630] that inline assembly names each operand's register, and D248 kept the Cortex-M0 positional `assembler.block(text, value)` only until lowering existed on every target. It does. The library writes none; two probe programs under `environments/cortex-m/probes/` do.
+
+**Chosen:** the positional form leaves; the operand form, `inout value: u32 at r0 = …`, is the only one, and the probes are rewritten to it. The maintainer chose this on 2026-11-21, answering the candidate list the third roadmap's simplification phase decides.
+
+**The alternatives:** keeping the positional form for its two call sites. Declined.
+
+**Pinned by** nothing that runs yet: the change that removes the form adds the fixture that refuses it, naming its replacement, and the rewrite that replaces it, and marks each decision it withdraws as superseded by this one.
 
 ### D597 — Assembly text takes its target's own line comment
 
