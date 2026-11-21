@@ -84,6 +84,7 @@ Open:
 | --- | --- | --- |
 | [Q-105 — May the register sweep of 2026-11-21 retire eight rows nobody is waiting on?](questions/Q-105.md) | all eight stay open in the register as they are. | nothing; the register is under its cap without it. |
 | [Q-116 — Does a static Linux archive replace the glibc archives, or sit beside them?](questions/Q-116.md) | the static glibc archive replaces the glibc archive under the same names for Linux x86-64 and arm64, and `install.sh` takes it on every Linux host, musl and NixOS included. | R23.50's release and install-script half; its build and gate job are the same under options 1 and 2. |
+| [Q-122 — Does the fold also lift the scalar element of an inferred module array?](questions/Q-122.md) | the module boundary is kept. R19.90 lifts only the counted repetition and `lenof`, as D1664 says, and leaves D26's and D35's scalar element as recorded boundaries. | R19.90's scope by one case, a few lines in `Infer_Literal_Shape` with one fixture turned positive. Nothing before R19.90 waits. |
 
 Answered:
 

@@ -1310,7 +1310,7 @@ from main, and does not reach main before R19's gate.
 
 ### R19.20 — How far the checker folds
 
-Status: active
+Status: complete
 Depends on: R19.10
 
 Taken only if the value-model fold (SC-24) is accepted. It reads the
@@ -1318,6 +1318,17 @@ checker and lowering against D24-D109 and says which per-slice paths
 collapse into one rule and which stay, starting from R19.10's sampled
 reading, [`roadmap/inputs/value-model-reading.md`](roadmap/inputs/value-model-reading.md). The fold's item takes its scope
 from this reading.
+Done: `roadmap/inputs/value-model-fold-scope.md` reads all 376 citing
+lines and the 86 decisions. Thirteen rules survive, which hold 21 live and
+16 partly live decisions, and the other 49 are superseded. The sample
+missed four checker sites that repeat the general dispatch: the runtime
+halves of a struct literal's and a variant payload's array field, the
+scalar `zeroed` allow-list and two refusals in `Synthesise`. It also
+missed two inline `zeroed` clears in lowering and a third scalar-element
+boundary. That boundary, at module scope, D26 and D35, is outside
+D1664's words and is asked as Q-122, kept until answered. The reading
+decides the diagnostics the shared check gives, that array fields become
+general places, and the fold's order after R19.30. The fold is size L.
 
 ### R19.30 — One write order for an aggregate assignment
 
@@ -1341,12 +1352,12 @@ exact fix a diagnostic carries, which SR-1242 asks for.
 
 ### Groups accepted in R19.10
 One item per group, each depending on R19.10 and on R19.40; the fold's
-item also depends on R19.20. Each removes its forms from the grammar, the
-highlighters, the tour and `spec.md`'s rules, marks every decision the
-removal withdraws as superseded by the one that took it, refuses each
-removed form with its replacement named, lands its `refine fix` rewrite in
-R19.40's command, and rewrites the corpus, the examples, the library and
-the prototypes' live text that wrote the form.
+item also depends on R19.20 and R19.30. Each removes its forms from the
+grammar, the highlighters, the tour and `spec.md`'s rules, marks every
+decision the removal withdraws as superseded by the one that took it,
+refuses each removed form with its replacement named, lands its `refine
+fix` rewrite in R19.40's command, and rewrites the corpus, the examples,
+the library and the prototypes' live text that wrote the form.
 
 ### R19.50 — Loops are statements
 
@@ -1419,19 +1430,28 @@ the item's commit.
 ### R19.90 — The value model folded
 
 Status: planned
-Depends on: R19.10, R19.20, R19.40
+Depends on: R19.10, R19.20, R19.30, R19.40
 
-SC-24 and SC-25, as D1664 records, scoped by R19.20's reading: every
-decision of D24 to D109 that only admitted one more cell is marked as
-superseded, the checker's four per-slice places and lowering's
-`Lower_Binding_Statement` collapse into the general path, and a counted
-repetition and `lenof` of a literal take any element shape. This takes on
-SR-1288.
+SC-24 and SC-25, as D1664 records, in the scope and order of R19.20's
+reading, `roadmap/inputs/value-model-fold-scope.md`. The 47 superseded
+decisions and the 2 that refused syntax are marked, and the 16 partly
+live decisions have their false sentences named. The checker's per-slice
+sites collapse into `Check_Contextual_Value`: the declaration gate down
+to [1940]'s refusals, the binding and assignment dispatch, the runtime
+halves of `Check_Array_Field` and `Check_Fixed_Array_Payload`,
+`Is_Zeroed_Scalar_Place` and `Synthesise`'s two refusals.
+`Admit_Array_Field` goes, because array fields become general places.
+Lowering's three inline sites collapse into `Write_Shaped_Value`, after
+R19.30 has settled its write order. A counted repetition and `lenof` of
+a literal take any element shape, and the module-scope inference does
+too if Q-122 says so. Comments, notes and fixture summaries are
+re-pointed to the surviving rules. This takes on SR-1288.
 
 Exit evidence: no fixture pinning a surviving rule of D24 to D109
 changed in meaning; diagnostic changes from L0304 to L0301 listed in the
 commit; positive fixtures for a repetition and a `lenof` of a non-scalar
-element; the complete gate on the item's commit.
+element; the build-modes comparison and the manifest over lowering's
+collapse; the complete gate on the item's commit.
 
 ### R19 gate
 R19's breaking window: every accepted group, R19.30 and R19.40 integrate on
