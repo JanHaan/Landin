@@ -46,11 +46,42 @@ application is at the other. This is what it is like to write:
 too: checking, running and compiling programs, formatting source, and the
 language server and debug adapter your editor starts. An install gives you
 `refine`, a few further commands you run through it, and Landin's standard
-library. There are five ways to get it: with Homebrew, from a release, in a
-container, with nix, or from source.
+library. There are six ways to get it: with the install script, with
+Homebrew, from a release, in a container, with nix, or from source.
 
 Use 0.2.9 or later: [the first program](#your-first-program) needs
 `refine run` and `hosted/blocking`, both newer than 0.2.8.
+
+### With the install script
+
+On Linux x86-64 or arm64 with glibc, or on a Mac with Apple Silicon:
+
+```sh
+curl -fsSL https://www.701.dev/install.sh | sh
+```
+
+It downloads the newest release's archive for your platform, the one
+[From a release](#from-a-release) describes, checks it against the
+`.sha256` published beside it and unpacks it into `~/.landin`. It edits
+none of your files and needs no root: it prints the line that puts
+`~/.landin/bin` on your `PATH`, which you add to your shell's startup
+file. Run it again to replace that install with the newest release.
+
+Options follow `sh -s --`. To install a named release into a directory
+of your choosing:
+
+```sh
+curl -fsSL https://www.701.dev/install.sh | sh -s -- --version 0.2.11 --dir ~/opt/landin
+```
+
+`--help` lists the options. The script is
+[`install.sh`](install.sh) in this repository, served unchanged; read it
+before you run it if you like. It refuses a host no archive serves,
+NixOS, musl distributions, Intel Macs, FreeBSD and Windows among them,
+and names nix and the source build instead. With the GitHub CLI installed
+it also prints the commands that check the archive's attestation, as
+[From a release](#from-a-release) describes. To remove the install,
+delete `~/.landin`.
 
 ### With Homebrew
 

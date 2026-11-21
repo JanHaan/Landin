@@ -40826,6 +40826,50 @@ report its version, `nix run . -- run main.ldn` must print the first
 program's output, and `.#refine` must be a different derivation, which the
 same job builds; `scripts/tests/test_nix_route.py` holds its refusals.
 
+### D1747 — The install script installs one release archive into one directory, by the archive's own checksum
+
+**The tour said** nothing. The roadmap asked for a script a reader pipes
+from `curl` into `sh` that installs the release archive for the host, and
+left where it installs, what it does to a directory already there and
+which hosts it refuses to the item that wrote it.
+
+**Chosen:** `install.sh`, in the repository and served unchanged at
+`https://www.701.dev/install.sh`, the address the maintainer chose, is POSIX `sh` needing `curl`,
+`tar` and `sha256sum` or `shasum`. It names the archive
+`landin-VERSION-PLATFORM.tar.gz` by the release workflow's names, finds
+the newest release by following GitHub's `releases/latest` redirect to its
+tag, or takes `--version`, and refuses an archive whose digest is not the
+one its `.sha256` names. It unpacks into `--dir`, by default
+`$HOME/.landin`, a directory holding only that install, which a later run
+replaces whole once the new one is unpacked beside it; a directory that
+holds anything else is refused. It edits no shell profile and runs nothing
+as root: it prints the `export PATH` line and the driver `refine run`
+links with. It refuses a host no archive serves, Linux without glibc's
+loader and NixOS, whose loader path is a stub, among them, and names nix
+and the source build there. When `gh` is installed it prints the commands
+that check the archive's attestation, and does not run them. `--platform`
+names the archive for another host and `--list` prints the names a release
+publishes for every platform. `LANDIN_RELEASES` names another place
+releases are served from, which is how the gate serves its own archive.
+
+**The alternatives:** installing into `/usr/local` or another system
+directory, which needs root and mixes with the system's files; keeping
+earlier versions side by side under the directory, which nothing selects
+between yet and a build tool will own; appending to a shell profile,
+which changes a file the reader did not name; the GitHub API for the
+newest release, which is rate-limited without a token; and running
+`gh attestation verify` itself, which needs a login a fresh machine does
+not have.
+
+**Pinned by** `scripts/install_check.py`, run in the gate's `release`,
+`arm64-release` and `darwin-host-release` jobs against each host's
+packaged compiler served from 127.0.0.1 as a release is: the newest and a
+named version installed and running the first program, a reinstall, a
+foreign directory, a damaged archive, a missing version and two unserved
+hosts refused; `scripts/tests/test_install_script.py` runs the same cases
+against a stand-in archive and holds the script's names to
+`release.yml`'s.
+
 ### D571 — A round's yield calls nothing beneath it but its sweep, its idler and its switch
 
 **The tour said** nothing. `core/fibre/stacks`' round of turns is the one

@@ -3849,6 +3849,12 @@ def main(argv):
         print(f"{SITE.name}/library.html  {len(library_pages)} reference and source pages")
         for name in write_resources(DOCS + GUIDES, library_pages):
             print(f"{SITE.name}/{name}")
+        #  The one-line install script the README's "Installing" pipes
+        #  from curl, served at the site's root unchanged, byte for byte,
+        #  so the copy a reader reads in the repository is the one that
+        #  runs.
+        (SITE / "install.sh").write_bytes((source / "install.sh").read_bytes())
+        print(f"{SITE.name}/install.sh")
         #  The status in the words the page shows: the version, then the
         #  headline and detail; the "Status:" prefix and the period after
         #  the version are the README's punctuation, which status_parts

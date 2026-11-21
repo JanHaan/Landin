@@ -2208,7 +2208,7 @@ run 44873069309 and boards run 44875115933 on the merged tree 9e62c8b88.
 
 ### R23.30 — A one-line install script
 
-Status: planned
+Status: complete
 Depends on: none
 
 A script a user pipes from `curl` into `sh`: it names the release archive
@@ -2227,6 +2227,30 @@ a damaged archive and an unserved host, each in a control; the
 installing documentation's command; the release recipe's step that checks
 the script's archive names against the assets the release workflow
 publishes, in `docs/process.md`.
+
+Done: `install.sh`, served unchanged at `https://www.701.dev/install.sh`
+(Q-66's answer), which the site's render copies from the repository,
+installs the host's release archive into `~/.landin` or `--dir`, the
+newest release or `--version`, after checking it against its `.sha256`;
+it replaces an earlier install whole, refuses a directory holding anything
+else, edits no shell profile, prints the `PATH` line and, when `gh` is
+installed, the attestation commands; it refuses a host no archive serves,
+NixOS and a Linux without glibc's loader among them, naming nix and the
+source build (D1747). `scripts/install_check.py` serves a packaged
+compiler from 127.0.0.1 in a release's layout and runs the script against
+it: the newest and a named version installed and running the first
+program, a reinstall, a foreign directory, a damaged archive, a missing
+version and two unserved hosts refused; the gate runs it in `release`,
+`arm64-release` and `darwin-host-release`, and
+`test_install_script` runs the cases against a stand-in archive and holds
+the script's names to `release.yml`'s. The README gives the command first
+among six routes, and the release recipe's check of the published
+release runs `install_check.py --published`, holding the names to the
+release's assets, and the documented command. Met on the way and fixed:
+the links check would race the Pages deployment on the push that
+publishes the script, so `lychee.toml` leaves that one address to the
+render and the recipe. Q-65 is answered too: version tags only. Gate run
+44896732794 and boards run 44898787764 on the merged tree fcd9ada74.
 
 ### R23.40 — Whether a static Linux `refine` can be built
 
