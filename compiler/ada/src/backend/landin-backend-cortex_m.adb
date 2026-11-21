@@ -121,8 +121,10 @@ package body Landin.Backend.Cortex_M is
    --  local: an operand's last read precedes reuse, including across calls.
    --  Scratch registers belong to selection. A reused spill home grows to
    --  hold the widest scalar assigned to it.
-   --  D1567: a set of the core registers r0-r15, the Nth bit rN.
-   type Register_Mask is mod 2 ** 16;
+   --  D1567: a set of the core registers r0-r15, the Nth bit rN, and
+   --  (D1771) of the VFP registers d0-d15, bit 16 + N dN and the two
+   --  single-precision registers it overlaps.
+   type Register_Mask is mod 2 ** 32;
    function Bit (Number : Natural) return Register_Mask
      is (2 ** Number);
 
@@ -130,7 +132,7 @@ package body Landin.Backend.Cortex_M is
    function Held_Count (Held : Register_Mask) return Natural is
       Count : Natural := 0;
    begin
-      for Number in 0 .. 15 loop
+      for Number in 0 .. 31 loop
          if (Held and Bit (Number)) /= 0 then
             Count := Count + 1;
          end if;
@@ -150,6 +152,9 @@ package body Landin.Backend.Cortex_M is
    --  r0-r3, r12 and lr, which a call may change.
    Caller_Saved : constant Register_Mask :=
      Bit (0) or Bit (1) or Bit (2) or Bit (3) or Bit (12) or Bit (14);
+
+   --  D1771: d0-d7, which a call may change too.
+   VFP_Caller_Saved : constant Register_Mask := 16#00FF_0000#;
 
    --  D1567: the core registers one line of a routine's text writes.  A
    --  label or directive writes none.  An instruction writes its first
@@ -208,6 +213,27 @@ package body Landin.Backend.Cortex_M is
 
       function One (Name : String) return Register_Mask is
         (if Number_Of (Name) >= 0 then Bit (Number_Of (Name)) else 0);
+
+      --  D1771: the VFP register an s or d name is or lies in.
+      function VFP_One (Name : String) return Register_Mask;
+      function VFP_One (Name : String) return Register_Mask is
+         Text : constant String := Trimmed (Name);
+      begin
+         if Text'Length in 2 .. 3 and then Text (Text'First) in 's' | 'd'
+           and then (for all C of Text (Text'First + 1 .. Text'Last)
+                     => C in '0' .. '9')
+         then
+            declare
+               Number : constant Natural :=
+                 Natural'Value (Text (Text'First + 1 .. Text'Last));
+               D : constant Natural :=
+                 (if Text (Text'First) = 's' then Number / 2 else Number);
+            begin
+               return (if D <= 15 then Bit (16 + D) else 0);
+            end;
+         end if;
+         return 0;
+      end VFP_One;
 
       --  The registers a brace list names, ranges included.
       function List_Of (Text : String) return Register_Mask;
@@ -303,7 +329,7 @@ package body Landin.Backend.Cortex_M is
          if Mnemonic = "bl" and then Is_Trap (Trimmed (Rest)) then
             return Bit (14);
          elsif Mnemonic in "bl" | "blx" then
-            return Caller_Saved;
+            return Caller_Saved or VFP_Caller_Saved;
          elsif Branches
            or else Mnemonic in "cmp" | "cmn" | "tst" | "teq" | "udf" | "nop"
              | "dmb" | "dsb" | "isb" | "cpsid" | "cpsie" | "wfi" | "wfe"
@@ -326,12 +352,26 @@ package body Landin.Backend.Cortex_M is
          elsif Mnemonic in "umull" | "smull" | "umlal" | "smlal" | "ldrd" then
             return One (Target) or One (Second_Name);
          elsif Mnemonic (Mnemonic'First) = 'v' then
-            if Mnemonic in "vmov" | "vmrs" then
-               return One (Target)
-                 or (if Number_Of (Target) >= 0 then One (Second_Name)
-                     else 0);
-            end if;
-            return 0;
+            declare
+               Stem : constant String :=
+                 (if Ada.Strings.Fixed.Index (Mnemonic, ".") > 0
+                  then Mnemonic (Mnemonic'First
+                    .. Ada.Strings.Fixed.Index (Mnemonic, ".") - 1)
+                  else Mnemonic);
+            begin
+               if Stem in "vmov" | "vmrs" then
+                  return One (Target) or VFP_One (Target)
+                    or (if Number_Of (Target) >= 0 then One (Second_Name)
+                        else 0);
+               elsif Stem in "vpop" | "vldmia" | "vldmdb" | "vldm" then
+                  return 16#FFFF_0000#;
+               elsif Stem in "vstr" | "vstmia" | "vstmdb" | "vstm"
+                 | "vpush" | "vcmp" | "vcmpe"
+               then
+                  return 0;
+               end if;
+               return VFP_One (Target);
+            end;
          end if;
          return One (Target);
       end;
@@ -436,7 +476,14 @@ package body Landin.Backend.Cortex_M is
       declare
          Calls : constant Boolean :=
            Use_Of.Calls_Before.Data (Value_Count + 1) > 0;
-         Offered : constant Register_List :=
+         --  D1771: with a float unit, d7 to d0 for floats: the text writes
+         --  d3 to d7 only at a call, d0 to d2 also around its operations;
+         --  then d8 to d15, which the routine saves.
+         Floats : constant Register_List :=
+           (if Hard then [23, 22, 21, 20, 19, 18, 17, 16,
+                          24, 25, 26, 27, 28, 29, 30, 31]
+            else [1 .. 0 => 0]);
+         Offered : constant Register_List := Floats &
            (if High then
               (if Calls then [4, 5, 6, 7, 3, 1, 12]
                else [3, 1, 12, 5, 4, 6, 7])
@@ -469,16 +516,29 @@ package body Landin.Backend.Cortex_M is
          --  at a position opens such a span.
          Interval_Slots : Counts renames Interval_Data.Data.all;
          Opening : Counts renames Opening_Data.Data.all;
-         Busy_Until : array (0 .. 15) of Natural := [others => 0];
-         Placed : array (0 .. 15) of Reservations.Map;
-         Upcoming : array (0 .. 15) of Reservations.Cursor :=
+         Busy_Until : array (0 .. 31) of Natural := [others => 0];
+         Called : array (1 .. Value_Count) of Boolean := [others => False];
+         Placed : array (0 .. 31) of Reservations.Map;
+         Upcoming : array (0 .. 31) of Reservations.Cursor :=
            [others => Reservations.No_Element];
 
-         --  Whether a scalar of Kind may be held in a core register.
-         function Holdable (Kind : Landin.Types.Type_Kind) return Boolean is
+         --  Whether a scalar of Kind may be held in a core register, and
+         --  (D1771) in a VFP register.
+         function Core_Holdable (Kind : Landin.Types.Type_Kind)
+           return Boolean is
            (Kind in Landin.Types.Scalar_Name
             and then Size_Of (Kind, Facts) /= Landin.Targets.Byte_8
             and then not (Hard and then Kind in Landin.Types.Float_Name));
+         function VFP_Holdable (Kind : Landin.Types.Type_Kind)
+           return Boolean is
+           (Hard and then Kind in Landin.Types.Float_Name);
+         function Holdable (Kind : Landin.Types.Type_Kind) return Boolean is
+           (Core_Holdable (Kind) or else VFP_Holdable (Kind));
+         --  Whether register Number may hold a scalar of Kind.
+         function Suits (Number : Natural; Kind : Landin.Types.Type_Kind)
+           return Boolean is
+           (if Number >= 16 then VFP_Holdable (Kind)
+            else Core_Holdable (Kind));
 
          --  Whether the text writes register Number at some position from
          --  First through Last.
@@ -557,7 +617,9 @@ package body Landin.Backend.Cortex_M is
             begin
                for Number of Offered loop
                   exit when Slot.Register /= 0;
-                  if Fits (Number, Span.First, Span.Last)
+                  if Suits (Number, Landin.IR.Type_Of
+                              (Of_Unit, Item, Landin.IR.Slot_Id (Index)))
+                    and then Fits (Number, Span.First, Span.Last)
                     and then Open_In (Number)
                   then
                      Placed (Number).Insert (Span.First, Index);
@@ -716,7 +778,10 @@ package body Landin.Backend.Cortex_M is
             procedure Take (Number : Natural);
             procedure Take (Number : Natural) is
             begin
-               if Slot.Register = 0 and then Fits (Number, Position, Last)
+               if Slot.Register = 0 and then Number /= 0
+                 and then Suits (Number, Landin.IR.Type_Of
+                                   (Of_Unit, Item, Landin.IR.Slot_Id (Index)))
+                 and then Fits (Number, Position, Last)
                then
                   Slot.Register := Number;
                   Slot.Live_From := Position;
@@ -746,6 +811,22 @@ package body Landin.Backend.Cortex_M is
             end if;
          end Open_Span;
       begin
+         --  D1771: a float a call passes or returns moves through its
+         --  home, as D616 has it.
+         for Index in 1 .. Value_Count loop
+            if Landin.IR.Op_Of (Of_Unit, Item, Landin.IR.Value_Id (Index))
+              in Landin.IR.Call | Landin.IR.Indirect_Call
+            then
+               Called (Index) := True;
+               for Position in 1 .. Landin.IR.Operand_Count
+                 (Of_Unit, Item, Landin.IR.Value_Id (Index))
+               loop
+                  Called (Positive (Landin.IR.Nth_Operand
+                    (Of_Unit, Item, Landin.IR.Value_Id (Index),
+                     Position))) := True;
+               end loop;
+            end if;
+         end loop;
          for Index in Offered'Range loop
             for Position in 0 .. Value_Count loop
                Prefix (Index).Data (Position + 2) :=
@@ -788,6 +869,7 @@ package body Landin.Backend.Cortex_M is
                if Holdable (Kind)
                  and then not Deferred_Constant
                    (Of_Unit, Item, Facts, Landin.IR.Value_Id (Index))
+                 and then not (VFP_Holdable (Kind) and then Called (Index))
                then
                   declare
                      Place : Value_Location renames Result.Values (Index);
@@ -799,6 +881,7 @@ package body Landin.Backend.Cortex_M is
                      procedure Share (Number : Natural) is
                      begin
                         if Place.Register = 0 and then Number /= 0
+                          and then Suits (Number, Kind)
                           and then Fits (Number, Position + 1, Last)
                         then
                            Place.Register := Number;
@@ -844,7 +927,7 @@ package body Landin.Backend.Cortex_M is
      return Boolean
    is
       package Count_Buffers renames Landin.Backend.Placement.Count_Buffers;
-      type Prefix_Table is array (0 .. 15) of
+      type Prefix_Table is array (0 .. 31) of
         Count_Buffers.Buffer (Writes'Length + 1);
       Prefix : Prefix_Table;
 
@@ -2451,7 +2534,26 @@ package body Landin.Backend.Cortex_M is
            Landin.Targets.Byte_Count ((Plan.Core_Used + 1) / 2) * 8;
          --  D617: d8-d15's save, between the laid-out homes and the
          --  incoming staging, so the limit check covers it.
-         Saved_Run : constant VFP_Run := Saved_VFP (Of_Unit, Item);
+         --  D1771: and the run of d8-d15 Registers holds floats in.
+         function Merged_Run return VFP_Run;
+         function Merged_Run return VFP_Run is
+            Run : VFP_Run := Saved_VFP (Of_Unit, Item);
+         begin
+            if Registers /= null then
+               for Number in 8 .. 15 loop
+                  if (Registers.Held and Bit (16 + Number)) /= 0 then
+                     if Run.High = 0 then
+                        Run := (Number, Number);
+                     else
+                        Run := (Natural'Min (Run.Low, Number),
+                                Natural'Max (Run.High, Number));
+                     end if;
+                  end if;
+               end loop;
+            end if;
+            return Run;
+         end Merged_Run;
+         Saved_Run : constant VFP_Run := Merged_Run;
          VFP_Save : constant Landin.Targets.Byte_Count :=
            VFP_Bytes (Saved_Run);
          VFP_Save_Offset : constant Landin.Targets.Byte_Count :=
@@ -2728,11 +2830,53 @@ package body Landin.Backend.Cortex_M is
          --  D1567: the register Registers holds a value or slot in, else
          --  0, and a register's name.
          function Value_Register (Value : Landin.IR.Value_Id) return Natural
-           is (if Registers = null then 0
+           is (if Registers = null
+                 or else Registers.Values (Positive (Value)).Register >= 16
+               then 0
                else Registers.Values (Positive (Value)).Register);
          function Slot_Register (Slot : Landin.IR.Slot_Id) return Natural
-           is (if Registers = null then 0
+           is (if Registers = null
+                 or else Registers.Slots (Positive (Slot)).Register >= 16
+               then 0
                else Registers.Slots (Positive (Slot)).Register);
+         --  D1771: the VFP register dN a float is held in, as N + 1,
+         --  else 0; and its name in the float's own bank, s2N for an f32.
+         function Value_VFP (Value : Landin.IR.Value_Id) return Natural
+           is (if Registers = null
+                 or else Registers.Values (Positive (Value)).Register < 16
+               then 0
+               else Registers.Values (Positive (Value)).Register - 15);
+         function Slot_VFP (Slot : Landin.IR.Slot_Id) return Natural
+           is (if Registers = null
+                 or else Registers.Slots (Positive (Slot)).Register < 16
+               then 0
+               else Registers.Slots (Positive (Slot)).Register - 15);
+         function VFP_Name
+           (Scalar : Landin.Types.Type_Kind; Held : Positive) return String
+           is (if Scalar = Landin.Types.F64
+               then "d" & Trimmed (Natural'Image (Held - 1))
+               else "s" & Trimmed (Natural'Image (2 * (Held - 1))));
+         --  Between core registers and a held float: a pair from Register
+         --  for an f64, else Register alone.
+         procedure VFP_Transfer
+           (Into_VFP : Boolean; Scalar : Landin.Types.Type_Kind;
+            Held : Positive; Register : String);
+         procedure VFP_Transfer
+           (Into_VFP : Boolean; Scalar : Landin.Types.Type_Kind;
+            Held : Positive; Register : String)
+         is
+            Core : constant String :=
+              (if Scalar = Landin.Types.F64
+               then Register & ", " & High (Register) else Register);
+         begin
+            if Into_VFP then
+               Intended := True;
+               Emit ("vmov " & VFP_Name (Scalar, Held) & ", " & Core);
+               Intended := False;
+            else
+               Emit ("vmov " & Core & ", " & VFP_Name (Scalar, Held));
+            end if;
+         end VFP_Transfer;
          function Name (Register : Natural) return String
            is ("r" & Trimmed (Natural'Image (Register)));
 
@@ -3271,6 +3415,10 @@ package body Landin.Backend.Cortex_M is
                Immediate (Register, Constant_Of (Value));
                return;
             end if;
+            if Value_VFP (Value) /= 0 then
+               VFP_Transfer (False, Kind (Value), Value_VFP (Value), Register);
+               return;
+            end if;
             if Value_Register (Value) /= 0 then
                if Register /= Name (Value_Register (Value)) then
                   Emit ("mov " & Register & ", "
@@ -3323,6 +3471,10 @@ package body Landin.Backend.Cortex_M is
                   Put (Done & ":");
                end;
             end if;
+            if Value_VFP (Value) /= 0 then
+               VFP_Transfer (True, Kind (Value), Value_VFP (Value), Register);
+               return;
+            end if;
             if Value_Register (Value) /= 0 then
                Hold (Value_Register (Value), Register,
                      (if Extended then Landin.Targets.Byte_4
@@ -3337,6 +3489,11 @@ package body Landin.Backend.Cortex_M is
          procedure Load_Slot
            (Slot : Landin.IR.Slot_Id; Register : String := "r0") is
          begin
+            if Slot_VFP (Slot) /= 0 then
+               VFP_Transfer (False, Landin.IR.Type_Of (Of_Unit, Item, Slot),
+                             Slot_VFP (Slot), Register);
+               return;
+            end if;
             if Slot_Register (Slot) /= 0 then
                if Register /= Name (Slot_Register (Slot)) then
                   Emit ("mov " & Register & ", "
@@ -3352,6 +3509,11 @@ package body Landin.Backend.Cortex_M is
          procedure Store_Slot
            (Slot : Landin.IR.Slot_Id; Register : String := "r0") is
          begin
+            if Slot_VFP (Slot) /= 0 then
+               VFP_Transfer (True, Landin.IR.Type_Of (Of_Unit, Item, Slot),
+                             Slot_VFP (Slot), Register);
+               return;
+            end if;
             if Slot_Register (Slot) /= 0 then
                Hold (Slot_Register (Slot), Register, Size_Of
                  (Landin.IR.Type_Of (Of_Unit, Item, Slot), Facts));
@@ -3430,6 +3592,16 @@ package body Landin.Backend.Cortex_M is
                if Debug /= null then
                   Emit (".cfi_remember_state");
                end if;
+               for Reg in Saved_Run.Low .. Saved_Run.High loop
+                  exit when VFP_Save = 0;
+                  Emit ("vldr d" & Trimmed (Reg'Image) & ", [sp, #"
+                    & Trimmed (Landin.Targets.Byte_Count'Image
+                      (Home_Bytes + Landin.Targets.Byte_Count
+                         (Reg - Saved_Run.Low) * 8)) & "]");
+                  if Debug /= null then
+                     Emit (".cfi_restore d" & Trimmed (Reg'Image));
+                  end if;
+               end loop;
                if Homes in 1 .. 508 then
                   Emit ("add sp, #" & Trimmed (Homes'Image));
                elsif Homes > 0 then
@@ -4351,7 +4523,15 @@ package body Landin.Backend.Cortex_M is
          procedure VFP_Home
            (Store : Boolean; Offset : Landin.Targets.Byte_Count;
             Register : String) is
+            Above : constant Integer := Sp_Above (Offset);
          begin
+            --  D1771: from sp where VLDR's and VSTR's offset reaches.
+            if Above >= 0 and then Above mod 4 = 0 and then Above <= 1020
+            then
+               Emit ((if Store then "vstr " else "vldr ") & Register
+                 & ", [sp, #" & Trimmed (Integer'Image (Above)) & "]");
+               return;
+            end if;
             Frame_Address (Offset);
             Emit ((if Store then "vstr " else "vldr ") & Register
               & ", [r6]");
@@ -4363,9 +4543,125 @@ package body Landin.Backend.Cortex_M is
            (Store : Boolean; Value : Landin.IR.Value_Id; N : Natural := 0)
          is
          begin
+            if Value_VFP (Value) /= 0 then
+               if VFP_Name (Kind (Value), Value_VFP (Value))
+                 /= Bank (Kind (Value), N)
+               then
+                  Emit ("vmov" & (if Kind (Value) = Landin.Types.F64
+                                  then ".f64 " else ".f32 ")
+                    & (if Store then VFP_Name (Kind (Value), Value_VFP (Value))
+                         & ", " & Bank (Kind (Value), N)
+                       else Bank (Kind (Value), N) & ", "
+                         & VFP_Name (Kind (Value), Value_VFP (Value))));
+               end if;
+               return;
+            end if;
             VFP_Home (Store, Value_Offset (Layout, Value),
                       Bank (Kind (Value), N));
          end VFP_Value;
+
+         --  D1771: the register a float operation reads Value from, its
+         --  own when held, else bank N after loading it there; and the
+         --  one it writes Value's result to.
+         function VFP_Operand (Value : Landin.IR.Value_Id; N : Natural)
+           return String;
+         function VFP_Operand (Value : Landin.IR.Value_Id; N : Natural)
+           return String is
+         begin
+            if Value_VFP (Value) /= 0 then
+               return VFP_Name (Kind (Value), Value_VFP (Value));
+            end if;
+            VFP_Value (False, Value, N);
+            return Bank (Kind (Value), N);
+         end VFP_Operand;
+         function VFP_Result (Value : Landin.IR.Value_Id; N : Natural)
+           return String
+           is (if Value_VFP (Value) /= 0
+               then VFP_Name (Kind (Value), Value_VFP (Value))
+               else Bank (Kind (Value), N));
+
+         --  D1771: "#V" for a float constant VMOV's immediate encodes,
+         --  plus or minus (16 + M) / 16 times 2 ** E with M in 0 .. 15 and
+         --  E in -3 .. 4, else "".
+         function VFP_Immediate (Value : Landin.IR.Value_Id) return String;
+         function VFP_Immediate (Value : Landin.IR.Value_Id) return String
+         is
+            Bits : constant Pattern :=
+              Pattern (Landin.IR.Number_Of (Of_Unit, Item, Value));
+            Wide : constant Boolean := Kind (Value) = Landin.Types.F64;
+            Fraction_Bits : constant Natural := (if Wide then 52 else 23);
+            Bias : constant Integer := (if Wide then 1023 else 127);
+            Exponent : constant Integer := Integer
+              ((Bits / 2 ** Fraction_Bits)
+               and (if Wide then 16#7FF# else 16#FF#)) - Bias;
+            Fraction : constant Pattern := Bits mod 2 ** Fraction_Bits;
+            Sign : constant Boolean :=
+              (Bits / 2 ** (if Wide then 63 else 31)) mod 2 = 1;
+         begin
+            if Landin.IR.Is_Negated (Of_Unit, Item, Value)
+              or else Exponent not in -3 .. 4
+              or else Fraction mod 2 ** (Fraction_Bits - 4) /= 0
+            then
+               return "";
+            end if;
+            declare
+               --  (16 + M) * 2 ** (E - 4), written exactly in decimal.
+               Mantissa : constant Long_Long_Integer :=
+                 16 + Long_Long_Integer (Fraction / 2 ** (Fraction_Bits - 4));
+               Scale : constant Integer := Exponent - 4;
+               Sign_Text : constant String := (if Sign then "-" else "");
+            begin
+               if Scale >= 0 then
+                  return "#" & Sign_Text & Trimmed (Long_Long_Integer'Image
+                    (Mantissa * 2 ** Scale)) & ".0";
+               end if;
+               declare
+                  Places : constant Natural := -Scale;
+                  Scaled : constant Long_Long_Integer :=
+                    Mantissa * 5 ** Places;
+                  Digits_Text : constant String :=
+                    Trimmed (Long_Long_Integer'Image (Scaled));
+                  Padded : constant String :=
+                    (if Digits_Text'Length <= Places
+                     then [1 .. Places + 1 - Digits_Text'Length => '0']
+                       & Digits_Text
+                     else Digits_Text);
+               begin
+                  return "#" & Sign_Text
+                    & Padded (Padded'First .. Padded'Last - Places) & "."
+                    & Padded (Padded'Last - Places + 1 .. Padded'Last);
+               end;
+            end;
+         end VFP_Immediate;
+
+         --  D1771: a float from a held register or its home into a held
+         --  register or its home, at least one of them held.
+         procedure VFP_Move
+           (From : Natural; From_Home : Landin.Targets.Byte_Count;
+            Into : Natural; Into_Home : Landin.Targets.Byte_Count;
+            Scalar : Landin.Types.Type_Kind);
+         procedure VFP_Move
+           (From : Natural; From_Home : Landin.Targets.Byte_Count;
+            Into : Natural; Into_Home : Landin.Targets.Byte_Count;
+            Scalar : Landin.Types.Type_Kind) is
+         begin
+            if From /= 0 and then Into /= 0 then
+               if From /= Into then
+                  Intended := True;
+                  Emit ("vmov" & (if Scalar = Landin.Types.F64
+                                  then ".f64 " else ".f32 ")
+                    & VFP_Name (Scalar, Into) & ", "
+                    & VFP_Name (Scalar, From));
+                  Intended := False;
+               end if;
+            elsif From /= 0 then
+               VFP_Home (True, Into_Home, VFP_Name (Scalar, From));
+            else
+               Intended := True;
+               VFP_Home (False, From_Home, VFP_Name (Scalar, Into));
+               Intended := False;
+            end if;
+         end VFP_Move;
 
          --  D920: a C record by value.  Copy_Record moves BYTES from r2 to
          --  r0, both advanced, by words when the record's alignment lets
@@ -4497,25 +4793,36 @@ package body Landin.Backend.Cortex_M is
                      Handled := False;
                      return;
                   end if;
-                  VFP_Value (False, Operand (1), 0);
-                  VFP_Value (False, Operand (2), 1);
-                  Emit ((case Op is
-                           when Landin.IR.Add => "vadd",
-                           when Landin.IR.Subtract => "vsub",
-                           when Landin.IR.Multiply => "vmul",
-                           when others => "vdiv")
-                        & Suffix & " " & Bank (Result, 0) & ", "
-                        & Bank (Result, 0) & ", " & Bank (Result, 1));
-                  VFP_Value (True, Value, 0);
+                  declare
+                     Left : constant String := VFP_Operand (Operand (1), 0);
+                     Right : constant String := VFP_Operand (Operand (2), 1);
+                     Into : constant String := VFP_Result (Value, 0);
+                  begin
+                     Emit ((case Op is
+                              when Landin.IR.Add => "vadd",
+                              when Landin.IR.Subtract => "vsub",
+                              when Landin.IR.Multiply => "vmul",
+                              when others => "vdiv")
+                           & Suffix & " " & Into & ", " & Left & ", "
+                           & Right);
+                     if Value_VFP (Value) = 0 then
+                        VFP_Value (True, Value, 0);
+                     end if;
+                  end;
                when Landin.IR.Negation =>
                   if Result not in Landin.Types.Float_Name then
                      Handled := False;
                      return;
                   end if;
-                  VFP_Value (False, Operand (1), 0);
-                  Emit ("vneg" & Suffix & " " & Bank (Result, 0) & ", "
-                    & Bank (Result, 0));
-                  VFP_Value (True, Value, 0);
+                  declare
+                     Source : constant String := VFP_Operand (Operand (1), 0);
+                     Into : constant String := VFP_Result (Value, 0);
+                  begin
+                     Emit ("vneg" & Suffix & " " & Into & ", " & Source);
+                     if Value_VFP (Value) = 0 then
+                        VFP_Value (True, Value, 0);
+                     end if;
+                  end;
                when Landin.IR.Equal_To | Landin.IR.Not_Equal_To
                   | Landin.IR.Less_Than | Landin.IR.Less_Or_Equal
                   | Landin.IR.Greater_Than | Landin.IR.Greater_Or_Equal =>
@@ -4528,9 +4835,29 @@ package body Landin.Backend.Cortex_M is
                        Kind (Operand (1));
                      Yes : constant String := Fresh;
                      Done : constant String := Fresh;
+                     Left : constant String := VFP_Operand (Operand (1), 0);
+                     Right : constant String := VFP_Operand (Operand (2), 1);
+                     --  Unordered sets C and V: every relation but
+                     --  inequality is false then, and each condition's
+                     --  inverse true.
+                     Condition : constant String :=
+                       (case Op is
+                          when Landin.IR.Equal_To => "eq",
+                          when Landin.IR.Not_Equal_To => "ne",
+                          when Landin.IR.Less_Than => "mi",
+                          when Landin.IR.Less_Or_Equal => "ls",
+                          when Landin.IR.Greater_Than => "gt",
+                          when others => "ge");
+                     --  D1771: a comparison its branch alone reads
+                     --  branches on the flags itself, as D1566's do.
+                     Fuses : constant Boolean :=
+                       Next_Value /= Landin.IR.No_Value
+                       and then Landin.IR.Op_Of (Of_Unit, Item, Next_Value)
+                         = Landin.IR.Branch
+                       and then Landin.IR.Nth_Operand
+                         (Of_Unit, Item, Next_Value, 1) = Value
+                       and then Readers.Data (Positive (Value)) = 1;
                   begin
-                     VFP_Value (False, Operand (1), 0);
-                     VFP_Value (False, Operand (2), 1);
                      --  An ordered relation signals on a quiet NaN, as IEEE
                      --  754 has it; equality does not.  No trap is enabled,
                      --  so only FPSCR's cumulative flag can tell.
@@ -4539,17 +4866,17 @@ package body Landin.Backend.Cortex_M is
                             then "vcmp" else "vcmpe")
                        & (if Scalar = Landin.Types.F64 then ".f64 "
                           else ".f32 ")
-                       & Bank (Scalar, 0) & ", " & Bank (Scalar, 1));
+                       & Left & ", " & Right);
                      Emit ("vmrs APSR_nzcv, fpscr");
-                     --  Unordered sets C and V: every relation but
-                     --  inequality is false then.
-                     Branch ((case Op is
-                                when Landin.IR.Equal_To => "eq",
-                                when Landin.IR.Not_Equal_To => "ne",
-                                when Landin.IR.Less_Than => "mi",
-                                when Landin.IR.Less_Or_Equal => "ls",
-                                when Landin.IR.Greater_Than => "gt",
-                                when others => "ge"), Yes);
+                     if Fuses then
+                        Fused := Next_Value;
+                        Transfer (Condition,
+                          Landin.IR.Target_Of (Of_Unit, Item, Next_Value),
+                          Landin.IR.Alternative_Of
+                            (Of_Unit, Item, Next_Value));
+                        return;
+                     end if;
+                     Branch (Condition, Yes);
                      Emit ("movs r0, #0");
                      Jump (Done);
                      Put (Yes & ":");
@@ -5996,6 +6323,17 @@ package body Landin.Backend.Cortex_M is
                   if Deferred (Value) then
                      return;
                   end if;
+                  --  D1771: a held float VMOV's immediate encodes is made
+                  --  in its register.
+                  if Value_VFP (Value) /= 0
+                    and then VFP_Immediate (Value) /= ""
+                  then
+                     Emit ("vmov" & (if Kind (Value) = Landin.Types.F64
+                                     then ".f64 " else ".f32 ")
+                       & VFP_Name (Kind (Value), Value_VFP (Value)) & ", "
+                       & VFP_Immediate (Value));
+                     return;
+                  end if;
                   declare
                      Number : Pattern := Pattern
                        (Landin.IR.Number_Of (Of_Unit, Item, Value));
@@ -6054,6 +6392,19 @@ package body Landin.Backend.Cortex_M is
                      end if;
                   end;
                when Landin.IR.Load =>
+                  if Slot_VFP (Landin.IR.Slot_Of (Of_Unit, Item, Value)) /= 0
+                    or else Value_VFP (Value) /= 0
+                  then
+                     VFP_Move
+                       (From => Slot_VFP
+                          (Landin.IR.Slot_Of (Of_Unit, Item, Value)),
+                        From_Home => Slot_Offset (Layout, Landin.IR.Slot_Of
+                          (Of_Unit, Item, Value)),
+                        Into => Value_VFP (Value),
+                        Into_Home => Value_Offset (Layout, Value),
+                        Scalar => Kind (Value));
+                     return;
+                  end if;
                   --  D1567: a value read in place is its slot's register
                   --  and moves nothing; a held slot is already extended.
                   declare
@@ -6079,6 +6430,19 @@ package body Landin.Backend.Cortex_M is
                      end if;
                   end;
                when Landin.IR.Store =>
+                  if Slot_VFP (Landin.IR.Slot_Of (Of_Unit, Item, Value)) /= 0
+                    or else Value_VFP (Operand (1)) /= 0
+                  then
+                     VFP_Move
+                       (From => Value_VFP (Operand (1)),
+                        From_Home => Value_Offset (Layout, Operand (1)),
+                        Into => Slot_VFP
+                          (Landin.IR.Slot_Of (Of_Unit, Item, Value)),
+                        Into_Home => Slot_Offset (Layout, Landin.IR.Slot_Of
+                          (Of_Unit, Item, Value)),
+                        Scalar => Kind (Operand (1)));
+                     return;
+                  end if;
                   --  A value stored into the slot it shares a register
                   --  with moves nothing.
                   declare
@@ -7148,13 +7512,25 @@ package body Landin.Backend.Cortex_M is
          Sp_Known := False;
          Reserve (Homes);
          if VFP_Save > 0 and then not Probe then
-            Frame_Address_Through (VFP_Save_Offset, "r6");
-            Emit ("vstmia r6, " & VFP_List (Saved_Run));
+            --  D1771: a leaf, which saves no r6, stores each from sp,
+            --  just above the incoming register homes.
+            if Leaf then
+               for Reg in Saved_Run.Low .. Saved_Run.High loop
+                  Emit ("vstr d" & Trimmed (Reg'Image) & ", [sp, #"
+                    & Trimmed (Landin.Targets.Byte_Count'Image
+                      (Home_Bytes + Landin.Targets.Byte_Count
+                         (Reg - Saved_Run.Low) * 8)) & "]");
+               end loop;
+            else
+               Frame_Address_Through (VFP_Save_Offset, "r6");
+               Emit ("vstmia r6, " & VFP_List (Saved_Run));
+            end if;
             if Debug /= null then
                for Reg in Saved_Run.Low .. Saved_Run.High loop
                   Emit (".cfi_offset d" & Trimmed (Reg'Image) & ", -"
                     & Trimmed (Landin.Targets.Byte_Count'Image
-                      (24 + Landin.Targets.Byte_Count (Kept)
+                      ((if Leaf then Save_Count
+                        else 24 + Landin.Targets.Byte_Count (Kept))
                        + VFP_Save_Offset
                        - Landin.Targets.Byte_Count (Reg - Saved_Run.Low)
                          * 8)));
@@ -7259,8 +7635,20 @@ package body Landin.Backend.Cortex_M is
                --  D616: a banked float parameter's register is stored to
                --  its slot, before any call could clobber it.
                if Arg.VFP_Count > 0 then
-                  VFP_Home (True, Slot_Offset (Layout, Slot),
-                            Arm32_ABI.VFP_Register (Arg, 1));
+                  if Slot_VFP (Slot) /= 0 then
+                     Intended := True;
+                     Emit ("vmov" & (if Landin.IR.Type_Of
+                                       (Of_Unit, Item, Slot)
+                                       = Landin.Types.F64
+                                     then ".f64 " else ".f32 ")
+                       & VFP_Name (Landin.IR.Type_Of (Of_Unit, Item, Slot),
+                                   Slot_VFP (Slot))
+                       & ", " & Arm32_ABI.VFP_Register (Arg, 1));
+                     Intended := False;
+                  else
+                     VFP_Home (True, Slot_Offset (Layout, Slot),
+                               Arm32_ABI.VFP_Register (Arg, 1));
+                  end if;
                   goto Next_Argument;
                end if;
                if Arg.Core_Count > 0 then
