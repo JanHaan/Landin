@@ -30,7 +30,7 @@ from the compiler.
 With `--published`, TAG is a published release: every name `install.sh
 --list` gives for its version must be one of the release's assets, and
 every archive the release publishes must be one `install.sh` names, as
-`gh release view` lists them.  docs/process.md's release recipe runs it.
+`gh release view` lists them.  The release recipe runs it.
 """
 
 import argparse
