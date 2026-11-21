@@ -107,6 +107,33 @@ class Key(unittest.TestCase):
                             gate_inputs.key(self.commit(), self.root,
                                             content_free=()))
 
+    def test_the_unread_guides_and_the_site_do_not_count(self):
+        #  D1648: guides no lane reads, by content; the site's renderer
+        #  whole, paths included.
+        self.write("docs/process.md", "a new step\n")
+        self.write("docs/measurement.md", "a new class\n")
+        self.write("docs/site/render_html.py", "print('page')\n")
+        self.assertTrue(self.same())
+
+    def test_the_guides_a_lane_reads_count(self):
+        for name in ("docs/commands.md", "docs/library.md", "docs/format.md",
+                     "docs/from-c.md"):
+            with self.subTest(name=name):
+                self.assertNotIn(name, gate_inputs.CONTENT_FREE)
+                self.write(name, "changed\n")
+                self.assertFalse(self.same())
+                git(self.root, "reset", "-q", "--hard", self.first)
+
+    def test_cycles_baselines_do_not_count_and_other_baselines_do(self):
+        #  D1650: only timing.py reads the cycles, from the base commit.
+        self.write("compiler/tests/measure/baselines/esp32.cycles.json", "{}\n")
+        self.assertTrue(self.same())
+        self.write("compiler/tests/measure/baselines/esp32.size.json", "{}\n")
+        self.assertFalse(self.same())
+        git(self.root, "reset", "-q", "--hard", self.first)
+        self.write("compiler/tests/measure/baselines/x/esp32.cycles.json", "{}\n")
+        self.assertFalse(self.same())
+
     def test_any_other_content_counts(self):
         for name in ("spec.md", "docs/README.md", "compiler/main.adb"):
             with self.subTest(name=name):
@@ -505,6 +532,142 @@ class Decide(unittest.TestCase):
                       "URLError", result.stderr)
         self.assertIn("::warning title=The reuse check could not ask GitHub::",
                       result.stderr)
+
+
+class BoardsReuse(unittest.TestCase):
+    """D1647: main's push takes the boards of a passed board-scope run."""
+
+    BOARDS = gate_inputs.board_jobs()
+    api = Decide.api
+
+    def setUp(self):
+        Decide.setUp(self)
+        self.run.update(event="workflow_dispatch", head_branch="topic")
+        self.jobs = [{"name": name, "conclusion": "success"}
+                     for name in self.BOARDS]
+        self.event_name = "push"
+        self.event = {"ref": "refs/heads/main", "after": HEAD}
+        self.checked_out = (HEAD, [BASE])
+        self.histories = {HEAD: [EXPLANATORY]}
+        self.statuses = {HEAD: "ahead"}
+        #  The whole tree differs (a declared explanatory edit) unless a
+        #  case makes it identical.
+        self.whole = {BASE: "w0", "HEAD": "w1"}
+
+    def decide(self):
+        return gate_inputs.decide_boards(
+            self.event_name, self.event, self.api, self.keys.get,
+            self.whole.get, self.checked_out, "gate.yml", NOW)[0]
+
+    def test_an_identical_tree_takes_the_dispatch_boards(self):
+        self.whole["HEAD"] = "w0"
+        self.keys["HEAD"] = "other"
+        self.histories[HEAD] = ["not declared"]
+        self.assertTrue(self.decide())
+
+    def test_a_declared_explanatory_tree_takes_them(self):
+        self.assertTrue(self.decide())
+        self.histories[HEAD] = [EXPLANATORY, "Undeclared"]
+        self.assertFalse(self.decide())
+
+    def test_another_tree_runs_them(self):
+        self.keys["HEAD"] = "other"
+        self.assertFalse(self.decide())
+
+    def test_only_mains_push_takes_them(self):
+        self.event = {"ref": "refs/heads/topic", "after": HEAD}
+        self.assertFalse(self.decide())
+        self.event_name = "workflow_dispatch"
+        self.assertFalse(self.decide())
+
+    def test_every_board_job_must_have_run_and_passed(self):
+        for index in range(len(self.BOARDS)):
+            with self.subTest(job=self.BOARDS[index]):
+                saved = list(self.jobs)
+                self.jobs[index] = dict(self.jobs[index], conclusion="skipped")
+                self.assertFalse(self.decide())
+                del self.jobs[index]
+                self.assertFalse(self.decide())
+                self.jobs = saved
+
+    def test_an_old_or_failed_run_is_no_record(self):
+        self.run["run_started_at"] = (NOW - timedelta(days=8)).isoformat()
+        self.assertFalse(self.decide())
+        self.run["run_started_at"] = (NOW - timedelta(days=1)).isoformat()
+        self.run["conclusion"] = "failure"
+        self.assertFalse(self.decide())
+
+    def test_a_branch_push_is_no_board_record(self):
+        self.run.update(event="push", head_branch="topic")
+        self.assertFalse(self.decide())
+
+
+class TimingReuse(unittest.TestCase):
+    """D1649: a dispatch whose key its branch timed already leaves timing out."""
+    def setUp(self):
+        Decide.setUp(self)
+        self.run.update(event="workflow_dispatch", head_branch="topic")
+        self.jobs = [{"name": name, "conclusion": "success"}
+                     for name in gate_inputs.TIMING_LEGS]
+
+        #  Each commit's base as measure.py finds it: BASE's is "p",
+        #  HEAD's is "q", and both bases have one key.
+        self.bases = {BASE: "p", HEAD: "q"}
+        self.keys.update(p="pk", q="pk")
+
+    def api(self, path):
+        if path.startswith("compare/main..."):
+            sha = path.split("...", 1)[1]
+            return {"base_commit": {"sha": "main-tip"},
+                    "merge_base_commit": {"sha": self.bases[sha]}}
+        return Decide.api(self, path)
+
+    def decide(self, event_name="workflow_dispatch"):
+        return gate_inputs.decide_timing(event_name, "topic", HEAD, self.api,
+                                         self.keys.get, "gate.yml", NOW)[0]
+
+    def test_another_base_times_again(self):
+        #  The review's case: a revert gives the same key over a base that
+        #  changed the code, which the timing pairs with and is held to.
+        self.keys["q"] = "changed"
+        self.assertFalse(self.decide())
+
+    def test_mains_tip_is_timed_against_its_parent(self):
+        asked = []
+
+        def api(path):
+            asked.append(path)
+            if path.startswith("compare/main..."):
+                sha = path.split("...", 1)[1]
+                return {"base_commit": {"sha": sha},
+                        "merge_base_commit": {"sha": sha}}
+            if path.startswith("commits/"):
+                return {"parents": [{"sha": "p"}]}
+            return Decide.api(self, path)
+        self.assertTrue(gate_inputs.decide_timing(
+            "workflow_dispatch", "topic", HEAD, api, self.keys.get,
+            "gate.yml", NOW)[0])
+        self.assertIn("commits/%s" % HEAD, asked)
+
+    def test_a_timed_dispatch_of_the_same_key_stands(self):
+        self.assertTrue(self.decide())
+        self.assertIn("actions/workflows/gate.yml/runs?event=workflow_dispatch"
+                      "&branch=topic&status=success&per_page=30", self.asked)
+
+    def test_another_key_another_branch_or_an_untimed_run_times_again(self):
+        self.keys["HEAD"] = "other"
+        self.assertFalse(self.decide())
+        self.keys["HEAD"] = "k"
+        self.run["head_branch"] = "elsewhere"
+        self.assertFalse(self.decide())
+        self.run["head_branch"] = "topic"
+        self.jobs[0] = dict(self.jobs[0], conclusion="skipped")
+        self.assertFalse(self.decide())
+
+    def test_only_a_dispatch_takes_an_earlier_timing(self):
+        for event_name in ("schedule", "push"):
+            with self.subTest(event_name=event_name):
+                self.assertFalse(self.decide(event_name))
 
 
 class Candidate(unittest.TestCase):
@@ -1266,6 +1429,39 @@ class BoardVerdict(unittest.TestCase):
                       summary)
         self.assertIn("board-pico2: passed", summary)
 
+    def reused(self, scope, what, said, lanes="skipped", boards="skipped", timing=None):
+        needs = self.needs(scope, lanes, boards, reuse="true", timing=timing)
+        needs["inputs"]["outputs"].update({what: "false", what + "-reuse": said,
+                                           what + "-from": "https://example/run/9"})
+        return needs
+
+    def test_a_main_push_may_take_its_boards_from_a_passed_run(self):
+        needs = self.reused(self.MAIN, "boards", "true")
+        self.assertEqual(gate_inputs.verdict(needs, self.ALWAYS, self.MAIN, {}), [])
+        summary = gate_inputs.report(needs, [], self.MAIN, {})
+        self.assertIn("taken from https://example/run/9", summary)
+        #  Without the reuse, skipped boards on main are missing evidence.
+        needs["inputs"]["outputs"]["boards-reuse"] = "false"
+        self.assertTrue(gate_inputs.verdict(needs, self.ALWAYS, self.MAIN, {}))
+
+    def test_a_dispatch_or_the_schedule_never_takes_boards(self):
+        for scope in (self.BOARDS, self.SCHEDULE):
+            with self.subTest(scope=scope["scope"]):
+                needs = self.reused(scope, "boards", "true", timing="skipped")
+                self.assertTrue(gate_inputs.verdict(needs, self.ALWAYS, scope, {}))
+
+    def test_a_dispatch_may_take_its_timing_from_a_timed_run(self):
+        needs = self.reused(self.BOARDS, "timing", "true", boards="success",
+                            timing="skipped")
+        self.assertEqual(gate_inputs.verdict(needs, self.ALWAYS, self.BOARDS,
+                                             PASSED), [])
+        self.assertIn("- timing: taken from https://example/run/9",
+                      gate_inputs.report(needs, [], self.BOARDS, PASSED))
+        needs = self.reused(self.SCHEDULE, "timing", "true", boards="success",
+                            timing="skipped")
+        self.assertTrue(gate_inputs.verdict(needs, self.ALWAYS, self.SCHEDULE,
+                                            PASSED))
+
     def test_a_main_push_with_every_board_passed(self):
         self.assertEqual(self.verdict(self.MAIN, "success", "success"), [])
 
@@ -1666,6 +1862,107 @@ class Readers(unittest.TestCase):
                          "a lane really reads takes the document out of "
                          "CONTENT_FREE" % ", ".join(gate_inputs.CONTENT_FREE
                                                     + gate_inputs.CONTENT_FREE_TREES))
+
+
+#  Every tracked file that names one of the guides DOCUMENTS lists, the site's
+#  renderer or the cycles baselines, and why no lane that gate_inputs.py may
+#  skip reads it through that name (D1648, D1650).  A scripts/tests module
+#  counts only when a lane runs it, as test_cli_native runs in
+#  compiler-checks and release: the scripts job runs the rest every time.
+COMMENT = "a comment or message that names it, which reads nothing"
+DOCUMENT_READERS = {
+    "check.py": "the documents job",
+    ".github/workflows/pages.yml": "the site's own publishing workflow",
+    ".github/workflows/gate.yml": COMMENT,
+    ".github/workflows/determinism.yml": COMMENT,
+    ".github/workflows/release.yml": COMMENT,
+    ".gitignore": "the rendered site's output directory",
+    "lychee.toml": "links.yml, which always runs",
+    "citations.txt": "decisions' text that names a guide, copied from spec.md",
+    "flake.nix": "comments; the flake copies the tree and builds only the compiler",
+    "assets/landin_icon.py": COMMENT,
+    "highlight/": "comments on the renderer that imports the highlighter",
+    "highlight/zed/src/landin.rs": "a message pointing a user at docs/server.md",
+    "compiler/ada/src/": COMMENT,
+    "compiler/ada/tests/src/landin-tests-backend_suite.adb": COMMENT,
+    "compiler/ada/tests/src/landin-tests-commands_suite.adb": COMMENT,
+    "compiler/tests/fixtures/runtime/measure-fibre-switches/": COMMENT,
+    "compiler/tests/fixtures/runtime/measure-thread-switches/": COMMENT,
+    "compiler/tests/freebsd/check.py": COMMENT,
+    "compiler/tests/measure/": "comments and data notes naming the contract",
+    "environments/boards/ram-run/main.rs": COMMENT,
+    "environments/boards/timing.py": "the cycles baselines' one reader, in the"
+                                     " aggregate of a timing event, from the"
+                                     " base commit; its docstring names the guide",
+    "scripts/agent_env.sh": COMMENT,
+    "scripts/agent_hook.py": "the agent session hook, run by a harness and"
+                             " never by a lane; its test is in scripts/tests",
+    "scripts/benchmarks.py": "measures the Benchmark Game ports by hand; no"
+                             " lane runs it, and it names its method's guide",
+    "scripts/build.sh": COMMENT,
+    "scripts/dev-build.sh": COMMENT,
+    "scripts/env.sh": COMMENT,
+    "scripts/linux-loop.sh": COMMENT,
+    "scripts/gate_inputs.py": "the inputs job, which names them to leave them out",
+    "scripts/gate_watch.py": COMMENT,
+    "scripts/item.py": "runs an item's steps by hand; its test is in scripts/tests",
+    "scripts/measure.py": COMMENT,
+    "scripts/measure_count.py": COMMENT,
+    "scripts/site.sh": "renders the site by hand, as pages.yml does",
+}
+
+
+def lane_modules(workflow):
+    """The scripts/tests modules a gate lane runs, by name."""
+    named = set(re.findall(r"scripts\.tests\.(\w+)", workflow))
+    for group in re.findall(r"script_tests\.py((?: test_\w+)+)", workflow):
+        named.update(group.split())
+    return named
+
+
+class DocumentReaders(unittest.TestCase):
+    def test_no_lane_reads_the_unread_guides_the_site_or_the_cycles(self):
+        names = "|".join(re.escape(path.split("/", 1)[1])
+                         for path in gate_inputs.DOCUMENTS)
+        mention = re.compile(r"(?<![\w-])(?:%s)\b|(?<![\w./-])docs/site\b"
+                             r"|\w\.cycles\.json" % names)
+        workflow = (ROOT / ".github/workflows/gate.yml").read_text()
+        lanes = lane_modules(workflow)
+        self.assertIn("test_cli_native", lanes)
+        tracked = subprocess.run(["git", "ls-files", "-z"], cwd=ROOT, check=True,
+                                 stdout=subprocess.PIPE, text=True).stdout
+        unexplained = []
+        for name in tracked.split("\0"):
+            path = ROOT / name
+            if not name or name.endswith(".md") or not path.is_file() \
+                    or name.startswith(gate_inputs.CONTENT_FREE_TREES):
+                continue
+            if name.startswith("scripts/tests/") and \
+                    Path(name).stem not in lanes:
+                continue
+            if any(name == known or (known.endswith("/") and name.startswith(known))
+                   for known in DOCUMENT_READERS):
+                continue
+            try:
+                text = path.read_text(encoding="utf-8")
+            except UnicodeDecodeError:
+                continue
+            if mention.search(text):
+                unexplained.append(name)
+        self.assertEqual(unexplained, [],
+                         "these name a guide, the site or the cycles baselines"
+                         " that gate_inputs.py leaves out of the key, so a lane"
+                         " it may skip could read one: give each an entry in"
+                         " DOCUMENT_READERS saying why it does not, or take"
+                         " what it reads out of the set")
+
+    def test_the_guides_a_lane_reads_are_not_in_the_set(self):
+        for name in ("docs/commands.md", "docs/library.md"):
+            self.assertIn(name, (ROOT / "scripts/tests/test_cli_native.py")
+                          .read_text())
+            self.assertNotIn(name, gate_inputs.CONTENT_FREE)
+        for name in ("docs/format.md", "docs/from-c.md"):
+            self.assertNotIn(name, gate_inputs.CONTENT_FREE)
 
 
 if __name__ == "__main__":

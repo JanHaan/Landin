@@ -1,8 +1,8 @@
 {
   "status": "passed",
-  "image_sha256": "575995318a3e710fef744cfb3b93a9e85f66dc9c1172f7fdfa5eef3d8ac029db",
+  "image_sha256": "dafe5f0e1b068c131fe65ddc283144ec25e0a8ee6ae293a9aea412ccc2d48649",
   "image_name": "board.elf",
-  "elf_sha256": "575995318a3e710fef744cfb3b93a9e85f66dc9c1172f7fdfa5eef3d8ac029db",
+  "elf_sha256": "dafe5f0e1b068c131fe65ddc283144ec25e0a8ee6ae293a9aea412ccc2d48649",
   "instructions": [
     "call8",
     "callx8",
@@ -49,8 +49,8 @@
       "timer_interrupts_meanwhile": 100
     },
     "stream": {
-      "timer_events": 2496,
-      "receive_interrupts": 3117,
+      "timer_events": 2558,
+      "receive_interrupts": 6630,
       "echoed": 3014,
       "sent": 3614
     },
@@ -111,7 +111,7 @@
     "recoveries": 2,
     "dropped": 44,
     "overflows": 1,
-    "entries": 3382,
+    "entries": 6973,
     "boot_reason": 1,
     "byte_cell": 116,
     "half_cell": 29789,
@@ -119,10 +119,10 @@
   },
   "readback": [
     "0x40080000+0x404",
-    "0x40080404+0xdf54",
+    "0x40080404+0x65ac",
     "0x3ffb0000+0x28"
   ],
-  "uart_sha256": "44cf623781892da997043ee1a18aa30221cf262d9f36680e552511461997434b",
+  "uart_sha256": "dde2856f97f1a16f6ba30e6d6a2c7a659da9209a8303f37885e5460a8928a1c6",
   "mode": "ram",
   "warm_load": {
     "board": "esp32",
@@ -142,12 +142,12 @@
       ],
       "contract": "warm-board-v1",
       "cpu1_stalled": true,
-      "elapsed_us": 23651,
+      "elapsed_us": 25754,
       "final_xtal_divider": 0,
       "initial_xtal_divider": 0,
       "instruction_visibility": {
         "address": 1074267312,
-        "elapsed_us": 21272,
+        "elapsed_us": 24427,
         "method": "cacheless-sram-memw-isync-single-step",
         "operations": [
           "memw",
@@ -185,13 +185,13 @@
       "peripheral_sources_stopped": true,
       "rom_reset": false
     },
-    "elf_sha256": "575995318a3e710fef744cfb3b93a9e85f66dc9c1172f7fdfa5eef3d8ac029db",
+    "elf_sha256": "dafe5f0e1b068c131fe65ddc283144ec25e0a8ee6ae293a9aea412ccc2d48649",
     "entry": 1074267136,
     "flash_written": false,
     "format_version": 1,
-    "helper_source_sha256": "47d74e1639692ad1649ebc14f6b050efb10a98c93f3122e111a40397f58a22c1",
+    "helper_source_sha256": "fc2f5b5081e7f4778195e621b04081bd05ac04dee304934a44bab3475aff0880",
     "mode": "warm",
-    "previous_pc": 1074269421,
+    "previous_pc": 1074269418,
     "segments": [
       {
         "address": 1074266112,
@@ -200,29 +200,102 @@
       },
       {
         "address": 1074267140,
-        "bytes": 57172,
-        "sha256": "547d75305e59649629958da5770d532c1fc3f610b8d7c7478720a1d0166b2833"
+        "bytes": 26028,
+        "sha256": "9aa69d379ae524d43104ea65d78965ddeffa4fb8b7d42bd1592fdcc2ed4c318c"
       },
       {
         "address": 1073414144,
         "bytes": 40,
-        "sha256": "e16d9f712ecee6ad34d6cba98511116ca6c6bb11859e7024d818f5deaa0f7e0a"
+        "sha256": "b87f99c9594cb0db70b33ee01585709799967a5505b8b7639dc8ec926953bb4a"
       },
       {
         "address": 1073414184,
         "bytes": 88,
-        "sha256": "f966f8938a3580c98ecf05fc9e99a81765488626c35ed87d275a804781a0c0dd"
+        "sha256": "afa282adcc13ac765fc300b76b65d03e6f113a66a7bd5cdacca6eb526b16f41d"
       }
     ],
     "stack": 1073545216,
     "status": "passed",
     "vector": 1074266112
   },
-  "seconds": 14.163,
+  "seconds": 123.276,
   "kernel_usb": {
-    "since": 1794565180.922354,
-    "until": 1794565195.0568712,
-    "lines": [],
+    "since": 1795197490.438274,
+    "until": 1795197613.697284,
+    "lines": [
+      {
+        "time": 1795197554.404708,
+        "text": "rigpi kernel: usb 1-1.2.3.4.3: USB disconnect, device number 22"
+      },
+      {
+        "time": 1795197556.058709,
+        "text": "rigpi kernel: usb 1-1.2.4.3: USB disconnect, device number 20"
+      },
+      {
+        "time": 1795197559.300707,
+        "text": "rigpi kernel: usb 1-1.2.4.3: new full-speed USB device number 48 using xhci_hcd"
+      },
+      {
+        "time": 1795197559.404707,
+        "text": "rigpi kernel: usb 1-1.2.4.3: ch341-uart converter now attached to ttyUSB3"
+      },
+      {
+        "time": 1795197561.050202,
+        "text": "rigpi kernel: usb 1-1.2.3.4.3: new full-speed USB device number 49 using xhci_hcd"
+      },
+      {
+        "time": 1795197561.156738,
+        "text": "rigpi kernel: cdc_acm 1-1.2.3.4.3:1.0: ttyACM5: USB ACM device"
+      },
+      {
+        "time": 1795197567.608717,
+        "text": "rigpi kernel: usb 1-1.2.3.4.3: USB disconnect, device number 49"
+      },
+      {
+        "time": 1795197567.81276,
+        "text": "rigpi kernel: usb 1-1.2.3.4.3: new full-speed USB device number 50 using xhci_hcd"
+      },
+      {
+        "time": 1795197567.924692,
+        "text": "rigpi kernel: cdc_acm 1-1.2.3.4.3:1.0: ttyACM5: USB ACM device"
+      },
+      {
+        "time": 1795197584.620713,
+        "text": "rigpi kernel: usb 1-1.2.3.4.3: USB disconnect, device number 50"
+      },
+      {
+        "time": 1795197587.238812,
+        "text": "rigpi kernel: usb 1-1.2.4.3: USB disconnect, device number 48"
+      },
+      {
+        "time": 1795197591.660705,
+        "text": "rigpi kernel: usb 1-1.2.4.3: new full-speed USB device number 51 using xhci_hcd"
+      },
+      {
+        "time": 1795197591.768231,
+        "text": "rigpi kernel: usb 1-1.2.4.3: ch341-uart converter now attached to ttyUSB3"
+      },
+      {
+        "time": 1795197594.692878,
+        "text": "rigpi kernel: usb 1-1.2.3.4.3: new full-speed USB device number 52 using xhci_hcd"
+      },
+      {
+        "time": 1795197594.792746,
+        "text": "rigpi kernel: cdc_acm 1-1.2.3.4.3:1.0: ttyACM5: USB ACM device"
+      },
+      {
+        "time": 1795197599.612698,
+        "text": "rigpi kernel: usb 1-1.2.3.4.3: USB disconnect, device number 52"
+      },
+      {
+        "time": 1795197599.820665,
+        "text": "rigpi kernel: usb 1-1.2.3.4.3: new full-speed USB device number 53 using xhci_hcd"
+      },
+      {
+        "time": 1795197599.935517,
+        "text": "rigpi kernel: cdc_acm 1-1.2.3.4.3:1.0: ttyACM5: USB ACM device"
+      }
+    ],
     "status": "captured"
   },
   "sent_sha256": "45f51ce1b772e0ef26e5ae5314047d208256a0b78508c7419e0b54d2eca653a4",
@@ -245,8 +318,8 @@
       "tag": "t",
       "h": "00000c9a",
       "c": "00000002",
-      "i": "00000d36",
-      "m": "000010ee",
+      "i": "00001b3d",
+      "m": "0000110c",
       "p": "00018042",
       "q": "00818040",
       "k": "00000064",

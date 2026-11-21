@@ -3080,7 +3080,7 @@ def check_citations(paths, guide_paths=()):
 
 
 def check_specification_version(full_run):
-    """Every place that states the specification's version states one.
+    """Every place that states the version states one.
 
     README.md's status line is the version the machinery reads: the flake,
     release.yml's asset name and llms.txt all take it from there.  Six more
@@ -3096,30 +3096,30 @@ def check_specification_version(full_run):
     readme = "README.md"
     places = [
         ("docs/site/render_html.py",
-         re.compile(r'^VERSION_LINE = "specification ([0-9][0-9.]*)"$', re.M)),
+         re.compile(r'^VERSION_LINE = "version ([0-9][0-9.]*)"$', re.M)),
         ("handoff.md",
-         re.compile(r"Kept current at specification \*\*([0-9][0-9.]*)\*\*")),
+         re.compile(r"Kept current at version \*\*([0-9][0-9.]*)\*\*")),
         ("tour.md", re.compile(r"^Version ([0-9][0-9.]*) \u2014", re.M)),
     ] + [(name, re.compile(r"^Current with specification ([0-9][0-9.]*)\.", re.M))
          for name in PROTOTYPE_FILES]
     out = absent([readme] + [path for path, _ in places])
     if out:
         return out
-    stated = re.search(r"^\*\*Status: specification ([0-9][0-9.]*)\.",
+    stated = re.search(r"^\*\*Status: version ([0-9][0-9.]*)\.",
                        read_file(readme, encoding="utf-8"), re.M)
     if not stated:
-        return [(readme, 1, "the status line states no specification version")]
+        return [(readme, 1, "the status line states no version")]
     version = stated.group(1)
     for path, pattern in places:
         text = read_file(path, encoding="utf-8")
         found = pattern.search(text)
         if not found:
-            out.append((path, 1, "states no specification version where "
+            out.append((path, 1, "states no version where "
                                  "check_specification_version looks"))
         elif found.group(1) != version:
             line = text.count("\n", 0, found.start(1)) + 1
             out.append((path, line,
-                        "says specification %s; README.md says %s"
+                        "says %s where README.md's version is %s"
                         % (found.group(1), version)))
     return out
 

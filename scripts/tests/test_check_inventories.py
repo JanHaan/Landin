@@ -58,8 +58,8 @@ class SpecificationVersion(unittest.TestCase):
     def test_each_place_left_behind_is_reported(self):
         for path, pattern in (
                 ("docs/site/render_html.py",
-                 r'^VERSION_LINE = "specification [0-9.]+"$'),
-                ("handoff.md", r"Kept current at specification \*\*[0-9.]+"),
+                 r'^VERSION_LINE = "version [0-9.]+"$'),
+                ("handoff.md", r"Kept current at version \*\*[0-9.]+"),
                 ("tour.md", r"^Version [0-9.]+(?= —)"),
                 (checker.PROTOTYPE_FILES[0],
                  r"^Current with specification [0-9.]+(?=\.)")):
@@ -76,22 +76,21 @@ class SpecificationVersion(unittest.TestCase):
                 said = checked(checker.check_specification_version, older,
                                copied=self.INPUTS)
                 self.assertEqual(len(said), 1, said)
-                self.assertIn("says specification 0.0.1; README.md says",
+                self.assertIn("says 0.0.1 where README.md's version is",
                               said[0])
 
     def test_a_place_that_states_none_and_a_readme_without_one(self):
         said = checked(checker.check_specification_version,
-                       edit("handoff.md", r"Kept current at specification",
-                            "Kept current at the specification"),
+                       edit("handoff.md", r"Kept current at version",
+                            "Kept current at the version"),
                        copied=self.INPUTS)
         self.assertEqual(len(said), 1, said)
-        self.assertIn("states no specification version", said[0])
+        self.assertIn("states no version", said[0])
         said = checked(checker.check_specification_version,
-                       edit("README.md", r"^\*\*Status: specification",
-                            "**Status: the specification"),
+                       edit("README.md", r"^\*\*Status: version",
+                            "**Status: the version"),
                        copied=self.INPUTS)
-        self.assertEqual(said, ["the status line states no specification"
-                                " version"])
+        self.assertEqual(said, ["the status line states no version"])
 
     def test_a_missing_place_is_reported_rather_than_skipped(self):
         said = checked(checker.check_specification_version,

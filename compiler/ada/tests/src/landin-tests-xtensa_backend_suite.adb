@@ -368,7 +368,9 @@ package body Landin.Tests.Xtensa_Backend_Suite is
       Landin.Testing.Check
         (Item, Call_At > 0
            and then Ada.Strings.Fixed.Index
-             (Text (Above_At .. Call_At), HT & "mov a9, a1" & LF) > 0,
+             (Text (Above_At .. Call_At), ", a1, 0" & LF) > 0
+           and then Ada.Strings.Fixed.Index
+             (Text (Above_At .. Call_At), ", a1, 4" & LF) > 0,
          "the stack words are addressed from SP");
       --  The report's figures count the area: the homes' extent is the
       --  figure the prologue adds to their base for the frame address.
@@ -409,6 +411,171 @@ package body Landin.Tests.Xtensa_Backend_Suite is
             & Homes'Image & Counted'Image);
       end;
    end Outgoing_Area_In_Frame;
+
+   --  D1627: the text of routine Name, from its label to its size.
+   function Routine_Text (Text, Name : String) return String;
+   function Routine_Text (Text, Name : String) return String is
+      Start : constant Natural :=
+        Ada.Strings.Fixed.Index (Text, LF & Name & ":" & LF);
+      Stop : constant Natural :=
+        (if Start = 0 then 0
+         else Ada.Strings.Fixed.Index (Text, ".size " & Name & ",", Start));
+   begin
+      return (if Start = 0 or else Stop = 0 then ""
+              else Text (Start .. Stop));
+   end Routine_Text;
+
+   --  D1627: whether Text moves a word through the homes at a7 after the
+   --  prologue's backchain word, the last line the prologue writes.
+   function Homes_Traffic (Text : String) return Boolean;
+   function Homes_Traffic (Text : String) return Boolean is
+      Body_At : constant Natural :=
+        Ada.Strings.Fixed.Index (Text, "s32e a8, a1, -12");
+   begin
+      return Body_At = 0
+        or else Ada.Strings.Fixed.Index (Text (Body_At .. Text'Last), ", a7, ")
+          > 0;
+   end Homes_Traffic;
+
+   --  D1627: a loop's words, the values and slots among them, are placed
+   --  in registers, and nothing goes through the homes.
+   procedure Placed_Loop (Item : in out Landin.Testing.Context);
+   procedure Placed_Loop (Item : in out Landin.Testing.Context) is
+      Text : constant String := Routine_Text (Emitted
+        (Item,
+         "total: (n: u32) -> (r: u32) =" & LF
+         & "    mut sum: u32 = 0" & LF
+         & "    mut index: u32 = 0" & LF
+         & "    while index < n do" & LF
+         & "        sum = sum +% index" & LF
+         & "        inc index" & LF
+         & "    end while" & LF
+         & "    r = sum" & LF
+         & "end total" & LF), "total");
+      Placed : Natural := 0;
+   begin
+      for Index in 1 .. Landin.Build_Reports.Routine_Count (Last_Report) loop
+         Placed := Natural'Max
+           (Placed, Landin.Build_Reports.Nth_Routine
+                      (Last_Report, Index).Register_Count);
+      end loop;
+      Landin.Testing.Check
+        (Item, Text /= "" and then not Homes_Traffic (Text),
+         "the loop's slots and values stay in registers" & LF & Text);
+      Landin.Testing.Check
+        (Item, Placed > 0, "the build report counts the registers placed");
+   end Placed_Loop;
+
+   --  D1627: CALL8 preserves a2-a7 alone, so a word live across a call is
+   --  placed there, and the call's argument and result words are a10 on.
+   procedure Placed_Across_Call (Item : in out Landin.Testing.Context);
+   procedure Placed_Across_Call (Item : in out Landin.Testing.Context) is
+      Text : constant String := Routine_Text (Emitted
+        (Item,
+         "leaf: (x: u32) -> (r: u32) =" & LF
+         & "    r = x +% 1" & LF
+         & "end leaf" & LF
+         & "twice: (x: u32) -> (r: u32) =" & LF
+         & "    once: u32 = leaf(x)" & LF
+         & "    r = leaf(once) +% x" & LF
+         & "end twice" & LF), "twice");
+      Second : constant Natural :=
+        (if Text = "" then 0
+         else Ada.Strings.Fixed.Index
+           (Text, "call8 leaf", Ada.Strings.Fixed.Index (Text, "call8 leaf")
+                                + 1));
+   begin
+      Landin.Testing.Check
+        (Item, Text /= "" and then not Homes_Traffic (Text)
+           and then Second > 0,
+         "x crosses both calls without its home" & LF & Text);
+      Landin.Testing.Check
+        (Item, Second > 0
+           and then Ada.Strings.Fixed.Index
+             (Text (Second .. Text'Last), "add a") > 0
+           and then (for some Register in 2 .. 6 =>
+                       Ada.Strings.Fixed.Index
+                         (Text (Second .. Text'Last),
+                          ", a" & Character'Val (48 + Register))
+                       > 0),
+         "after the second call x is read from a2-a6");
+   end Placed_Across_Call;
+
+   --  D1110: where a program prepares stacks, each prologue
+   --  checks its whole frame against the stack's limit, so the figure it
+   --  subtracts from SP counts the outgoing area too: sixteen bytes more
+   --  than its homes' figure less the sixteen below SP, which is the
+   --  homes' figure itself, where a routine with no area checks sixteen
+   --  less than its homes.
+   procedure Prepared_Stack_Area (Item : in out Landin.Testing.Context);
+   procedure Prepared_Stack_Area (Item : in out Landin.Testing.Context) is
+      HT : constant Character := ASCII.HT;
+      Text : constant String := Emitted
+        (Item,
+         "mut backing: [4096]u8 = zeroed" & LF
+         & "mut main_saved: usize = 0" & LF
+         & "mut fibre_saved: usize = 0" & LF
+         & "sum4: (a: u64, b: u64, c: u64, d: u64) -> (r: u64) =" & LF
+         & "    r = a + b + c + d" & LF
+         & "end sum4" & LF
+         & "fibre: (argument: usize) -> noreturn =" & LF
+         & "    loop do" & LF
+         & "        _ = sum4(u64(argument), 2, 3, 4)" & LF
+         & "        compiler.stack_switch(addr fibre_saved, main_saved)" & LF
+         & "    end loop" & LF
+         & "end fibre" & LF
+         & "run: () -> none =" & LF
+         & "    fibre_saved = compiler.stack_prepare(backing[0..<4096],"
+         & " fibre, 7)" & LF
+         & "    compiler.stack_switch(addr main_saved, fibre_saved)" & LF
+         & "end run" & LF);
+
+      --  The figure the prologue of Name checks against the limit, and
+      --  the one it adds to the homes' base for the frame address.
+      procedure Figures
+        (Name : String; Checked, Homes : out Integer);
+      procedure Figures
+        (Name : String; Checked, Homes : out Integer)
+      is
+         Start : constant Natural :=
+           Ada.Strings.Fixed.Index (Text, LF & Name & ":" & LF);
+         Check_At : constant Natural :=
+           (if Start = 0 then 0
+            else Ada.Strings.Fixed.Index
+              (Text, LF & HT & "sub a8, a1, a8" & LF, Start));
+         Homes_At : constant Natural :=
+           (if Start = 0 then 0
+            else Ada.Strings.Fixed.Index
+              (Text, LF & HT & "add a8, a7, a8" & LF, Start));
+         function Figure_Before (At_Line : Natural) return Integer;
+         function Figure_Before (At_Line : Natural) return Integer is
+            Figure_At : constant Natural :=
+              (if At_Line = 0 then 0
+               else Ada.Strings.Fixed.Index
+                 (Text (Start .. At_Line), HT & "movi a8, ",
+                  Going => Ada.Strings.Backward));
+         begin
+            return (if Figure_At = 0 then -1
+                    else Integer'Value (Text (Figure_At + 10 .. At_Line - 1)));
+         end Figure_Before;
+      begin
+         Checked := Figure_Before (Check_At);
+         Homes := Figure_Before (Homes_At);
+      end Figures;
+
+      Fibre_Checked, Fibre_Homes, Sum_Checked, Sum_Homes : Integer;
+   begin
+      Figures ("fibre", Fibre_Checked, Fibre_Homes);
+      Figures ("sum4", Sum_Checked, Sum_Homes);
+      Landin.Testing.Check
+        (Item, Fibre_Homes > 0 and then Fibre_Checked = Fibre_Homes,
+         "the routine whose call takes stack words checks its area too:"
+         & Fibre_Checked'Image & Fibre_Homes'Image & LF & Text);
+      Landin.Testing.Check
+        (Item, Sum_Homes > 0 and then Sum_Checked = Sum_Homes - 16,
+         "a routine without an area checks its homes alone:"
+         & Sum_Checked'Image & Sum_Homes'Image);
+   end Prepared_Stack_Area;
 
    --  An interrupt's entry and return leave the firmware's interrupt
    --  context in EXCSAVE1, so the switch masks before it names its own.
@@ -461,6 +628,15 @@ package body Landin.Tests.Xtensa_Backend_Suite is
       Landin.Testing.Register
         (Into, "xtensa backend", "an outgoing area is part of the frame",
          Outgoing_Area_In_Frame'Access);
+      Landin.Testing.Register
+        (Into, "xtensa backend", "placed words keep a loop in registers",
+         Placed_Loop'Access);
+      Landin.Testing.Register
+        (Into, "xtensa backend", "a word across a call keeps a2-a6",
+         Placed_Across_Call'Access);
+      Landin.Testing.Register
+        (Into, "xtensa backend", "a prepared stack's check counts the area",
+         Prepared_Stack_Area'Access);
       Landin.Testing.Register
         (Into, "xtensa backend", "the stack switch masks before its context",
          Switch_Masks_First'Access);

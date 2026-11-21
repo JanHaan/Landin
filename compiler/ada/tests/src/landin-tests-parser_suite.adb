@@ -2127,10 +2127,14 @@ package body Landin.Tests.Parser_Suite is
                               Host.Add_File
                                 (Path, Unbounded.To_String (Content));
                               --  D543: firmware is given the library's
-                              --  reference description.
+                              --  reference description, Cortex-M's or any
+                              --  other firmware request's.
                               if Ada.Strings.Fixed.Index
                                 (Fixtures.Args (Fixture),
                                  "--target=cortex-m0") /= 0
+                                or else Ada.Strings.Fixed.Index
+                                  (Fixtures.Args (Fixture),
+                                   "--firmware-entry") /= 0
                               then
                                  Host.Add_Firmware_Library;
                               end if;

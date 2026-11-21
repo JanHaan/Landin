@@ -1,0 +1,9 @@
+class: negative
+summary: A firmware entry's outgoing area alone must fit the selected 4 KiB stack reservation
+program: program.ldn
+constructs: 1990
+targets: xtensa
+codes: L0507, L0507
+args: compile --target=xtensa --firmware-entry=start --emit=asm ../tests/fixtures/negative/xtensa-outgoing-area-exceeds-stack/program.ldn
+expect: expected.txt
+status: 1

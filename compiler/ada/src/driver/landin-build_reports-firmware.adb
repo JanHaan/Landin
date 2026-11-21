@@ -107,6 +107,22 @@ package body Landin.Build_Reports.Firmware is
       Valid : out Boolean;
       ESP_Image : String := "")
    is
+      Fault : US.Unbounded_String;
+   begin
+      Measure (Host, Executable, Link_Map, Profile, Stage, Result, Valid,
+               Fault, ESP_Image);
+   end Measure;
+
+   procedure Measure
+     (Host : Landin.Platform.Filesystem'Class;
+      Executable, Link_Map : String;
+      Profile : Landin.Targets.Firmware.Profile;
+      Stage : String;
+      Result : out US.Unbounded_String;
+      Valid : out Boolean;
+      Fault : out US.Unbounded_String;
+      ESP_Image : String := "")
+   is
       package Firmware renames Landin.Targets.Firmware;
       use type Firmware.Section_Kind;
       ELF, Map : US.Unbounded_String;
@@ -177,12 +193,17 @@ package body Landin.Build_Reports.Firmware is
    begin
       Result := US.Null_Unbounded_String;
       Valid := False;
+      Fault := US.Null_Unbounded_String;
       Host.Read_File (Executable, ELF, Status);
       if Status /= Landin.Platform.Read_Ok then
+         Fault := US.To_Unbounded_String
+           ("the linked image cannot be read: " & Executable);
          return;
       end if;
       Host.Read_File (Link_Map, Map, Status);
       if Status /= Landin.Platform.Read_Ok then
+         Fault := US.To_Unbounded_String
+           ("the link map cannot be read: " & Link_Map);
          return;
       end if;
 
@@ -290,8 +311,10 @@ package body Landin.Build_Reports.Firmware is
             return Natural'Last;
          end Loaded;
       begin
-         if Mapping'Length = 0
-           or else Data'Length < 52
+         if Mapping'Length = 0 then
+            Fault := US.To_Unbounded_String ("the link map is empty");
+            return;
+         elsif Data'Length < 52
            or else Data (1 .. 6) /= Character'Val (127) & "ELF"
              & Character'Val (1) & Character'Val (1)
            or else Number (16, 2) /= 2
@@ -301,6 +324,9 @@ package body Landin.Build_Reports.Firmware is
            or else Number (40, 2) /= 52
            or else Number (42, 2) /= 32
          then
+            Fault := US.To_Unbounded_String
+              ("the linked image is not a 32-bit little-endian ELF"
+               & " executable for the profile's core");
             return;
          end if;
          declare
@@ -310,6 +336,8 @@ package body Landin.Build_Reports.Firmware is
             if Count = 0 or else Header > Data'Length
               or else Count > (Data'Length - Header) / 32
             then
+               Fault := US.To_Unbounded_String
+                 ("the linked image's program headers lie outside the file");
                return;
             end if;
             for Index in 0 .. Count - 1 loop
@@ -337,6 +365,10 @@ package body Landin.Build_Reports.Firmware is
                        or else File_Size > Landin.Targets.Byte_Count
                          (Data'Length) - File_At
                      then
+                        Fault := US.To_Unbounded_String
+                          ("a load segment at " & Image (Virtual)
+                           & " holds more file bytes than memory, or lies"
+                           & " outside the file");
                         return;
                      end if;
                      if Firmware.RAM_Only (Profile) then
@@ -359,6 +391,10 @@ package body Landin.Build_Reports.Firmware is
                      then
                         if Virtual + Memory_Size > RAM.Origin + RAM_Limit
                         then
+                           Fault := US.To_Unbounded_String
+                             ("the load segment at " & Image (Virtual)
+                              & " ends past the static RAM limit, "
+                              & Image (RAM.Origin + RAM_Limit));
                            return;
                         end if;
                         RAM_End := Landin.Targets.Byte_Count'Max
@@ -369,17 +405,32 @@ package body Landin.Build_Reports.Firmware is
                      then
                         null;
                      elsif Region_Of (Virtual, Memory_Size) = 0 then
+                        Fault := US.To_Unbounded_String
+                          ("the load segment at " & Image (Virtual)
+                           & " lies in no region of the description");
                         return;
                      end if;
                      if File_Size > 0 then
-                        --  An ESP32's ROM loads every segment into RAM, so
-                        --  its image is written to writable memory.
+                        --  An ESP32's ROM loads every segment into RAM, and
+                        --  a loader writes every other Xtensa image where it
+                        --  is mapped (D1359), so only an image reset fills
+                        --  must not load from writable memory.
                         if Region_Of (Physical, File_Size) = 0
                           or else (Firmware.Writable
                                      (Profile.Regions
                                         (Region_Of (Physical, File_Size)).Mode)
-                                   and then not Firmware.RAM_Only (Profile))
+                                   and then Firmware.Boots_From_Image
+                                     (Profile))
                         then
+                           Fault := US.To_Unbounded_String
+                             ("the load segment at " & Image (Virtual)
+                              & " has its contents loaded from "
+                              & Image (Physical) & ", "
+                              & (if Region_Of (Physical, File_Size) = 0
+                                 then "in no region of the description"
+                                 else "in writable memory, where nothing"
+                                   & " holds them when reset fills the"
+                                   & " image (D1359)"));
                            return;
                         end if;
                         if Region_Of (Physical, File_Size) = Image_At
@@ -393,6 +444,9 @@ package body Landin.Build_Reports.Firmware is
             end loop;
          end;
          if Flash_End = Flash.Origin then
+            Fault := US.To_Unbounded_String
+              ("the image loads nothing into the region its text is"
+               & " placed in");
             return;
          end if;
          if Firmware.Takes_Stage (Profile.Boot) then
@@ -402,6 +456,8 @@ package body Landin.Build_Reports.Firmware is
             begin
                Find ("_landin_firmware_boot2", Found, Stage_At, Stage_Bytes);
                if not Found then
+                  Fault := US.To_Unbounded_String
+                    ("the image defines no _landin_firmware_boot2");
                   return;
                end if;
                --  The checksum's word, through the segment that loads it.
@@ -409,6 +465,8 @@ package body Landin.Build_Reports.Firmware is
                  (Stage_At + Landin.Targets.Byte_Count (Firmware.Stage_Limit),
                   4);
                if At_File = Natural'Last then
+                  Fault := US.To_Unbounded_String
+                    ("no load segment holds the second stage's checksum word");
                   return;
                end if;
                Stage_Sum := Word (At_File);
@@ -423,10 +481,15 @@ package body Landin.Build_Reports.Firmware is
                Find ("_landin_firmware_image_block", Found, Block_At,
                      Block_Bytes);
                if not Found or else Block_Bytes mod 4 /= 0 then
+                  Fault := US.To_Unbounded_String
+                    ("the image's _landin_firmware_image_block is missing"
+                     & " or not whole words");
                   return;
                end if;
                At_File := Loaded (Block_At, Block_Bytes);
                if At_File = Natural'Last then
+                  Fault := US.To_Unbounded_String
+                    ("no load segment holds the image block");
                   return;
                end if;
                for Index in 0 .. Natural (Block_Bytes) / 4 - 1 loop
@@ -453,6 +516,9 @@ package body Landin.Build_Reports.Firmware is
                        Ada.Strings.Fixed.Index (Mapping, ")", From => First);
                   begin
                      if Last = 0 or else Last = First then
+                        Fault := US.To_Unbounded_String
+                          ("the link map names an archive member it does"
+                           & " not close");
                         return;
                      end if;
                      for Index in First .. Last - 1 loop
@@ -461,6 +527,9 @@ package body Landin.Build_Reports.Firmware is
                           and then Mapping (Index) not in '0' .. '9'
                           and then Mapping (Index) not in '_' | '-' | '.' | '+'
                         then
+                           Fault := US.To_Unbounded_String
+                             ("the link map names an archive member with"
+                              & " characters a member name has not");
                            return;
                         end if;
                      end loop;
@@ -516,6 +585,8 @@ package body Landin.Build_Reports.Firmware is
       end if;
       if Firmware.Takes_ESP_Image (Profile.Boot) then
          if ESP_Image = "" then
+            Fault := US.To_Unbounded_String
+              ("no application image was written beside the executable");
             return;
          end if;
          US.Append (Result, ",""esp_image"":{" & ESP_Image & "}");
@@ -526,6 +597,8 @@ package body Landin.Build_Reports.Firmware is
       when Constraint_Error =>
          Result := US.Null_Unbounded_String;
          Valid := False;
+         Fault := US.To_Unbounded_String
+           ("the linked image's headers or symbols lie outside the file");
    end Measure;
    --  Where WORD, at address AT_ADDRESS, jumps, when it is RISC-V's
    --  `jal x0`, the `j` an RV32 entry word is (D686); otherwise 0.

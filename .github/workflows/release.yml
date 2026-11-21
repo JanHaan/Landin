@@ -181,7 +181,7 @@ jobs:
           REHEARSE: ${{ inputs.rehearse }}
         run: |
           set -eu
-          version=$(sed -n 's/.*specification \([0-9][0-9.]*\)\..*/\1/p' README.md | head -1)
+          version=$(sed -n 's/^\*\*Status: version \([0-9][0-9.]*\)\..*/\1/p' README.md | head -1)
           if [ "$REHEARSE" != true ] && [ "v$version" != "$TAG" ]; then
             echo "README says $version; the tag is $TAG" >&2
             exit 1
@@ -243,7 +243,7 @@ jobs:
         id: package
         run: |
           set -eu
-          version=$(sed -n 's/.*specification \([0-9][0-9.]*\)\..*/\1/p' README.md | head -1)
+          version=$(sed -n 's/^\*\*Status: version \([0-9][0-9.]*\)\..*/\1/p' README.md | head -1)
           asset="landin-$version-${{ matrix.platform }}.tar.gz"
           debug="landin-$version-${{ matrix.platform }}-debug.tar.gz"
           binary="compiler/ada/build/${{ matrix.build }}/release/bin/refine"
@@ -315,7 +315,7 @@ jobs:
       - name: Build and check the user image
         run: |
           set -eu
-          version=$(sed -n 's/.*specification \([0-9][0-9.]*\)\..*/\1/p' README.md | head -1)
+          version=$(sed -n 's/^\*\*Status: version \([0-9][0-9.]*\)\..*/\1/p' README.md | head -1)
           archive="$RUNNER_TEMP/archives/landin-$version-${{ matrix.platform }}.tar.gz"
           python3 scripts/container_image.py build user "$archive" --tag landin-user \
             --version "$version" --revision "$(git rev-parse HEAD)"
@@ -351,7 +351,7 @@ jobs:
       - name: Build and check the contributor image
         run: |
           set -eu
-          version=$(sed -n 's/.*specification \([0-9][0-9.]*\)\..*/\1/p' README.md | head -1)
+          version=$(sed -n 's/^\*\*Status: version \([0-9][0-9.]*\)\..*/\1/p' README.md | head -1)
           python3 scripts/container_image.py build contributor --tag landin-contributor \
             --version "$version" --revision "$(git rev-parse HEAD)"
           python3 scripts/container_image.py check contributor landin-contributor
@@ -382,7 +382,7 @@ jobs:
       - name: Assemble both lists
         run: |
           set -eu
-          version=$(sed -n 's/.*specification \([0-9][0-9.]*\)\..*/\1/p' README.md | head -1)
+          version=$(sed -n 's/^\*\*Status: version \([0-9][0-9.]*\)\..*/\1/p' README.md | head -1)
           python3 scripts/container_image.py publish "$version" "$RUNNER_TEMP/images" \
             --layout "$RUNNER_TEMP/layout"
           cat "$RUNNER_TEMP/layout/index.json"
@@ -454,7 +454,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -eu
-          version=$(sed -n 's/.*specification \([0-9][0-9.]*\)\..*/\1/p' README.md | head -1)
+          version=$(sed -n 's/^\*\*Status: version \([0-9][0-9.]*\)\..*/\1/p' README.md | head -1)
           printf '%s\n' "$GH_TOKEN" | skopeo login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
           python3 scripts/container_image.py publish "$version" "$RUNNER_TEMP/images" \
             --outputs "$GITHUB_OUTPUT"

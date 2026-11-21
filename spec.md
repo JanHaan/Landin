@@ -25853,6 +25853,10 @@ needs, `flake` among them.
 
 ### D586 — An explanatory edit may take its base from any branch's full run
 
+**Amended by D1648 and D1650:** the key leaves out more than the four
+documents' content: the guides and the tree D1648 names, and the boards'
+cycles baselines.
+
 **The tour said** nothing. The explanatory exception took its base only
 from a full run of a push to main, so a documents-only commit that closed
 an item after its branch's full gate cost one more full run before main
@@ -25884,6 +25888,8 @@ hold ancestry, declarations and the complete listing.
 
 ### D1373 — The roadmap's own files leave an explanatory edit's key
 
+**Amended by D1648:** `docs/site/` is left out the same way.
+
 **The tour said** nothing. D586 left the content of four top-level
 documents out of the tree key an explanatory edit is compared by, and
 `ROADMAP.md`'s register was a table in one of them. The third roadmap
@@ -25911,6 +25917,45 @@ a new row would escape.
 `test_the_roadmap_tree_does_not_count_at_all` and its `Readers` case,
 which names every tracked file that mentions `roadmap/` and why no lane
 the key lets skip reads it.
+
+### D1648 — The derived guides no lane reads, and the site's renderer, leave an explanatory edit's key
+
+**The tour said** nothing. D586 and D1373 left four top-level documents'
+content and the roadmap's own directory out of the key an explanatory edit is
+compared by. Two of one item's three merges of `main` in the survey of
+2026-11-20 brought only `docs/process.md`, `docs/environments.md` and
+`docs/site/*.py` with the roadmap, and each cost a full gate and a boards
+run. The maintainer chose this on 2026-11-20.
+
+**Chosen:** the content of the guides `docs/benchmarks.md`,
+`docs/capabilities.md`, `docs/diagnostics.md`, `docs/documents.md`,
+`docs/environments.md`, `docs/ir.md`, `docs/measurement.md`,
+`docs/process.md`, `docs/server.md` and `docs/targets.md` joins the four
+documents', and the tree `docs/site/`, paths too, joins the roadmap's, as
+`scripts/gate_inputs.py`'s `DOCUMENTS` and `CONTENT_FREE_TREES` name them.
+Each was shown to be read by no lane the key lets skip: `pages.yml`,
+`scripts/site.sh` and `check.py` read them, and the files that name them
+otherwise do so in comments and messages. `docs/commands.md` and
+`docs/library.md` stay in the key, because `test_cli_native` reads them in
+the compiler-checks and release lanes, and so do `docs/format.md` and
+`docs/from-c.md`, which the Ada test program reads. `docs/diagnostics.md`
+is in the set because the explanations `refine explain` prints are
+generated from it into an Ada body that is not, so a change to what it
+says changes the key through that body. Everything else in D586 and D1373
+stands: an edit is explanatory only when every commit says so.
+
+**The reason:** these files explain; a sentence in them that changes a
+claim is checked by `check.py`, the pages workflow and review, not by a
+compiler lane, as for the four documents.
+
+**The alternatives:** adding only `docs/site/`; and keeping D586 and D1373
+as they stood.
+
+**Pinned by** `scripts/tests/test_gate_inputs.py`'s
+`test_the_unread_guides_and_the_site_do_not_count`,
+`test_the_guides_a_lane_reads_count` and its `DocumentReaders` cases, which
+name every tracked file that mentions one of them, the scripts tests a lane
+runs included, and why no lane the key lets skip reads it.
 
 ### D1375 — Generated code is measured against committed baselines, size exactly in both directions
 
@@ -26013,6 +26058,69 @@ hours of emulation for a figure that is exact at any size.
 `scripts/tests/test_measure_count.py`, and the gate's `measure-size` and
 `cortex-m-programs` jobs.
 
+### D1649 — A dispatch times a key once on its branch
+
+**The tour said** nothing. D1378's timing ran on the schedule and on every
+dispatch whatever its scope, so a dispatch after a merge that changed
+nothing the timing reads timed the same compiler again: three
+`measure-time` jobs, about 58 runner-minutes, and the boards' time steps,
+which take a leg from about 11 minutes on the rig to about 30. The
+maintainer chose this on 2026-11-20.
+
+**Chosen:** a dispatch leaves out `measure-time`, the timing images and the
+boards' time steps when a successful dispatch of this repository on the same
+branch, under a week old, whose `measure-time` legs ran and passed in a
+complete listing, was made on a commit with the same gate key, and the
+two commits' bases, which the timing pairs the compiler with and holds the
+cycles to, found as `measure.py base` finds them against `main` as it now
+stands, have the same key too. The key is the one an explanatory edit is
+compared by, which leaves out only what no lane reads, so the compiler,
+the bundles and the measuring scripts timed are the ones this dispatch
+would time; no declaration is needed, because nothing the timing reads
+differs. `gate_inputs.py physical` decides it, and
+the aggregate accepts the skip on a dispatch alone and names the run. The
+schedule always times. A run that failed only in timing is still re-run in
+its failed jobs, not dispatched again.
+
+**The reason:** a timing judges the compiler's code against the base's
+baselines; the same inputs give the same judgement, and timing them again
+spent runners and rig time on noise, which failed five of nine dispatches
+in the survey.
+
+**The alternatives:** a `scope=timing` dispatch run once per item with
+boards dispatches untimed; and timing on every dispatch with only the
+re-run of failed jobs.
+
+**Pinned by** `scripts/tests/test_gate_inputs.py`'s `TimingReuse` cases
+and `BoardVerdict`'s `test_a_dispatch_may_take_its_timing_from_a_timed_run`.
+
+### D1650 — The cycles baselines leave the key
+
+**The tour said** nothing. A commit that recorded only the boards' cycles
+baselines, `compiler/tests/measure/baselines/*.cycles.json`, ran every
+software lane again, about 520 runner-minutes, though only
+`environments/boards/timing.py` reads those files, in the aggregate of an
+event that times the boards, from the base commit. The maintainer chose
+this on 2026-11-20.
+
+**Chosen:** the gate's key leaves those files out, paths too, by
+`scripts/gate_inputs.py`'s `CONTENT_FREE_PATTERNS`, so a commit that
+records them alone and says `Gate: explanatory` reuses the software pass.
+The size and instruction baselines, which lanes read, stay in the key. A
+candidate's identical-tree key still counts them, and the dispatch that
+judges the new baselines still runs.
+
+**The reason:** no software lane reads them, and the evidence they change
+is the boards' timing, which a dispatch gives.
+
+**The alternatives:** also letting the aggregate judge the previous
+dispatch's kept figures against the new baselines without measuring again,
+which was not asked for; and keeping the files in the key.
+
+**Pinned by** `scripts/tests/test_gate_inputs.py`'s
+`test_cycles_baselines_do_not_count_and_other_baselines_do` and its
+`DocumentReaders` case.
+
 ### D1379 — The instruction counter declares the plugin calls it makes
 
 **The tour said** nothing.
@@ -26110,6 +26218,11 @@ all of that as parameters and decide nothing itself. The RISC-V allocation,
 the next to be written, shares arm64's placement where the two agree rather
 than writing it again; Cortex-M's low and high registers and Xtensa's
 native selection are placed by their own work.
+
+**Amended on 2026-11-20:** Xtensa's placement reads its routine's words,
+the scratch words its selection writes among them, over the routine's own
+text rather than this analysis, and places them in the machine layer that
+knows what each Xtensa instruction writes (D1627).
 
 **The alternatives:** one allocator over a register description for every
 backend, which would first have had to describe each selection's scratch
@@ -26457,6 +26570,111 @@ Xtensa, x86-64 and arm64 do not need for speed, each dividing by a
 constant already or in hardware.
 
 **Pinned by** the Cortex-M corpus and `compiler/tests/measure/baselines/`.
+
+### D1627 — Xtensa places every word of a routine over the routine's own text
+
+**The tour said** nothing. Xtensa's machine layer kept every RISC-V-form
+logical word but five in memory at a7 + 4×N and every value and slot in
+its frame home, so an operation loaded its operands, computed and stored
+its result back: 414 of the firmware mandelbrot's 545 instructions in
+`in_set` were `l32i` and `s32i` through a7, and the build report's share
+of stack loads and stores was 53.5% at xtensa-esp32.
+
+**Chosen:** the emitter keeps its walk of the verified IR and its
+RISC-V-form words, and in a routine without an `assembler.block` gives
+each scalar value and each slot `Landin.Backend.Placement` finds no address
+reaches a word of its own, `vN`, two for an eight-byte one, whose home is
+the value's or slot's frame home; a narrower one holds its value
+zero-extended. The machine layer buffers the routine's body, computes the
+liveness of every word over the body's own blocks and branches, joins the
+definitions that reach a common use into a web, and places the webs by
+linear scan in order of their first position: a web live across a call
+takes one of a2-a6, which CALL8 preserves, any other also a10-a15,
+preferring the register a call's arguments or results or the routine's
+entry or exit want it in, or that of a word it is copied to or from; a web
+that copies another's value without either being written in its interval
+reads the other's register. When none is free, the web with the fewest
+occurrences, weighted eight times for each loop around them, for each
+position it would hold stays in its home, and selection loads it into a8
+or a9 where it is read. Before placing, a `mul`, `add`, `divu` or `remu`
+whose operand is a word set once to a number, directly or through copies,
+is a shift, an `addi`, a shift right or a mask where the number is a power
+of two or small, and a zero test of such a word is decided; an operation
+without effect whose results nothing reads is dropped; and a set on a
+comparison that only the zero test after it reads is that test, `sltu`
+and `bnez` one `bltu`. The entry moves the incoming a2-a6 into x10-x14's webs, a call its
+argument words into a10-a15 and its results out of a10-a14, and the exit
+x10-x13 and x31 into a2-a6, each as one parallel move. A routine whose
+text the analysis cannot follow, a native line in its body, a jump to a
+label outside it or a write of SP or the CFA, or whose text is longer than
+150,000 lines or whose liveness would take more than 2 ** 26 bits, is
+selected word by word as before, the value and slot words in their homes.
+The scratch words x5-x7, x9 and x18 have no home: when one finds no
+register, the cheapest web that has a home gives up its own. The frame is
+the one it was, its 80-byte bank and every value's and slot's home kept:
+a firmware fibre's stack is sized to it. Over the firmware
+set every image is smaller at every profile and both levels, `.text`
+0.37 to 0.76 of the baselines before it, `in_set` is 121 instructions, 30
+of them stack loads and stores, and on both boards every workload runs in
+0.17 to 0.68 of the cycles it took.
+
+**The alternatives:** selecting natively from the IR, which D1403 named
+for Xtensa, a second emitter of the RISC-V emitter's 6,900 lines for the
+ABI, firmware, interrupt and pair handling this one already has; an
+allocator over the RISC-V form in the emitter, as D1503's, which D1403
+declined because the machine layer would still load and store every
+logical word, and which places the words the machine layer here places;
+and placing over `Landin.IR.Liveness` as D1403 has the other backends do,
+which sees values and slots but not the scratch words selection writes in
+every operation, which are half of what this places. D1403's one liveness
+analysis is therefore not Xtensa's: its placement reads the routine's
+words, not its IR.
+
+**Pinned by** `xtensa backend/placed words keep a loop in registers`,
+`xtensa backend/a word across a call keeps a2-a6`, both chips' corpus
+lanes and `compiler/tests/measure/baselines/`.
+
+### D1628 — On Xtensa a comparison only its branch reads is the branch
+
+**The tour said** nothing. A comparison made its truth value with a branch
+around two moves, stored it, and the branch after it loaded it and
+branched on it.
+
+**Chosen:** an integer comparison that no other operand reads and that
+the next operation of its block branches on is that branch's own test,
+`beq`, `bltu` and the rest on the two operands, followed by a `j` to the
+alternative, as D1566 has Cortex-M's flags do. A float comparison, a
+libgcc helper's answer, keeps its truth value.
+
+**The alternatives:** leaving the pair to placement, which removes the
+truth value's memory traffic but keeps both branches.
+
+**Pinned by** both chips' corpus lanes and
+`compiler/tests/measure/baselines/`.
+
+### D1629 — An Xtensa image is measured as a loader writes it
+
+**The tour said** nothing. D1359 has a loader write every Xtensa image
+where it is mapped, the ROM an application image's segments and a
+debugger or emulator the reference's, and reset copies nothing; but the
+build report's measurement refused an image of the Xtensa reference's
+boot layout whose `.rodata` and `.data` are loaded into DRAM, because a
+boot image's initialized data must come from its text region, and said
+only that it could not measure the image.
+
+**Chosen:** the measurement refuses initialized data loaded from writable
+memory only for an image reset fills, `Boots_From_Image`, so the Xtensa
+reference is measured as its chips' descriptions are; and every image it
+cannot measure is refused naming what it met, the segment and its load
+address and the rule it breaks, the symbol, or the map's line.
+
+**The alternatives:** giving the reference's initialized data a load
+address in IRAM and copying it at reset, which no Xtensa startup does and
+which would put byte-addressed data where an ESP32 reads only words; and
+refusing the reference's boot layout at link time, which would refuse
+every corpus image with a constant.
+
+**Pinned by** `cortex ABI/linked firmware evidence`.
 
 ### D1383 — `refine` keeps the compiler's commands and ships four of its tools beside it
 
@@ -27524,6 +27742,9 @@ unpushed tree; or automatically refreshing a hardware record from a build.
 
 ### D904 — Physical boards run in the gate on trusted events only, and their evidence is never reused
 
+**Superseded in part by D1647:** a push to `main` takes its boards from a
+passed run of the same tree instead of running them again.
+
 **The tour said** nothing about where physical evidence comes from; D901
 and D902 made boot checks and RAM runs the closing evidence of a board
 item, run by hand from the maintainer's host.
@@ -27577,6 +27798,48 @@ to simulated pushes, schedules, dispatches, pull requests and forks;
 `scripts/tests/test_gate_inputs.py`, which holds `gate.yml`'s scope, the
 physical jobs outside the reuse list, the board matrix and the aggregate's
 verdict; and `scripts/tests/test_board_gate.py`'s `Sequence`.
+
+### D1647 — Main's push takes its boards from a passed run of the same tree
+
+**The tour said** nothing. D904 ran the boards fresh on every push to
+`main` and listed reusing a candidate's board evidence at promotion among
+its alternatives without a reason. In the 3.4 days surveyed on 2026-11-20,
+34 of 35 pushes to `main` followed a passed boards dispatch on the identical
+tree or before only explanatory commits; each cost about 11 minutes of the
+rig and 19 of the promoting item's finish, and in the fortnight before, the
+one failure of `main`'s boards was a rig difference on a tree that had
+passed its dispatch half an hour earlier. The maintainer chose this on
+2026-11-20.
+
+**Chosen:** a push to `main` takes its boards from a run of `gate.yml` in
+this repository on a board-scope event, a dispatch, a push to `main` or the
+schedule, under a week old and successful, whose `board-bundles` and every
+leg ran and passed in a complete job listing, when that run's commit is the
+identical tree, every file, mode and path, or a base the software-reuse
+rule of D586 accepts: the same key, an ancestor of the pushed commit, and
+every commit since it saying `Gate: explanatory`. `gate_inputs.py
+physical` decides it in the `inputs` job, which then skips the board jobs,
+and the aggregate accepts their skip on a push to `main` alone and names
+the run whose boards it took. The schedule and a dispatch always run the
+boards, and a run that took its boards is never a base. A candidate still
+needs its own passed boards dispatch before promotion. `main`'s Linux
+x86-64 cache entry, which `board-bundles` saved, is saved by
+`linux-release-main-cache` instead, under the tree's gate key.
+
+**The reason:** the run taken is evidence of the same inputs on the same
+rig, at most a week old, and the rig is sampled by every dispatch, about
+twenty a day, and by the weekly schedule, so a rig that has changed shows
+within hours on another item's dispatch. A second sample at promotion
+bought a red `main`, which blocks every item, for a rig change.
+
+**The alternatives:** keeping D904's rule; running the schedule daily as
+well; and dropping the candidate's dispatch so that `main`'s boards are the
+only ones, which turns `main` red on a candidate's board or cycles
+difference.
+
+**Pinned by** `scripts/tests/test_gate_inputs.py`'s `BoardsReuse` cases and
+`BoardVerdict`'s `test_a_main_push_may_take_its_boards_from_a_passed_run`
+and `test_a_dispatch_or_the_schedule_never_takes_boards`.
 
 ### D905 — A board run reports one outcome, stops cleanly when cancelled, and shares one rig state
 
