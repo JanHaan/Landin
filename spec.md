@@ -40687,7 +40687,7 @@ replacing a tag; `scripts/tests/test_release.py`'s `Workflow` cases, which
 hold the push to after the release is public and to the publishing job
 alone; `check.py`'s pin agreement, which holds the recipe's base image to
 `environments/pins.sh`; and the gate's `outside-user-stock` and
-`arm64-release` steps that build and run it.
+`arm64-release-checks` steps that build and run it.
 
 ### D1668 — The contributor image is the pinned environment for both Linux architectures, read from pins.sh
 
