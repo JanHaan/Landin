@@ -37980,10 +37980,10 @@ the provider choosing; its first old extent of bytes, the prefix among
 them, are where the result is, and `out_of_memory` leaves the storage as
 it was. A storage with no block, or whose items have no size, still takes
 a fresh block. `mem.reserve_admit_copy`, which `vec.append_bytes` grows
-with, does the same unless the bytes it appends are a view of the
-storage's own block, which must be read before the old block is given
-back: then it grows in place where the provider can and otherwise moves
-as before (D1122). The list now takes 190 ms with 12 `mremap` calls, one
+with, grows the same way, and when the bytes it appends are a view of the
+storage's own block it reads them where the block now is: the block keeps
+the old block's bytes whether it grew or moved, so what is appended is
+what they held when the call began (D1122). The list now takes 190 ms with 12 `mremap` calls, one
 `mmap` and one `munmap`. Through `core/fault`'s injector a growth is one
 attempt and, when it succeeds, one success and no free, whichever way the
 inner provider answers, so the fixtures that pinned an injector's
@@ -37991,12 +37991,16 @@ counters were rewritten for it.
 
 **The alternatives:** keeping D356's growth asked in place before the
 `resize`, which asks the system twice for every block it cannot extend
-where it is; and a `resize` for byte lists alone, which leaves every other
-item type copying its slots.
+where it is; keeping D356's growth for an append of the list's own bytes,
+which links both ways of growing into every image that appends bytes and
+took `runtime/core-self-append` past Cortex-M0's 32 KiB at `none`; and a
+`resize` for byte lists alone, which leaves every other item type copying
+its slots.
 
 **Pinned by** the fixtures D356 names whose counters changed, among them
 `runtime/r420-vec-large-list`, `runtime/r420-failing-providers` and
-`runtime/core-vec-used-sort`, and `runtime/hosted-heap-resize`.
+`runtime/core-vec-used-sort`, `runtime/core-self-append` and
+`runtime/hosted-heap-resize`.
 
 ### D357 — `file_system` refines `files`, and a member for another system says so
 
@@ -38448,6 +38452,12 @@ place and overwrites every block it is given back, and which fails on each
 of the list's and the builder's cases without the rule;
 `runtime/core-text-builder` and `runtime/core-vec-bytes` hold the growth
 itself.
+
+D1727 amends how a list's append keeps the rule: its storage grows through
+the provider's `resize`, and a view of its own block is read at the same
+offset in the block `resize` returns, which holds the old block's bytes
+whether it grew or moved. A list's one view is a range of that block, so
+its offset is known, unlike a `format`'s values.
 
 ### D442 — `platform/linux`'s path parameters take `ptr u8`
 
