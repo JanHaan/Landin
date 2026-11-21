@@ -372,7 +372,8 @@ LANDIN_ADA_DIR="$LANDIN_ROOT/compiler/ada"
 LANDIN_BUILD_TAG=test
 LANDIN_BUILD_MODE=debug
 LANDIN_BUILD_DIR="$LANDIN_ADA_DIR/build/test/debug"
-export LANDIN_BUILD_DIR LANDIN_BUILD_TAG LANDIN_BUILD_MODE
+LANDIN_LINK="${FAKE_LINK:-dynamic}"
+export LANDIN_BUILD_DIR LANDIN_BUILD_TAG LANDIN_BUILD_MODE LANDIN_LINK
 landin_build_lock() { :; }
 landin_require() { command -v "$1" >/dev/null; }
 ''')
@@ -661,6 +662,28 @@ path.write_text("-- generated at " + str(path) + "\\n"
         self.assertEqual(self.calls(), calls)
         invalid = self.run_build(extra=reuse)
         self.assertEqual(invalid.returncode, 2)
+
+    def test_a_static_link_has_no_run_path_and_is_reused_by_its_q(self):
+        #  glibc's static start kills an executable naming a run path, so a
+        #  static link adds -R, once, and the manifest records it; the
+        #  reusing job still says only -q, as the gate's lanes do.
+        static = {"FAKE_LINK": "static", "LANDIN_BUILD_INCREMENTAL": "no"}
+        first = self.run_build("-q", extra=static)
+        self.assertEqual(first.returncode, 0, first.stderr)
+        self.assertTrue(all(call.count("-R") == 1 for call in self.calls()))
+        self.assertIn("switches -R", self.requested(self.manifest))
+        given = self.run_build("-q", "-R", extra=static)
+        self.assertEqual(given.returncode, 0, given.stderr)
+        self.assertTrue(all(call.count("-R") == 1 for call in self.calls()))
+        calls = self.calls()
+        reuse = {**static, "LANDIN_BUILD_REUSE": "yes"}
+        current = self.run_build("-q", extra=reuse)
+        self.assertEqual(current.returncode, 0, current.stderr)
+        self.assertIn("imported build matches", current.stdout)
+        self.assertEqual(self.calls(), calls)
+        refused = self.run_build("-q", "-R", extra=reuse)
+        self.assertEqual(refused.returncode, 2)
+        self.assertIn("requires build.sh -q", refused.stderr)
 
     def test_imported_full_build_rejects_missing_or_stale_test_stamp(self):
         self.assertEqual(self.run_build().returncode, 0)

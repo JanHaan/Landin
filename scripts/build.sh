@@ -112,6 +112,9 @@ done
 #  position-independent executable asserts that it names none, and kills
 #  the program before main when it does.  The manifest records it with the
 #  caller's switches, so a tree linked with a run path is linked again.
+#  The caller's own switches, before that, are what a reused build is
+#  held to below.
+Asked_Switches="$*"
 if [ "${LANDIN_LINK:-dynamic}" = static ]; then
     Asked=no
     for Argument do
@@ -286,7 +289,7 @@ esac
 #  for a full build, the test executable's separate successful-build stamp.
 #  Compiler-only consumers need only refine and its source manifest.
 if [ "$Reuse" = "yes" ]; then
-    if [ "$#" -ne 1 ] || [ "$1" != "-q" ]; then
+    if [ "$Asked_Switches" != "-q" ]; then
         echo "landin: LANDIN_BUILD_REUSE requires build.sh -q" >&2
         exit 2
     fi
