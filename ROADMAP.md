@@ -2254,7 +2254,7 @@ render and the recipe. Q-65 is answered too: version tags only. Gate run
 
 ### R23.40 — Whether a static Linux `refine` can be built
 
-Status: planned
+Status: complete
 Depends on: none
 
 A Linux `refine` linked statically, against musl, would run on Alpine,
@@ -2270,22 +2270,50 @@ that passed the release test program if one was built; R23.50 confirmed or
 rewritten to match, or, if it cannot be done at a cost worth paying, a
 question asking the maintainer to retire it.
 
+Done: the pinned GNAT links `refine`, its four split commands and the
+test program statically against glibc with no source change: the GNAT
+runtime was static already, nothing calls the name service, `dlopen` or
+`iconv`, and the build only adds `-largs -static` or `-static-pie`. On
+Linux x86-64 both builds passed the whole release test program, 1279
+cases each. The arm64 build, made under emulation, passed the suites it
+reached before runtime fixture execution, which emulation could not finish;
+R23.50's gate job runs it natively. Both architectures' archives ran in
+Alpine 3.24's minirootfs with no glibc, the first program through Alpine's
+`gcc` and five `--link=libc` fixtures against musl. The archive grows
+3.7 %. musl would need a GNAT 16.1 toolchain built and maintained by the
+project, since none is published, for no reach static glibc lacks; the
+finding is `roadmap/inputs/static-linux-refine.md`, R23.50 is rewritten to
+it, and Q-116 asks whether the static archive replaces the glibc ones,
+defaulting to yes. Met on the way and fixed: the flake's `aarch64-linux`
+shell and `refine` package did not build, GPRbuild's arm64 archive wanting
+`libgmp.so.10`, which the flake now supplies. Rows SR-1515 to SR-1517 hold
+what outlives the item.
+
 ### R23.50 — A static Linux archive
 
 Status: planned
 Depends on: R23.10, R23.30, R23.40
 
-The release workflow publishes a static Linux archive for x86-64 and
-arm64 as R23.40 found it can be built, beside the glibc archives or in
-their place as that finding argues. The install script takes it on a
-musl host, and the user image takes it where it makes the image simpler.
+The release workflow publishes a Linux `refine` linked statically against
+glibc with `-static-pie`, for x86-64 and arm64, as R23.40 found it builds
+with the pinned toolchain and no source change
+(`roadmap/inputs/static-linux-refine.md`); a musl build is not attempted,
+since no published GNAT targets musl. The static archive replaces the glibc
+archives under their names or is published beside them as Q-116 answers.
+The install script takes it on a musl or NixOS host, and the user image
+takes it where it makes the image simpler. The archive carries glibc's
+licence and names the glibc it holds, and the build is refused when a
+static link prints glibc's warning that a call needs that glibc's shared
+libraries at run time.
 
 Exit evidence: a gate job that runs the packaged static compiler on
 Alpine and in an image with no C library of its own beyond the linker it
-needs, compiling and running the first program; the release test program
-passed by the static build; the install script choosing it on Alpine in
-its control; the archive in the installing documentation; the release
-recipe's step for it in `docs/process.md`.
+needs, compiling and running the first program and the `--link=libc`
+runtime fixtures against musl, or a row for each that does not run there;
+the release test program passed by the static build on both
+architectures; the install script choosing it on Alpine in its control;
+the archive in the installing documentation; the release recipe's step for
+it in `docs/process.md`.
 
 ### R23 gate
 Every route in the installing documentation and exercised by the gate or,
