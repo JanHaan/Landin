@@ -182,7 +182,7 @@ binary-trees 478 / 1,195.
 
 ### Cortex-M after its remaining selection
 
-R16.27's selection (D1767-D1774), measured with `measure.py size` and
+The remaining selection (D1767-D1774), measured with `measure.py size` and
 `measure.py instructions` over the firmware set against the commit it
 started from. Executed instructions, the geometric mean of the six
 workloads' ratios: armv6-m 0.897 at speed-auto, 0.863 at size-auto and
@@ -204,14 +204,14 @@ What is left, by what each measured, for whoever takes Cortex-M next:
    instructions: its state is `u64`, kept in its homes and computed in
    the r0:r1 and r2:r3 pairs. `core.line.divisor` is 924 bytes at armv6-m
    size-auto and `frame_bits` 210, against gcc `-Os`'s 190 and 32
-   (`SR-869`). A held pair, as RV32's (D1503), is the step; not measured.
+   (the register's row on short `u64` routines). A held pair, as RV32's (D1503), is the step; not measured.
 2. **Small aggregates copied and cleared a byte at a time.** A two-byte
    packed image and a sixteen-byte `[16]u8` are zeroed and copied by
    `strb` loops of four instructions a byte, though their frame slots
    could be word-aligned; in fannkuch-redux's `fannkuch` one such loop
    runs for each permutation. Not measured.
 3. **The atom `match` chain.** `failure.words` at armv6-m size-auto is
-   1,132 bytes, about 33 an arm (`SR-231`); a table needs a multiway IR
+   1,132 bytes, about 33 an arm (the atom `match` row); a table needs a multiway IR
    terminator.
 4. **A framed routine's parameter stores.** The entry stores each
    incoming register through `mov r6, r11; subs r6, #N` before sp is

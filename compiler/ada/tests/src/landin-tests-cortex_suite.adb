@@ -220,11 +220,12 @@ package body Landin.Tests.Cortex_Suite is
          end;
       end loop;
    end Scalar_Spill_Homes;
-   --  D1767-D1774: the remaining Thumb-2 selection.  At the Thumb-2 levels a loop's
-   --  constants are immediates, a comparison with zero and its branch one
-   --  CBZ or CBNZ, a packed field UBFX and BFI, a shift by a constant one
-   --  instruction, a constant divisor needs no test and speed holds r12;
-   --  armv6-m keeps Thumb-1's forms with the same immediates.
+   --  D1767-D1774: the remaining Thumb-2 selection.  At the Thumb-2
+   --  levels a loop's constants are immediates, a comparison with zero
+   --  and its branch one CBZ or CBNZ, a packed field UBFX and BFI, a
+   --  shift by a constant one instruction, a constant divisor needs no
+   --  test and speed holds r12; armv6-m keeps Thumb-1's forms with the
+   --  same immediates.
    procedure Thumb2_Selection (Item : in out Landin.Testing.Context);
    procedure Thumb2_Selection (Item : in out Landin.Testing.Context) is
       LF_Text : constant String := [1 => Character'Val (10)];
