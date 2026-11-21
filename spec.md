@@ -40872,7 +40872,7 @@ replacing a tag; `scripts/tests/test_release.py`'s `Workflow` cases, which
 hold the push to after the release is public and to the publishing job
 alone; `check.py`'s pin agreement, which holds the recipe's base image to
 `environments/pins.sh`; and the gate's `outside-user-stock` and
-`arm64-release` steps that build and run it.
+`arm64-release-checks` steps that build and run it.
 
 ### D1668 — The contributor image is the pinned environment for both Linux architectures, read from pins.sh
 
@@ -41002,7 +41002,7 @@ newest release, which is rate-limited without a token; and running
 not have.
 
 **Pinned by** `scripts/install_check.py`, run in the gate's `release`,
-`arm64-release` and `darwin-host-release` jobs against each host's
+`arm64-release-checks` and `darwin-host-release` jobs against each host's
 packaged compiler served from 127.0.0.1 as a release is: the newest and a
 named version installed and running the first program, a reinstall, a
 foreign directory, a damaged archive, a missing version and two unserved
