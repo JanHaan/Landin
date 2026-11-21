@@ -3183,7 +3183,7 @@ def index_page(docs, counts, intro, status, progress, program, symbols,
              #  they probably do not want to read it; that is a link in
              #  the status line, for the reader who does.
              '<a href="examples.html">run the examples</a>'
-             f'<a href="readme.html#{INSTALL_ANCHOR}">install refine</a></div>')
+             f'<a href="readme.html#{INSTALL_ANCHOR}">install Landin</a></div>')
     if status:
         version, headline, detail = status_parts(status)
         #  One line in the hero; the status in full is a section of its

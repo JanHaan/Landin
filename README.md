@@ -42,9 +42,12 @@ application is at the other. This is what it is like to write:
 
 ## Installing
 
-`refine` is one executable, with its standard library in a directory
-beside it. There are five ways to get both: with Homebrew, from a release,
-in a container, with nix, or from source.
+`refine` is Landin's compiler, and the command you run for everything else
+too: checking, running and compiling programs, formatting source, and the
+language server and debug adapter your editor starts. An install gives you
+`refine`, a few further commands you run through it, and Landin's standard
+library. There are five ways to get it: with Homebrew, from a release, in a
+container, with nix, or from source.
 
 Use 0.2.9 or later: [the first program](#your-first-program) needs
 `refine run` and `hosted/blocking`, both newer than 0.2.8.
