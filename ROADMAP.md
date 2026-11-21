@@ -644,7 +644,7 @@ counterpart case is made from its hosted fixture.
 
 ### R16.27 — Cortex-M's remaining selection
 
-Status: active
+Status: complete
 Depends on: R16.10
 
 R16.22 left where its allocation found them the Cortex-M values it does not
@@ -661,6 +661,42 @@ with its measurement.
 Exit evidence: each cost taken measured lower than its R16.10 baseline and
 R16.22's figures, the cycles on the boards no slower, with unchanged
 behavior, ABI and debugger evidence.
+
+Done: with a float unit Cortex-M holds floats in d0-d15 (D1771), which
+takes `SR-596`: on the AN500 description the firmware mandelbrot at
+speed executes 649,506 instructions under QEMU against 4,117,064, and on
+the STM32H753 runs in 1,775,748 cycles against 9,119,914. The Thumb-2
+levels' speed holds values in r12, r8 and r10 (D1772, `SR-581`), a test
+against zero is CBZ or CBNZ (D1768, `SR-582`) and a packed field UBFX and
+BFI (D1773, `SR-583`). At every level a word constant is made where it is
+read, as an immediate where the operation has one (D1767), a frame part
+and a slot are read and written in place (D1769), integer conversions
+within a word take one comparison (D1770) and moves that change nothing
+go (D1774). Over the firmware set the executed instructions fall to 0.851
+of the base at armv7-m speed and 0.857 at size, 0.897 and 0.863 at
+armv6-m, and `.text` 7.5-9.0% and 5.6-6.1%. On the boards every `size`
+and `speed` configuration is faster, the RP2040's by 0.918 and 0.894 at
+the geometric mean, the RP2350's 0.847 and 0.844, and the STM32H753's
+binary-search 2,067 cycles at speed and 2,496 at size, merge-sort 6,440,
+all below R16.22's figures. `SR-1430`'s cause was found on that board:
+from uncached AXI SRAM the M7 times a home's load by its distance from
+the store before it, so `none`'s mandelbrot ran 15.6% slower with its
+float homes read straight from sp and 2.2% faster than the base with the
+two address instructions between them that D1771 keeps at `none`;
+`SR-1430` is taken. That spacing leaves binary-search and SipHash at
+`none` on the STM32H753 4.9% and 0.9% slower, recorded as SR-1508. `SR-869`'s
+`divisor` is 924 bytes and `frame_bits` 210, still the eight-byte pairs,
+and `SR-231`'s `failure.words` 1,132 bytes; both are kept with these
+figures, and `compiler/tests/measure/findings.md` lists what is left with
+what each measured. The RP2040, RP2350 (Arm) and STM32H753 records were
+made again on the rig. Found on the way and fixed: a leaf saving d8-d15
+had no restore, which no routine needed before. SR-1505-SR-1507 record
+the friction met: no command builds and counts one Cortex-M fixture,
+`measure.py size`'s unexplained `--environment`, and a silent fallback
+of the recorded-writes allocation. The candidate passed its
+[gate](https://github.com/701-dev/Landin/actions/runs/44925345364) and
+[boards](https://github.com/701-dev/Landin/actions/runs/44928110636),
+timing included.
 
 ### The continuous items
 
