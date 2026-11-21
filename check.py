@@ -10747,7 +10747,8 @@ PROCESS_SECTION_BUDGETS = {
     "Parallel sessions and shared resources": 14600,
     "Command reference": 8400,
     "The mechanical gate": 48000,
-    "Releasing a version": 11400,
+    #  R23.30 added the install script's check to the recipe's step 6.
+    "Releasing a version": 12600,
 }
 
 
