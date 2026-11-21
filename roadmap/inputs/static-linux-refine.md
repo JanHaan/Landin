@@ -25,8 +25,8 @@ nothing a static glibc build does not, beyond a licence point.
   `libdl.so.2`, `librt.so.1` and the loader.
 - **Tasking** is one protected object (`Landin.Serials`) and
   `Ada.Real_Time`'s clock, so `libgnarl` and its POSIX threads are linked.
-- **Exceptions** are GCC's table-driven unwinding, from `libgcc_eh.a` in a
-  static link.
+- **Exceptions** are GCC's table-driven unwinding, which links statically
+  with the rest; the test program's exception cases pass in the static build.
 - **The C adapters** under `compiler/ada/src/platform/` call POSIX:
   `posix_spawn` and its attributes, `pthread_sigmask`, `getrusage`,
   `getgroups`, and two glibc extensions, `mallinfo2` (the heap figure of
@@ -55,9 +55,9 @@ archives have.
 | what | Linux x86-64 | Linux arm64 |
 | --- | --- | --- |
 | `refine`, four split commands, test program linked statically | yes, `-static` and `-static-pie` | yes, `-static`, in 44 minutes emulated |
-| whole release test program, unfiltered | passed with `-static`: 1279 cases, 0 failed, 261437 checks, 49 minutes; with `-static-pie`: see below | under emulation, see below |
+| whole release test program, unfiltered | passed with `-static` and with `-static-pie`: 1279 cases, 0 failed, 261437 checks, 42 to 49 minutes each | not completed: under emulation 16 suites, 619 cases, passed, and all 290 positive fixtures were emitted, but runtime fixture execution had run 16 of 970 fixtures, all passing, when it was stopped; a native arm64 runner is where it belongs |
 | packaged by `scripts/package.sh`, run in Alpine 3.24's minirootfs (no `/lib64`, no glibc), PATH and HOME only | `refine version`, `refine run` of the first program, output identical; each split command's `--help` | the same, in the arm64 minirootfs |
-| `--link=libc` runtime fixtures linked against Alpine's musl and run | `clock-system-libc`, `environment-variables-libc`, `thread-creation-and-join-order-writes-libc`, `thread-storage-under-libc`, `posix-accounts-libc`: each its expected status 42, the one with an expected output identical | the same five, the same results |
+| `--link=libc` runtime fixtures linked against Alpine's musl and run | `clock-system-libc`, `environment-variables-libc`, `thread-creation-and-join-order-writes-libc`, `thread-storage-under-libc`, `posix-accounts-libc`: each its expected status 42, and the one with an expected output printed it | the same five, each status 42 |
 
 Alpine's `gcc` package is the linker driver there: `refine` finds it as
 `gcc`, the last name it tries, so `apk add gcc musl-dev` is all a user

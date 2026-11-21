@@ -2254,7 +2254,7 @@ render and the recipe. Q-65 is answered too: version tags only. Gate run
 
 ### R23.40 — Whether a static Linux `refine` can be built
 
-Status: active
+Status: complete
 Depends on: none
 
 A Linux `refine` linked statically, against musl, would run on Alpine,
@@ -2269,6 +2269,25 @@ Exit evidence: the finding in `roadmap/inputs/`, with a static `refine`
 that passed the release test program if one was built; R23.50 confirmed or
 rewritten to match, or, if it cannot be done at a cost worth paying, a
 question asking the maintainer to retire it.
+
+Done: the pinned GNAT links `refine`, its four split commands and the
+test program statically against glibc with no source change: the GNAT
+runtime was static already, nothing calls the name service, `dlopen` or
+`iconv`, and the build only adds `-largs -static` or `-static-pie`. On
+Linux x86-64 both builds passed the whole release test program, 1279
+cases each. The arm64 build, made under emulation, passed the suites it
+reached before runtime fixture execution, which emulation could not finish;
+R23.50's gate job runs it natively. Both architectures' archives ran in
+Alpine 3.24's minirootfs with no glibc, the first program through Alpine's
+`gcc` and five `--link=libc` fixtures against musl. The archive grows
+3.7 %. musl would need a GNAT 16.1 toolchain built and maintained by the
+project, since none is published, for no reach static glibc lacks; the
+finding is `roadmap/inputs/static-linux-refine.md`, R23.50 is rewritten to
+it, and Q-116 asks whether the static archive replaces the glibc ones,
+defaulting to yes. Met on the way and fixed: the flake's `aarch64-linux`
+shell and `refine` package did not build, GPRbuild's arm64 archive wanting
+`libgmp.so.10`, which the flake now supplies. Rows SR-1515 to SR-1517 hold
+what outlives the item.
 
 ### R23.50 — A static Linux archive
 
