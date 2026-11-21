@@ -1180,6 +1180,7 @@ class BuildArchives(unittest.TestCase):
             "darwin-release-clean": "compiler/ada/build/darwin-arm64/release",
             "linux-amd64-debug": "compiler/ada/build/linux-amd64/debug",
             "linux-arm64-debug": "compiler/ada/build/linux-arm64/debug",
+            "linux-arm64-release": "compiler/ada/build/linux-arm64/release",
             "darwin-arm64-debug": "compiler/ada/build/darwin-arm64/debug",
         }
 

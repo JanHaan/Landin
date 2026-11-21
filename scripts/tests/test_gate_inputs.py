@@ -494,8 +494,12 @@ class Decide(unittest.TestCase):
             made.append(path)
             if answers and len(made) >= answers:
                 return {"answered": len(made)}
-            raise urllib.error.HTTPError("https://example/" + path, code,
-                                         "Bad Gateway", None, None)
+            error = urllib.error.HTTPError("https://example/" + path, code,
+                                           "Bad Gateway", None, None)
+            #  Closed here, not left to the collector, whose ResourceWarning
+            #  scripts/script_tests.py counts as a failure.
+            self.addCleanup(error.close)
+            raise error
         return fetch, made
 
     def test_a_server_error_is_asked_again(self):
