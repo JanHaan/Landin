@@ -460,6 +460,32 @@ class Decide(unittest.TestCase):
                 stderr=subprocess.PIPE)
         self.assertEqual((result.returncode, result.stdout), (0, "reuse=false\n"))
 
+    def test_the_runs_commits_are_fetched_once_together(self):
+        #  One `git fetch` for every commit not yet here, and none again
+        #  when a decider keys one of them; GitHub is asked once per path.
+        calls = []
+
+        def run(command, **_):
+            calls.append(command)
+            return subprocess.CompletedProcess(command, 0)
+        with mock.patch.object(gate_inputs, "FETCHED", {"HEAD", "aa"}), \
+                mock.patch.object(gate_inputs.subprocess, "run", run), \
+                mock.patch.object(gate_inputs, "key", lambda rev, **_: "k" + rev):
+            gate_inputs.prefetch(["bb", "aa", "cc", "bb"])
+            self.assertEqual(calls, [["git", "fetch", "-q", "--no-tags", "--depth=1",
+                                      "origin", "bb", "cc"]])
+            self.assertEqual(gate_inputs.fetched_key("cc"), "kcc")
+            self.assertEqual(len(calls), 1)
+            gate_inputs.fetched_key("dd")
+            self.assertEqual(calls[-1][-1], "dd")
+        asked = []
+        with mock.patch.object(gate_inputs, "ANSWERS", {}), \
+                mock.patch.object(gate_inputs, "fetch_github",
+                                  lambda path: asked.append(path) or {"p": path}):
+            gate_inputs.github("a")
+            self.assertEqual(gate_inputs.github("a"), {"p": "a"})
+            self.assertEqual(asked, ["a"])
+
     def refusing(self, code, answers=0):
         """A fetch refusing with CODE, for ever or until ANSWERS requests."""
         made = []
@@ -468,8 +494,12 @@ class Decide(unittest.TestCase):
             made.append(path)
             if answers and len(made) >= answers:
                 return {"answered": len(made)}
-            raise urllib.error.HTTPError("https://example/" + path, code,
-                                         "Bad Gateway", None, None)
+            error = urllib.error.HTTPError("https://example/" + path, code,
+                                           "Bad Gateway", None, None)
+            #  Closed here, not left to the collector, whose ResourceWarning
+            #  scripts/script_tests.py counts as a failure.
+            self.addCleanup(error.close)
+            raise error
         return fetch, made
 
     def test_a_server_error_is_asked_again(self):

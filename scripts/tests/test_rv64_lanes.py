@@ -392,7 +392,7 @@ class RV64Controls(unittest.TestCase):
         for job in ('  rv64-emit:\n', '  rv64:\n'):
             self.assertIn('false', conjuncts(job), job)
         aggregate = workflow.split('  gate:\n', 1)[1]
-        self.assertIn('arm64-release, freebsd, rv64-qemu,', aggregate)
+        self.assertIn('arm64-release-checks, freebsd, rv64-qemu,', aggregate)
         self.assertNotIn('rv64-emit', aggregate)
         inputs = workflow.split('  inputs:\n', 1)[1].split('  documents:\n', 1)[0]
         self.assertIn('rv64-qemu-1 rv64-qemu-2', inputs)

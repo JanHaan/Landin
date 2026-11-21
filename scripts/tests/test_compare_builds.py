@@ -92,11 +92,14 @@ class CompareBuilds(unittest.TestCase):
         self.addCleanup(lambda: __import__("shutil").rmtree(self.root))
 
     def build(self, name, refine=None, tests=None, manifest=MANIFEST,
-              linked="linked refine 00\n"):
+              linked="linked refine 00\n", split=None):
         directory = self.root / name
         (directory / "bin").mkdir(parents=True)
         (directory / "bin/refine").write_bytes(refine or elf())
         (directory / "bin/landin_tests").write_bytes(tests or elf(data=b"t"))
+        (directory / "libexec/landin").mkdir(parents=True)
+        for command, contents in (split or {"refine-site": elf(data=b"s")}).items():
+            (directory / "libexec/landin" / command).write_bytes(contents)
         for stamp in compare_builds.MANIFESTS:
             (directory / stamp).write_text(manifest + linked)
         return directory
@@ -194,6 +197,22 @@ class CompareBuilds(unittest.TestCase):
         self.assertEqual(status, 1)
         self.assertIn("cannot read the sections: neither an ELF nor a 64-bit Mach-O file", out)
 
+    def test_every_split_command_is_compared_unnamed(self):
+        status, out, _ = self.run_compare(self.build("clean"), self.build("cached"))
+        self.assertEqual(status, 0, out)
+        self.assertIn("SAME libexec/landin/refine-site", out)
+        cached = self.build("other", split={"refine-site": elf(data=b"z")})
+        status, out, _ = self.run_compare(self.build("clean2"), cached)
+        self.assertEqual(status, 1)
+        self.assertIn("DIFFER libexec/landin/refine-site\n", out)
+
+    def test_a_split_command_one_build_alone_has_differs(self):
+        cached = self.build("cached", split={"refine-site": elf(data=b"s"),
+                                             "refine-svd": elf(data=b"v")})
+        status, out, _ = self.run_compare(self.build("clean"), cached)
+        self.assertEqual(status, 1)
+        self.assertIn("DIFFER libexec/landin/refine-svd: only the cached build has it", out)
+
     def test_a_missing_executable_or_manifest_is_an_error(self):
         clean, cached = self.build("clean"), self.build("cached")
         (cached / "bin/landin_tests").unlink()
@@ -236,14 +255,16 @@ class Workflow(unittest.TestCase):
     def setUp(self):
         self.jobs = jobs(GATE.read_text())
 
-    def test_the_jobs_about_the_executable_take_the_clean_build(self):
+    def test_only_the_comparison_takes_the_clean_build(self):
+        #  Every lane takes the cached build, which the comparison holds
+        #  to the clean one file by file, libexec/ included; the release
+        #  lanes no longer wait for the clean build's end.
         clean = {name for name, text in self.jobs.items()
                  if "linux-release-clean" in takes(text)}
-        self.assertEqual(clean, {"release", "outside-user-stock",
-                                 "linux-release-compare"})
+        self.assertEqual(clean, {"linux-release-compare"})
         for name in ("release", "outside-user-stock"):
-            self.assertNotIn("linux-release", takes(self.jobs[name]), name)
-            self.assertIn("needs: [inputs, linux-release-clean]",
+            self.assertEqual(takes(self.jobs[name]), {"linux-release"}, name)
+            self.assertIn("needs: [inputs, linux-release-build]\n",
                           self.jobs[name], name)
 
     def test_no_shell_name_runs_into_an_expression(self):

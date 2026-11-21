@@ -12,9 +12,11 @@ Each directory is an unpacked build archive, holding `bin/NAME` and the
 manifests `source-manifest.txt` and `tests-manifest.txt`.  The builds are
 the same when each `bin/NAME` is the same file, byte for byte, in both, and
 the manifests record the same inputs: the same sources, project files,
-switches and toolchain.  Nothing is stripped or ignored, the debugging
-information included, so a lane that ran the cached build ran the very file
-the clean build made.
+switches and toolchain.  Every file under each build's `libexec/`, the
+split commands `refine` runs, is compared the same way without being
+named, and a file one build alone has is a difference.  Nothing is
+stripped or ignored, the debugging information included, so a lane that
+ran the cached build ran the very file the clean build made.
 
 When an executable differs the report says how, to find the cause: the
 sizes and digests, the sections whose contents differ or that one file
@@ -264,6 +266,14 @@ def requested(path):
             if not row.startswith("linked ")]
 
 
+def published(directory):
+    """Every file under DIRECTORY's libexec/, the split commands the
+    `refine` dispatcher runs (D1384), as paths relative to DIRECTORY."""
+    root = directory / "libexec"
+    return {path.relative_to(directory).as_posix()
+            for path in root.rglob("*") if path.is_file()} if root.is_dir() else set()
+
+
 def compare(clean_dir, cached_dir, names, out=None):
     """Compare two unpacked builds; the exit status."""
     out = out or sys.stdout
@@ -290,9 +300,15 @@ def compare(clean_dir, cached_dir, names, out=None):
                 out.write("  %s: %s\n" % (side, row))
             if len(rows) > 12:
                 out.write("  and %d more\n" % (len(rows) - 12))
-    for name in names:
-        clean_path = clean_dir / "bin" / name
-        cached_path = cached_dir / "bin" / name
+    clean_split, cached_split = published(clean_dir), published(cached_dir)
+    for relative in sorted(clean_split ^ cached_split):
+        differ += 1
+        out.write("DIFFER %s: only the %s build has it\n"
+                  % (relative, "clean" if relative in clean_split else "cached"))
+    for name, relative in [*((n, "bin/" + n) for n in names),
+                           *((r, r) for r in sorted(clean_split & cached_split))]:
+        clean_path = clean_dir / relative
+        cached_path = cached_dir / relative
         clean, cached = clean_path.read_bytes(), cached_path.read_bytes()
         if clean == cached:
             out.write("SAME %s: %d bytes, sha256 %s\n"
