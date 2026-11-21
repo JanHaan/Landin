@@ -2104,17 +2104,7 @@
       "mode": "execute"
     },
     "runtime/core-text-utf8-split": {
-      "mode": "execute",
-      "lanes": {
-        "esp32c3": {
-          "mode": "limit",
-          "reason": "D698: since D1567 the Cortex-M0 image fits the reference's 32 KiB at every profile, and RV32's at size and speed; at none/off RV32's needs FLASH 36964 of this lane's 32 KiB, over by 4196."
-        },
-        "sifive-e": {
-          "mode": "limit",
-          "reason": "D698: since D1567 the Cortex-M0 image fits the reference's 32 KiB at every profile, and RV32's at size and speed; at none/off RV32's needs FLASH 36708 of this lane's 32 KiB, over by 3940."
-        }
-      }
+      "mode": "execute"
     },
     "runtime/core-tree-count-overflow": {
       "codes": [
@@ -3968,17 +3958,7 @@
       "mode": "execute"
     },
     "runtime/r420-buffer-real-exhaustion": {
-      "mode": "execute",
-      "lanes": {
-        "esp32c3": {
-          "mode": "limit",
-          "reason": "D698: since D1567 the Cortex-M0 image fits the reference's 32 KiB at every profile, and RV32's at size and speed; at none/off RV32's needs FLASH 34896 of this lane's 32 KiB, over by 2128."
-        },
-        "sifive-e": {
-          "mode": "limit",
-          "reason": "D698: since D1567 the Cortex-M0 image fits the reference's 32 KiB at every profile, and RV32's at size and speed; at none/off RV32's needs FLASH 34640 of this lane's 32 KiB, over by 1872."
-        }
-      }
+      "mode": "execute"
     },
     "runtime/r420-failing-providers": {
       "codes": [
@@ -4940,17 +4920,7 @@
       "mode": "execute"
     },
     "runtime/signals-fake-firmware": {
-      "mode": "execute",
-      "lanes": {
-        "esp32c3": {
-          "mode": "limit",
-          "reason": "D698: at none/off and none/all its rv32imc image overflows the esp32c3 lane's 32 KiB of IRAM by 440 and 448 bytes (FLASH 33208 and 33216, .text 32616 and 32624), measured after D1111's borrow test put an instruction in every routine's stack check and D1124's round_yield, which hands an ending fibre's turn on, grew by 148; Thumb's text fits the reference's 32 KiB, and every optimized profile runs here."
-        },
-        "sifive-e": {
-          "mode": "limit",
-          "reason": "D698: at none/off and none/all its rv32imac image overflows the sifive-e lane's 32 KiB of flash by 184 and 192 bytes (FLASH 32952 and 32960, .text 32616 and 32624), measured after D1111's borrow test put an instruction in every routine's stack check and D1124's round_yield, which hands an ending fibre's turn on, grew by 148; Thumb's text fits the reference's 32 KiB, and every optimized profile runs here."
-        }
-      }
+      "mode": "execute"
     },
     "runtime/signals-fake-stop-server": {
       "mode": "execute",

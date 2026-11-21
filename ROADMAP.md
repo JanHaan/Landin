@@ -382,7 +382,7 @@ Findings fixed on the way: the RV64 GDB session's source still assumed a
 dead argument stays readable, and is now the LLDB lanes' source, whose
 argument is read after the call; `runtime/directory-memory` now fits the
 RV32 lanes' 32 KiB and at `size` overruns their 4 KiB stack, recorded as a
-D698 lane limit. SR-1363 files what remains largest, selection's flag
+D698 lane limit. `SR-1363` files what remains largest, selection's flag
 emulation, 22% of RV64's instructions.
 
 ### R16.22 — Cortex-M register allocation
@@ -470,7 +470,7 @@ liveness, joins their definitions into webs and places them by linear scan
 in a2-a6, which a call preserves, and a10-a15, the rest in their homes.
 Before placing it folds a word set once to a number into the `mul`, `add`,
 `divu` or `remu` that reads it, so a division or remainder by a power of
-two is a shift or a mask, which takes the Xtensa half of SR-1429, now
+two is a shift or a mask, which takes the Xtensa half of `SR-1429`, now
 restated for RISC-V alone; it drops what nothing reads and makes a flag
 and its zero test one branch; and a comparison only its branch reads is
 that branch (D1628). A routine of more than 150,000 lines, or whose text
@@ -537,7 +537,7 @@ SR-1422 the nine registers x86-64 offers, SR-1423 the assembly block's
 rule, SR-1424 float constants made in each block, SR-1425 a loop's two
 jumps, SR-1426 the order D339 copies in, and R551-12 keeps the bounds
 check a loop's end does not name and the calls of `core/atomic`'s cells;
-SR-1427, SR-1428 and SR-1429 record what the work met, and SR-1430 the
+SR-1427, SR-1428 and `SR-1429` record what the work met, and SR-1430 the
 STM32H753's binary-search, 9.7% slower at size where the RP2040 and
 RP2350 run every configuration faster. Findings fixed on
 the way: the public exposure above, and a dead shift kept as if it could
@@ -549,14 +549,14 @@ included.
 
 ### R16.25 — RISC-V's remaining costs
 
-Status: planned
+Status: complete
 Depends on: R16.10
 
 After R16.21's allocation (D1503) the largest RISC-V cost is selection's
-emulation of Arm's condition flags, SR-1363: copies into x20 and x21 before
+emulation of Arm's condition flags, `SR-1363`: copies into x20 and x21 before
 every comparison and a carry and overflow computed for every addition, 22%
 of RV64's instructions over four hosted workloads, and five registers kept
-from the allocator. This takes on SR-1363 and SR-637, RV32's frames
+from the allocator. This takes on `SR-1363` and `SR-637`, RV32's frames
 reserving a home for every scratch register a routine might save, which
 R16.21 left as it was.
 
@@ -564,6 +564,33 @@ Exit evidence: RV64's instructions and both targets' sizes measured lower
 than their R16.21 baselines, RV32's frames no larger than their saves need,
 with unchanged behavior, ABI and debugger evidence and the board records
 made again.
+
+Done: D1687 copies no comparison: the branches after a check read its
+operands where they are, a comparison's result is `slt`, `sltu`, `seqz`
+or one float comparison, and a carry or overflow is computed only for a
+checked sum, into x30, so x20, x21 and x23-x25 are offered to the
+allocator. D1688 lays a routine's frame out again for the callee-saved
+registers its text names, at both XLENs, which takes `SR-637` and stops
+RV64 saving ten registers a routine. `SR-1429`, whose activation was this
+item's start, is D1689: an unsigned division by a constant power of two
+is a shift or a mask, and a remainder `rem` or `remu`. Against the base,
+RV64's `.text` falls 20.5% at `none`, 26.3% at `size` and 24.3% at
+`speed`, RV32's 5.9-6.2%, 9.3-10.1% and 9.9-10.8%, and RV64 executes 0.73
+of its instructions at `speed`, 0.68 at `size` (fasta 0.56,
+fannkuch-redux 0.59, mandelbrot 0.71, binary-trees 0.75 at `speed`); the
+lines naming the old flag registers fall from 22% to 1.1-1.4%, now held
+values. On the ESP32-C3, ESP32-C5 and Pico 2's Hazard3 all 162 timed
+configurations are faster, the integer workloads by 25-34% at
+speed-auto, SipHash by 15% and mandelbrot by 2%, and their six records
+were made again. The RV64 fixtures under QEMU, the RV32 lanes and the
+stack report pass; three corpus programs now fit the RV32 lanes at
+`none`, and their D698 limits are removed. Found on the way and fixed: a
+first draft computed a checked sum's carry into the register the sum was
+held in, which `Holds` cannot see, since a write after an operation's
+own result at its position looks like the result's; the measurement's
+oracles caught it, and selection's temporaries are now never offered.
+Filed: SR-1468, an `if`'s comparison computed into a register before its
+branch; SR-1465-SR-1467 record the friction met.
 
 ### R16.26 — The library's costs
 

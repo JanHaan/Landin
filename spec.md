@@ -24666,7 +24666,8 @@ Cortex-M0's and a corpus that fits 32 KiB in Thumb did not.
 **Chosen:** at XLEN 32 a routine saves and restores its callee-saved
 registers at the frame's stack pointer, where each is one compressible
 instruction, and only those its text names, by number or, in an assembly
-block, by ABI alias; their homes stay in the frame. Where every region of
+block, by ABI alias; their homes stay in the frame (D1688 lays the frame
+out without them). Where every region of
 the profile is at most 1 MiB, a jump is `j` and a branch is written as
 itself, which GNU as lengthens with a JAL past 4 KiB, since a routine is
 one input section within one region. A word loaded from the home the line
@@ -26286,7 +26287,8 @@ The allocator then offers x10-x17, which cost no save, and x9, x18, x19
 and x22, which every routine saves already (D678 prunes an unnamed one at
 XLEN 32, where they are offered only where enough scalar traffic pays for
 the save), to a location only where that record writes none of them over
-its interval; x20, x21, x23-x27 and the temporaries are never offered. A parameter
+its interval; x20, x21, x23-x27 and the temporaries are never offered (D1687
+now offers x20, x21 and x23-x25). A parameter
 takes only the argument register it arrives in, since the entry stores
 each parameter while later ones still wait in theirs. The routine is
 emitted again with that plan and its writes recorded again; if any meets a
@@ -26321,6 +26323,109 @@ corrupt a held value silently; and homes, the measured cost above.
 
 **Pinned by** `backend/RISC-V keeps values in registers`, the RV64 GDB
 sessions, the RV32 lanes' corpus and `compiler/tests/measure/baselines/`.
+
+### D1687 — RISC-V branches on a comparison's operands where they are
+
+**The tour said** nothing. RISC-V has no condition flags, and selection
+emulated Arm's: every comparison copied its operands into x20 and x21 for
+the branch that followed, a float comparison set x20, x21 and x23-x25 from
+seven instructions, and every addition or subtraction, checked or not,
+computed its carry and overflow into x23 and x24 and left its result in
+x20 against zero in x21. After D1503 these were 22% of RV64's
+instructions over four hosted workloads, and they kept five registers
+from the allocator.
+
+**Chosen:** a comparison records its operands where they are and emits
+nothing; the branch that follows reads them there (`blt a0, a1`), a
+literal other than zero is loaded into x29, and zero is `zero`. A
+comparison's result is computed directly, with `slt`, `sltu`, `seqz` or
+`snez` and at most an `xori`, and a float comparison's with the one
+`feq`, `flt` or `fle` its condition needs, operands swapped for greater;
+only a carry or overflow test still branches. An addition or subtraction
+records its result against zero, and computes a carry, the unsigned check,
+or an overflow, the signed one, only where a check reads it, into x30:
+a borrow is `sltu` of the operands before the difference, a carry `sltu`
+of the sum below the operand it does not overwrite, and an operand the
+result overwrites is first copied to x7 or x28. An addition by a literal
+that fits twelve bits is `addi`. Every temporary selection writes after an
+operation's own result, at its position, is one no location is offered,
+since the recorded writes (D1503) cannot tell it from the result's own
+write. A line that writes a recorded operand, calls, or is a label marks
+the comparison stale, and a branch on a stale one is a compiler defect
+rather than a wrong program. x20, x21 and x23-x25 are offered to the
+allocator after x22, x20-x21 and x24-x25 as RV32 pairs.
+
+Over the seven hosted workloads, with D1688 and D1689, RV64's
+instructions executed under QEMU fall to 0.73 of what they were at
+`speed`, 0.68 at `size` and 0.73 at `none` (fasta 0.56, fannkuch-redux
+0.59, mandelbrot 0.71, binary-trees 0.75), and the four workloads' lines
+naming x20, x21 or x23-x25 as a destination fall from 22% to 1.1-1.4%,
+now held values.
+
+**The alternatives:** keeping the emulation and only offering the
+registers between comparisons, which leaves the copies; computing every
+condition into a register first, as the float form did, one instruction
+more per branch; and fusing the comparison into the branch in the IR,
+which would ask the same of every backend for RISC-V's want alone.
+
+**Pinned by** `backend/RISC-V compares without copies`, the
+RV64 fixtures under QEMU, the RV32 lanes' corpus and
+`compiler/tests/measure/baselines/`.
+
+### D1688 — A RISC-V routine's frame holds only the saves its text names
+
+**The tour said** nothing. RV64 saved x9 and x18-x26 in every routine
+and RV32 x9 and x18-x27, through a frame laid out before the text that
+decides what is named; D678 pruned RV32's unnamed saves after the fact
+but left their homes in the frame, up to 44 bytes more than the saves
+needed.
+
+**Chosen:** a routine that is not naked and holds no assembly block is
+emitted, the callee-saved registers its lines name apart from their
+saves and restores are collected as the lines are written (x26 after its
+far jumps are settled), and when that is fewer than its plan saves, it is
+emitted again with only those saves and a frame laid out for them. The
+second emission is kept when it names no register outside its saves and,
+for a routine holding registers, its writes still hold (D1503); otherwise
+the first is written again. At `none` a routine that holds nothing and
+calls nothing saves nothing.
+
+With D1687 and D1689, RV64's `.text` falls a further 20.5% at `none`,
+26.3% at `size` and 24.3% at `speed`, and RV32's 5.9-6.2%, 9.3-10.1% and
+9.9-10.8%; RV64's frame for a leaf routine falls from 112 bytes to 32,
+arm64's. Three corpus programs that overran the RV32 lanes' 32 KiB at
+`none` now fit, and their D698 limits are removed.
+
+**The alternatives:** predicting the saves before emission, which would
+describe selection's every register use beside it, the cost D1503 avoided;
+and laying RV32's frame out again only, leaving RV64 to save ten
+registers a routine.
+
+**Pinned by** `backend/RV64 jumps are near within a routine`, `stack
+report/a closed graph on every target`, the RV64 GDB sessions and
+`compiler/tests/measure/baselines/`.
+
+### D1689 — RISC-V divides by a constant power of two with a shift or a mask
+
+**The tour said** nothing. RISC-V divided an unsigned value by a constant
+2 ** k with `divu`, several cycles on every core the rig holds, where
+Cortex-M shifts (D1626) and Xtensa shifts and masks, and formed every
+remainder from a quotient, a `mul` and a `sub`.
+
+**Chosen:** an unsigned division of a value no wider than XLEN by a
+constant 2 ** k is `srli` by k, and its remainder `andi` with 2 ** k - 1
+where that fits twelve bits, else `slli` and `srli` by XLEN - k, at both
+XLENs and every objective; neither can trap. Any other remainder is `rem`
+or `remu`, which truncates as the quotient does and is zero for the one
+signed quotient that overflows, so its check stays the quotient's alone.
+
+**The alternatives:** a target-neutral rewrite in simplification, which
+D1626 declined for the backends that divide in hardware; and a multiply
+by a reciprocal for every constant divisor, a larger change left to a
+measured need.
+
+**Pinned by** the RV32 lanes' corpus, the RV64 fixtures under QEMU and
+`compiler/tests/measure/baselines/`.
 
 ### D1563 — Cortex-M reaches its homes from sp, and a value's home is a word
 
