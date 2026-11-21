@@ -15,5 +15,6 @@ project Refine is
    package Compiler renames Landin_Common.Compiler;
    package Builder  renames Landin_Common.Builder;
    package Binder   renames Landin_Common.Binder;
+   package Linker   renames Landin_Common.Linker;
 
 end Refine;

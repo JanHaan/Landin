@@ -27,6 +27,16 @@
 #  refine-NAME.debug or refine-NAME.dSYM.  The 0.2.8 compiler was 100 MB
 #  with it and 27.6 MB without.  The BINARY given is never changed.
 #
+#  A Linux ELF BINARY that requests no program interpreter has glibc linked
+#  into it, as a release build does (compiler/ada/landin_common.gpr), and
+#  glibc is under the LGPL, version 2.1 or later.  Such an archive also
+#  holds LICENSE-GLIBC, the copyright file of the Debian package whose
+#  libc.a was linked, and NOTICE-GLIBC, which names that glibc, where its
+#  source is and how to relink refine against a modified one.  Both are
+#  read from the libc6-dev package of the host that packages, which must be
+#  the host that built BINARY, a Debian or Ubuntu one as the release
+#  workflow's runners are; on any other host such a BINARY is refused.
+#
 #  The archive is whatever BINARY is.  One that requests a program
 #  interpreter outside the system's own directories, as a compiler built in
 #  `nix develop` does, is packaged with a warning that names the path: the
@@ -70,6 +80,33 @@ for name in $splits; do
     }
 done
 
+#  The debug information is split by the host's objcopy, and the archive
+#  is named for the host, so an ELF executable of another architecture is
+#  refused here rather than failing inside objcopy.  A Mach-O one is
+#  packaged on the Darwin host it was built for.
+if [ "$(uname -s)" = Linux ]; then
+    built_for=$(python3 - "$binary" <<'EOF'
+import struct, sys
+data = open(sys.argv[1], "rb").read(20)
+machines = {62: "x86_64", 183: "aarch64", 243: "riscv64"}
+if data[:4] == b"\x7fELF" and len(data) == 20:
+    order = "<" if data[5] == 1 else ">"
+    number, = struct.unpack_from(order + "H", data, 18)
+    print(machines.get(number, "ELF machine %d" % number))
+EOF
+)
+    host_machine=$(uname -m)
+    if [ -n "$built_for" ] && [ "$built_for" != "$host_machine" ]; then
+        echo "package: $binary is built for $built_for, and this host is" \
+            "$host_machine; package.sh packages the host's own executables," \
+            "with the host's objcopy.  Package it on that architecture's host, or" \
+            "in that architecture's development shell, such as nix develop" \
+            "'.#devShells.$built_for-linux.default' under emulation." >&2
+        exit 1
+    fi
+fi
+
+static=no
 if command -v python3 > /dev/null; then
     inspected=0
     loader=$(python3 "$root/scripts/program_interpreter.py" "$binary") \
@@ -87,10 +124,39 @@ package: source" builds it and the release workflow does.
 EOF
     elif [ "$inspected" != 0 ]; then
         exit "$inspected"
+    elif [ -z "$loader" ] && [ -n "${built_for:-}" ]; then
+        static=yes
     fi
 else
     echo "package: python3 is not on PATH, so the program interpreter" \
          "$binary requests was not inspected" >&2
+fi
+
+#  The glibc a static BINARY holds: the libc6-dev package that supplied
+#  libc.a, its source package and the distribution it came from.
+if [ "$static" = yes ]; then
+    glibc_refused() {
+        echo "package: $binary has glibc linked into it, and its archive" \
+            "must carry glibc's licence and name the glibc it holds;" \
+            "$1.  Package it on the Debian or Ubuntu host that built it," \
+            "as the release workflow does." >&2
+        exit 1
+    }
+    command -v dpkg-query > /dev/null \
+        || glibc_refused "this host has no dpkg-query to say which glibc that is"
+    glibc_package=$(dpkg-query -W \
+        -f='${Package} ${Version} ${source:Package} ${source:Version}' \
+        libc6-dev 2>/dev/null) \
+        || glibc_refused "this host has no libc6-dev package, which supplies libc.a"
+    glibc_copyright=$(dpkg-query -L libc6-dev 2>/dev/null \
+        | grep '/copyright$' | head -1) || true
+    [ -n "$glibc_copyright" ] && [ -f "$glibc_copyright" ] \
+        || glibc_refused "libc6-dev lists no copyright file on this host"
+    glibc_distribution=unknown
+    if [ -f /etc/os-release ]; then
+        glibc_distribution=$(. /etc/os-release \
+            && printf '%s' "${PRETTY_NAME:-${NAME:-unknown}}")
+    fi
 fi
 
 work=$(mktemp -d)
@@ -150,6 +216,32 @@ if [ ! -f "$root/citations.txt" ]; then
 fi
 cp "$root/citations.txt" "$stage/lib/landin/citations.txt"
 cp "$root/LICENSE" "$root/LICENSE-MIT" "$root/LICENSE-APACHE" "$stage/"
+if [ "$static" = yes ]; then
+    read -r package version source source_version <<EOF
+$glibc_package
+EOF
+    cp "$glibc_copyright" "$stage/LICENSE-GLIBC"
+    cat > "$stage/NOTICE-GLIBC" <<EOF
+The executables in this archive, bin/refine and libexec/landin/refine-*,
+are linked statically with the GNU C Library, glibc: the libc.a of the
+package $package $version of $glibc_distribution, built from its
+source package $source $source_version.
+
+glibc is free software, licensed under the GNU Lesser General Public
+License, version 2.1 or later.  LICENSE-GLIBC is that package's copyright
+file, which holds the licence and the copyright notices of glibc's parts.
+
+glibc's source is the source package $source $source_version, in the
+archive of $glibc_distribution; on that system,
+apt-get source $source=$source_version fetches it.
+
+To relink refine with a modified glibc: refine's complete source is
+public, under the MIT or Apache-2.0 licence, at
+https://github.com/701-dev/Landin, a release at its tag.  Build it as
+its README's "From source" says, with LANDIN_BUILD_MODE=release and the
+modified libc.a where the C compiler finds its own.
+EOF
+fi
 
 if [ -n "$debug_asset" ]; then
     debug=$work/debug

@@ -879,6 +879,18 @@ python3 scripts/container_image.py check contributor landin-contributor
 
 # The release workflow with nothing to publish, on a pushed ref.
 gh workflow run release.yml --repo 701-dev/Landin --ref BRANCH -f rehearse=true
+
+# A Linux release build is static, glibc linked into each executable
+# (compiler/ada/TOOLCHAIN.md), and its tests run as any build's do.  Packaged
+# on Debian or Ubuntu, whose libc6-dev names the glibc for the archive's
+# notice, it runs where no glibc is: alone in an empty root and on Alpine,
+# with install.sh and the --link=libc fixtures (scripts/static_check.py;
+# bubblewrap, and the network for Alpine's packages).
+LANDIN_BUILD_MODE=release ./scripts/test.sh
+./scripts/package.sh compiler/ada/build/linux-amd64/release/bin/refine landin.tar.gz
+(. environments/pins.sh && landin_fetch_alpine /tmp/alpine x86_64-linux)
+python3 scripts/static_check.py --archive landin.tar.gz \
+  --alpine /tmp/alpine/alpine-3.24.4 --work /tmp/static
 ```
 
 ## The mechanical gate

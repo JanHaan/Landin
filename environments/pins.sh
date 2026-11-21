@@ -58,6 +58,14 @@ LANDIN_SHELLCHECK_SHA256_X86_64_LINUX=8c3be12b05d5c177a04c29e3c78ce89ac86f159568
 LANDIN_SHELLCHECK_SHA256_AARCH64_LINUX=12b331c1d2db6b9eb13cfca64306b1b157a86eb69db83023e261eaa7e7c14588
 LANDIN_SHELLCHECK_SHA256_AARCH64_DARWIN=56affdd8de5527894dca6dc3d7e0a99a873b0f004d7aabc30ae407d3f48b0a79
 
+#  The musl system the gate's static-archive job runs the packaged Linux
+#  compiler on (scripts/static_check.py): Alpine's minirootfs for each
+#  architecture, checked against this sha256 before it is unpacked.
+LANDIN_ALPINE_VERSION=3.24.4
+LANDIN_ALPINE_RELEASES=https://dl-cdn.alpinelinux.org/alpine/v3.24/releases
+LANDIN_ALPINE_SHA256_X86_64_LINUX=cdaa38cb8de3537967ee5b6c9b6cd00cc962da2b018e6eea48696bb274923012
+LANDIN_ALPINE_SHA256_AARCH64_LINUX=4b14c18f7e90a063b61462ea1462a5732c154bf6adad594974fe6487cd98a8de
+
 #  The cross lane: QEMU's user emulation and the cross drivers that link
 #  another Linux target's executables.  The nix shell takes both from
 #  flake.lock's nixpkgs and refuses to build when that revision's versions
@@ -189,4 +197,27 @@ landin_fetch() {
     tar xzf "$Into/$Archive" -C "$Into/$Directory" --strip-components=1 \
         || return 1
     rm -f "$Into/$Archive"
+}
+
+#  Unpacks the pinned Alpine minirootfs for one Linux platform into
+#  $1/alpine-VERSION, verified as the toolchain is.
+landin_fetch_alpine() {
+    Into="$1"
+    Platform="$2"        # x86_64-linux or aarch64-linux
+
+    case "$Platform" in
+        x86_64-linux) Alpine_Sha="$LANDIN_ALPINE_SHA256_X86_64_LINUX" ;;
+        aarch64-linux) Alpine_Sha="$LANDIN_ALPINE_SHA256_AARCH64_LINUX" ;;
+        *)
+            echo "landin: no pinned Alpine for platform '$Platform'" >&2
+            return 2
+            ;;
+    esac
+    Alpine_Machine="${Platform%-linux}"
+    mkdir -p "$Into"
+    landin_fetch "$Into" \
+        "alpine-minirootfs-$LANDIN_ALPINE_VERSION-$Alpine_Machine.tar.gz" \
+        "$LANDIN_ALPINE_RELEASES/$Alpine_Machine" \
+        "$Alpine_Sha" \
+        "alpine-$LANDIN_ALPINE_VERSION"
 }

@@ -222,6 +222,16 @@ its SHA-256.
 | Linux arm64 | `shellcheck-v0.11.0.linux.aarch64.tar.xz` | `12b331c1d2db6b9eb13cfca64306b1b157a86eb69db83023e261eaa7e7c14588` |
 | macOS arm64 | `shellcheck-v0.11.0.darwin.aarch64.tar.xz` | `56affdd8de5527894dca6dc3d7e0a99a873b0f004d7aabc30ae407d3f48b0a79` |
 
+The release jobs run the packaged Linux compiler on Alpine `3.24.4`'s
+minirootfs, a musl system with no glibc (`scripts/static_check.py`). The
+checksums are the ones Alpine's `latest-releases.yaml` for v3.24 publishes
+beside each archive; `landin_fetch_alpine` checks them before unpacking.
+
+| platform | archive | sha256 |
+|---|---|---|
+| Linux x86-64 | `alpine-minirootfs-3.24.4-x86_64.tar.gz` | `cdaa38cb8de3537967ee5b6c9b6cd00cc962da2b018e6eea48696bb274923012` |
+| Linux arm64 | `alpine-minirootfs-3.24.4-aarch64.tar.gz` | `4b14c18f7e90a063b61462ea1462a5732c154bf6adad594974fe6487cd98a8de` |
+
 ## Warning and style policy
 
 Set once, in `compiler/ada/landin_common.gpr`, and inherited by every project:
@@ -241,6 +251,22 @@ and validity checks are on while the compiler is being written. Release mode
 uses `-O2 -g -gnatn` and keeps debug information; the release workflow's
 `scripts/package.sh --debug` takes it out of the published compiler and
 publishes it beside the archive (D531).
+
+A Linux release build links its executables statically, glibc and the GNAT
+runtime inside them, as position-independent executables
+(`-static-pie`), so the archive runs on any Linux, a musl or NixOS one
+among them. `scripts/env.sh` chooses the link as `LANDIN_LINK`, static
+for a Linux release and dynamic for a debug build and on Darwin, and
+`landin_common.gpr`'s `Linker` package applies it; a bare `gprbuild`, as
+the flake's, links dynamically. Two rules come with it. The link adds
+`-Wl,--fatal-warnings`, so the warning glibc gives for a call that needs
+its own shared libraries at run time, as the name service and `dlopen`
+do, refuses the build rather than shipping a compiler that breaks on a
+host with another C library. And `scripts/build.sh` adds GPRbuild's `-R`:
+glibc's start of a static position-independent executable asserts that
+it names no run path, and kills it before `main` when it does. The link
+needs glibc's `libc.a`: Debian's and Ubuntu's `libc6-dev` hold it,
+Fedora's is `glibc-static`, and the flake's shell supplies its own.
 
 Every unit of both projects is also compiled under `compiler/ada/landin.adc`,
 in both modes, as the projects' local configuration pragmas. It holds

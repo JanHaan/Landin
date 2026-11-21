@@ -108,6 +108,18 @@ for Argument do
     esac
 done
 
+#  A static link has no run path, GPRbuild's -R: glibc's start of a static
+#  position-independent executable asserts that it names none, and kills
+#  the program before main when it does.  The manifest records it with the
+#  caller's switches, so a tree linked with a run path is linked again.
+if [ "${LANDIN_LINK:-dynamic}" = static ]; then
+    Asked=no
+    for Argument do
+        if [ "$Argument" = -R ]; then Asked=yes; fi
+    done
+    if [ "$Asked" = no ]; then set -- "$@" -R; fi
+fi
+
 #  The switches that can change what GPRbuild produces, for the manifest:
 #  all of the caller's but those that only say how much to print and how
 #  many jobs to run.  The exec directory build.sh adds changes only where

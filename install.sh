@@ -51,8 +51,8 @@ usage() {
 
 other_routes() {
     cat >&2 <<EOF
-install.sh: the release archives serve Linux x86-64 and arm64 with glibc,
-install.sh: and macOS on Apple Silicon.  Elsewhere, install Landin
+install.sh: the release archives serve Linux on x86-64 and arm64, and
+install.sh: macOS on Apple Silicon.  Elsewhere, install Landin
 install.sh: with nix:     nix profile install github:$repository
 install.sh: or build it from source, as the README's "From source" says:
 install.sh:   https://github.com/$repository#from-source
@@ -63,6 +63,7 @@ version=
 dir=
 platform=
 list=no
+native=no
 while [ "$#" -gt 0 ]; do
     case $1 in
         --version) [ "$#" -ge 2 ] || refuse "--version needs a version, such as 0.2.11"
@@ -100,9 +101,8 @@ host_platform() {
         aarch64|arm64) machine=aarch64 ;;
     esac
     case "$system/$machine" in
-        Linux/x86_64) loader=/lib64/ld-linux-x86-64.so.2 ;;
-        Linux/aarch64) loader=/lib/ld-linux-aarch64.so.1 ;;
-        Darwin/aarch64) echo aarch64-darwin; return 0 ;;
+        Linux/x86_64|Linux/aarch64) echo "$machine-linux" ;;
+        Darwin/aarch64) echo aarch64-darwin ;;
         Darwin/x86_64)
             say "no release archive serves macOS on an Intel processor" >&2
             other_routes; exit 1 ;;
@@ -110,19 +110,6 @@ host_platform() {
             say "no release archive serves $system on $reported" >&2
             other_routes; exit 1 ;;
     esac
-    #  A Linux archive's refine is linked against glibc and asks for the
-    #  system's standard loader.  NixOS provides a stub at that path that
-    #  only says it cannot run the program, and a musl system has none.
-    if [ -e /etc/NIXOS ]; then
-        say "the Linux archive's refine needs glibc's loader at $loader, which NixOS does not provide" >&2
-        other_routes; exit 1
-    fi
-    if [ ! -e "$loader" ]; then
-        say "the Linux archive's refine needs glibc's loader at $loader, and this system has none" >&2
-        say "(a musl distribution such as Alpine has a loader of its own)" >&2
-        other_routes; exit 1
-    fi
-    echo "$machine-linux"
 }
 
 if [ -n "$platform" ]; then
@@ -132,6 +119,7 @@ if [ -n "$platform" ]; then
     esac
 elif [ "$list" = no ]; then
     platform=$(host_platform)
+    native=yes
 fi
 
 #  The newest release: $releases/latest redirects to .../tag/vVERSION.
@@ -218,6 +206,24 @@ tar -xzf "$work/$archive" -C "$work/prefix" \
     || refuse "could not unpack $archive; nothing was installed"
 [ -x "$work/prefix/bin/refine" ] && [ -d "$work/prefix/lib/landin" ] \
     || refuse "$archive holds no bin/refine and lib/landin; nothing was installed"
+
+#  A Linux archive's refine has glibc linked into it and starts on any
+#  Linux, musl and NixOS ones among them.  The archives of 0.2.11 and
+#  earlier did not: they ask for glibc 2.38 or later and its loader at the
+#  standard path.  An archive for this host whose refine does not start
+#  here is refused rather than installed.
+if [ "$native" = yes ]; then
+    if ! started=$("$work/prefix/bin/refine" version 2>&1); then
+        say "refine $version from $archive does not start on this host; nothing was installed." >&2
+        printf '%s\n' "$started" | sed -n '1,3s/^/install.sh:   /p' >&2
+        case $platform in
+            *-linux)
+                say "The Linux archives of 0.2.11 and earlier need glibc 2.38 or later and its loader;" >&2
+                say "a later release's archive starts on any Linux." >&2 ;;
+        esac
+        other_routes; exit 1
+    fi
+fi
 
 #  The new install is complete before the old one is moved aside, so an
 #  interrupted run leaves one or the other.

@@ -2,7 +2,8 @@
 
 The gate runs scripts/install_check.py against its packaged compiler on
 each host a release serves.  Here the same cases run against a stand-in
-archive, whose bin/refine prints the first program's output, so the
+archive, whose bin/refine prints the first program's output and a
+version, so the
 script's own logic is held on every scripts job; and the names the script
 downloads are held to the ones the release workflow publishes.
 """
@@ -22,6 +23,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 import install_check  # noqa: E402
 
 STAND_IN = """#!/bin/sh
+[ "$1" = version ] && echo 'refine 0.0.0' && exit 0
 [ "$1 $2" = "run main.ldn" ] || exit 2
 [ -d "$(dirname "$0")/../lib/landin/core" ] || exit 3
 cat <<'EOF'
@@ -49,11 +51,19 @@ class Installs(unittest.TestCase):
         with TemporaryDirectory() as scratch:
             archive = Path(scratch) / "landin.tar.gz"
             stand_in_archive(archive)
+            #  As the host's own archive where a release serves the host,
+            #  so the script also runs the refine it unpacked; elsewhere
+            #  as Linux x86-64's, which it installs without running.
+            try:
+                install_check.host_platform()
+                platform, cases = None, 9
+            except SystemExit:
+                platform, cases = "x86_64-linux", 8
             passed, failures = install_check.run_checks(
                 archive, Path(scratch) / "work", "0.0.0",
-                platform="x86_64-linux")
+                platform=platform)
             self.assertEqual(failures, [])
-            self.assertEqual(passed, 8)
+            self.assertEqual(passed, cases)
 
 
 class Names(unittest.TestCase):

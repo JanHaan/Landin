@@ -21,5 +21,6 @@ project Refine_Bindings is
 
    package Compiler renames Landin_Common.Compiler;
    package Binder   renames Landin_Common.Binder;
+   package Linker   renames Landin_Common.Linker;
 
 end Refine_Bindings;

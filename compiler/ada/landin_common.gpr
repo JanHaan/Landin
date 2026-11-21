@@ -37,6 +37,18 @@ abstract project Landin_Common is
 
    Mode_Switches := Debug_Switches;
 
+   --  How the executables are linked: "dynamic" against the host's C
+   --  library, or "static", with glibc linked into the executable as a
+   --  position-independent one, so a Linux release runs on a host with any
+   --  C library or none.  scripts/env.sh chooses static for a Linux
+   --  release build and dynamic otherwise; a bare gprbuild, as the
+   --  flake's, links dynamically.  A static link is refused when it warns:
+   --  glibc warns of a call, such as one into the name service, that needs
+   --  the linked glibc's own shared libraries at run time, which a host
+   --  with another C library does not have.
+   type Link_Kind is ("dynamic", "static");
+   Link : Link_Kind := external ("LANDIN_LINK", "dynamic");
+
    case Build_Mode is
       when "debug"   => Mode_Switches := Debug_Switches;
       when "release" => Mode_Switches := Release_Switches;
@@ -57,6 +69,16 @@ abstract project Landin_Common is
    package Builder is
       for Default_Switches ("Ada") use ("-j0");
    end Builder;
+
+   package Linker is
+      case Link is
+         when "dynamic" =>
+            null;
+         when "static" =>
+            for Default_Switches ("Ada") use
+              ("-static-pie", "-Wl,--fatal-warnings");
+      end case;
+   end Linker;
 
    package Binder is
       for Default_Switches ("Ada") use ("-Es");

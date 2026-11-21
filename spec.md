@@ -40870,6 +40870,143 @@ hosts refused; `scripts/tests/test_install_script.py` runs the same cases
 against a stand-in archive and holds the script's names to
 `release.yml`'s.
 
+**Amended by D1789:** the script no longer refuses a Linux host by its
+loader. The Linux archives carry a static `refine` from the release after
+0.2.11, and the script instead runs the `refine` it unpacked for the host
+and refuses an archive whose `refine` does not start there.
+
+### D1787 — A Linux release links glibc into its executables, as static position-independent ones
+
+**The tour said** nothing. A Linux archive's `refine` was linked against
+the build host's glibc: it asked for glibc's loader at its standard path
+and, built on Ubuntu 24.04, for glibc 2.38's symbol versions, so it did
+not start on Alpine or another musl system, on NixOS, or on a glibc older
+than 2.38: Debian 12, Ubuntu 22.04 and RHEL 9 among them. The pinned GNAT links every executable statically against glibc with
+no source change, as `roadmap/inputs/static-linux-refine.md` found.
+
+**Chosen:** a release build on Linux links `refine`, its split commands
+and the test program statically with `-static-pie`, glibc and the GNAT
+runtime inside them, keeping the address randomisation the dynamic
+archives had. `scripts/env.sh` chooses the link as `LANDIN_LINK`, static
+for a Linux release and dynamic for a debug build and on Darwin, so the
+build decides it, not a caller, and every release-mode lane of the gate
+tests the link a release publishes; `landin_common.gpr`'s `Linker`
+package applies it, and a bare `gprbuild`, as the flake's source package,
+links dynamically. `scripts/build.sh` adds GPRbuild's `-R` to a static
+link: glibc's start of a static position-independent executable asserts
+that it names no run path and kills it before `main` when it does, which
+is how the gate's release lanes, built without `-R`, would have failed.
+A musl build is not attempted: no published GNAT targets musl.
+
+**The alternatives:** a musl `refine`, which needs a GNAT 16.1 toolchain
+for musl built and maintained by the project alone; linking only the
+release workflow's build statically with `-largs`, which leaves the gate's
+release lanes testing a dynamic compiler the release does not publish;
+`-static` without position independence, which gives up address
+randomisation for nothing; and a link switch the caller chooses, which
+`scripts/test.sh` and `dev-test.sh` would not pass on.
+
+**Pinned by** the gate's `release` and `arm64-release` jobs, whose test
+program, corpus and installed-toolchain checks run the static build
+natively on each architecture, and their step `The static archive without
+glibc` (D1790); `scripts/tests/test_static_archive.py` holds the link,
+its switches and every executable project's `Linker` package.
+
+### D1788 — A static link that warns is refused, and the archive carries glibc's licence and names it
+
+**The tour said** nothing. A static glibc link warns when the program
+calls something, the name service, `dlopen` or `iconv`, that needs the
+linked glibc's own shared libraries at run time, and such a program
+breaks on a host with another C library. glibc is under the LGPL,
+version 2.1 or later, and a static `refine` holds it.
+
+**Chosen:** the static link adds `-Wl,--fatal-warnings`, so the first such
+call refuses the build where it is made. `scripts/package.sh` packages a
+Linux ELF `refine` that requests no interpreter with two files beside the
+project's licences: `LICENSE-GLIBC`, the copyright file of the
+`libc6-dev` package whose `libc.a` was linked, and `NOTICE-GLIBC`, which
+names that package's version, its distribution and source package, how
+to fetch the source, and that `refine`'s complete source and build are
+public so a user can relink it with a modified glibc. Both come from the
+packaging host's `dpkg-query`, so such a `refine` is packaged on the
+Debian or Ubuntu host that built it, as the release workflow's runners
+are, and refused elsewhere with that said. Whether that meets every
+obligation the LGPL places on the distributor, among them the offer of
+glibc's own source, is the maintainer's to settle; this records what the
+archive carries, not that it is sufficient.
+
+**The alternatives:** a glibc licence text kept in the repository, which
+could name a glibc other than the one linked; reading the version from
+the binary, which holds no glibc banner; and a warning grep over the
+build's log, which a change to the log's shape would silence.
+
+**Pinned by** `scripts/tests/test_static_archive.py`: a name-service call
+that links with a warning fails under `--fatal-warnings`, a static
+stand-in packaged with a fake `libc6-dev` carries both files with the
+package's names, and one packaged without it is refused;
+`scripts/static_check.py` requires both files of the gate's archive.
+
+### D1789 — The install script refuses an archive whose refine does not start on the host
+
+**The tour said** nothing. D1747 refused a Linux host without glibc's
+loader, and NixOS, before downloading. With a static Linux archive that
+refusal would turn away the hosts the archive serves, and an older
+release, whose archive asks for glibc 2.38 and its loader, still fails on
+them.
+
+**Chosen:** the script no longer looks for a loader. After the archive is
+checked and unpacked, and before anything is installed, it runs the
+unpacked `refine version` when the archive is the host's own; when that
+fails it says the release does not start on the host, shows the first
+lines of what the system said, notes for Linux that the archives of 0.2.11
+and earlier need glibc 2.38 or later and its loader, names nix and the
+source build, and installs nothing. `--platform` installs without running.
+
+**The alternatives:** keeping a per-version table of which releases need
+which glibc, which the script would have to learn at every release; and
+installing first and leaving the failure to the reader's first `refine`,
+which says only that a file was not found.
+
+**Pinned by** `scripts/install_check.py`'s case `an archive whose refine
+does not start here`, run by the gate against each host's packaged
+compiler and by `scripts/tests/test_install_script.py` against a stand-in;
+`scripts/static_check.py` installs the static archive with the script on
+Alpine.
+
+### D1790 — The gate runs the packaged static compiler alone in an empty root and on Alpine
+
+**The tour said** nothing. The roadmap asked for the packaged static
+compiler run on Alpine and in an image with no C library of its own,
+compiling and running the first program and the `--link=libc` runtime
+fixtures against musl.
+
+**Chosen:** `scripts/static_check.py`, a step of the gate's `release` and
+`arm64-release` jobs, takes the archive the job packaged and runs it under
+bubblewrap with PATH and HOME alone. In an empty root holding the archive
+and nothing else, no C library, shell or linker, `refine version`,
+`refine check` and `refine compile --emit=asm` of the first program and
+every split command's `--help` must succeed. On Alpine 3.24.4's
+minirootfs, pinned by checksum in `environments/pins.sh`, with `gcc`,
+`musl-dev` and `curl` added, `install.sh` installs the archive served from
+127.0.0.1, its `refine run` runs the first program, and every runtime
+fixture that says `link: libc` and names the host's Linux target is
+compiled with the installed `refine`, linked against musl and run as the
+harness runs it: its root, C archives, shared objects, arguments, files,
+input, status or trap and output, at the default profile. The runner must
+allow unprivileged user namespaces, which the step sets.
+
+**The alternatives:** a job of its own, which would add two jobs that
+wait for a release build to rebuild or download what the release jobs
+already hold; Docker, which the development hosts lack and which would
+fetch an image by tag rather than an archive by checksum; and running the
+fixtures through the test program inside Alpine, which tests the stages
+linked into it rather than the packaged `refine`.
+
+**Pinned by** the step itself in both jobs, nineteen `link: libc`
+fixtures passing on x86-64 when it was written;
+`scripts/tests/test_static_archive.py` holds the fixture selection and
+the ELF reading it relies on.
+
 ### D571 — A round's yield calls nothing beneath it but its sweep, its idler and its switch
 
 **The tour said** nothing. `core/fibre/stacks`' round of turns is the one

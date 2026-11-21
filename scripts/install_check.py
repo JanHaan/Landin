@@ -17,6 +17,9 @@ them.  `install.sh`, pointed there by `LANDIN_RELEASES`, then
   replaces it when run again;
 - refuses a damaged archive, saying the checksum differs, and installs
   nothing;
+- refuses an archive whose refine does not start on the host, as one of
+  0.2.11 or earlier does not on a Linux without glibc 2.38 and its
+  loader, saying so and installing nothing;
 - refuses a host no archive serves, a FreeBSD and a Linux RISC-V that a
   `uname` earlier on PATH reports, naming the routes that do serve them;
 - refuses a version the releases do not have.
@@ -35,6 +38,7 @@ every archive the release publishes must be one `install.sh` names, as
 
 import argparse
 import hashlib
+import io
 import http.server
 import json
 import os
@@ -45,6 +49,7 @@ import shutil
 import stat
 import subprocess
 import sys
+import tarfile
 import threading
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -52,7 +57,27 @@ SCRIPT = ROOT / "install.sh"
 FIRST_PROGRAM = ROOT / "compiler/tests/fixtures/runtime/first-program"
 DAMAGED = "0.0.1"
 MISSING = "0.0.2"
+UNSTARTABLE = "0.0.3"
 SERVED = "0.0.0"
+
+
+def unstartable_archive():
+    """An archive laid out as a release's whose refine fails to start, as
+    the kernel's refusal of a missing loader does: exit status 127."""
+    buffer = io.BytesIO()
+    with tarfile.open(fileobj=buffer, mode="w:gz") as archive:
+        for name in ("bin", "lib", "lib/landin"):
+            member = tarfile.TarInfo(name)
+            member.type = tarfile.DIRTYPE
+            member.mode = 0o755
+            archive.addfile(member)
+        body = (b"#!/bin/sh\necho 'refine: cannot execute: required file"
+                b" not found' >&2\nexit 127\n")
+        member = tarfile.TarInfo("bin/refine")
+        member.size = len(body)
+        member.mode = 0o755
+        archive.addfile(member, io.BytesIO(body))
+    return buffer.getvalue()
 
 
 def host_platform():
@@ -192,6 +217,7 @@ def run_checks(archive, work, version, platform=None, path=None):
     damaged[len(damaged) // 2] ^= 0xFF
     publish(served, DAMAGED, named, bytes(damaged),
             hashlib.sha256(data).hexdigest())
+    publish(served, UNSTARTABLE, named, unstartable_archive())
     server = serve(served, version)
     path = path or os.environ.get("PATH", "/usr/bin:/bin")
     checks = Checks(work, "http://127.0.0.1:%d/releases"
@@ -245,6 +271,20 @@ def run_checks(archive, work, version, platform=None, path=None):
                 and not any(p.name.startswith(".landin-install")
                             for p in work.iterdir())):
             checks.ok(what)
+
+        #  Only for the host's own archive: with --platform the script
+        #  installs what it is asked for, which need not start here.
+        if platform is None:
+            unstartable = work / "unstartable"
+            what = "an archive whose refine does not start here"
+            ran = checks.install("--version", UNSTARTABLE, "--dir",
+                                 str(unstartable))
+            if (checks.expect(what, ran, 1, "does not start on this host",
+                              "nothing was installed",
+                              "required file not found",
+                              "nix profile install")
+                    and not unstartable.exists()):
+                checks.ok(what)
 
         what = "a version the releases do not have"
         ran = checks.install(*chosen, "--version", MISSING, "--dir",

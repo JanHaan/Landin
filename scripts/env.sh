@@ -12,6 +12,7 @@
 #  LANDIN_BUILD_VARIANT  a build tree of its own for an experiment: the tag
 #                        becomes TAG.VARIANT, which `nix develop` does not
 #                        override as it does the tag
+#  LANDIN_LINK           static or dynamic; chosen here, not by a caller
 #  LANDIN_BUILD_INCREMENTAL  yes only through the developer wrappers
 #  LANDIN_BUILD_REUSE        yes only for a verified same-run CI build artifact
 
@@ -32,6 +33,17 @@ case "$LANDIN_BUILD_MODE" in
         ;;
 esac
 export LANDIN_BUILD_MODE
+
+#  A Linux release links glibc into its executables, so the archive runs on
+#  a host with any C library or none (compiler/ada/landin_common.gpr); a
+#  debug build and every Darwin build link the host's C library.  The build
+#  decides, not the caller, so the gate tests the link a release publishes.
+if [ "$LANDIN_BUILD_MODE" = release ] && [ "$(uname -s)" = Linux ]; then
+    LANDIN_LINK=static
+else
+    LANDIN_LINK=dynamic
+fi
+export LANDIN_LINK
 
 #  One checkout, more than one host: the macOS loop and the linux/amd64
 #  container build the same directory.  The tag keeps their object files

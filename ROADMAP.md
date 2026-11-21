@@ -2286,7 +2286,7 @@ finding is `roadmap/inputs/static-linux-refine.md`, R23.50 is rewritten to
 it, and Q-116 asks whether the static archive replaces the glibc ones,
 defaulting to yes. Met on the way and fixed: the flake's `aarch64-linux`
 shell and `refine` package did not build, GPRbuild's arm64 archive wanting
-`libgmp.so.10`, which the flake now supplies. Rows SR-1515 to SR-1517 hold
+`libgmp.so.10`, which the flake now supplies. Rows `SR-1515` to `SR-1517` hold
 what outlives the item.
 
 ### R23.50 — A static Linux archive
