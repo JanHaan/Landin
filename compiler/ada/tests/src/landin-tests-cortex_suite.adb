@@ -220,7 +220,7 @@ package body Landin.Tests.Cortex_Suite is
          end;
       end loop;
    end Scalar_Spill_Homes;
-   --  D1767-D1774: R16.27's selection.  At the Thumb-2 levels a loop's
+   --  D1767-D1774: the remaining Thumb-2 selection.  At the Thumb-2 levels a loop's
    --  constants are immediates, a comparison with zero and its branch one
    --  CBZ or CBNZ, a packed field UBFX and BFI, a shift by a constant one
    --  instruction, a constant divisor needs no test and speed holds r12;

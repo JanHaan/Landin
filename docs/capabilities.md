@@ -1047,10 +1047,15 @@ process ignores SIGPIPE and gives its children the default back.
   once with every value in a home, does not write over their intervals,
   checking its second emission against the plan; RV32 holds eight-byte
   values in register pairs (D1503). Cortex-M does the same over r4-r7, r3
-  and r1 at every level, eight-byte values and VFP floats keeping their
-  homes (D1567), at the Thumb-2 levels branches directly and builds
-  constants with MOVW and MOVT (D1564), and divides by a constant power of
-  two with shifts (D1626). Xtensa places every word of a routine without
+  and r1 at every level, eight-byte values keeping their homes (D1567),
+  with r12, r8 and r10 at the Thumb-2 levels' speed (D1772) and, with a
+  float unit, floats in d0-d15 (D1771); it makes a word constant where it
+  is read, as an immediate where the operation has one (D1767), reads a
+  frame part in place (D1769), converts between word integers with one
+  comparison (D1770), at the Thumb-2 levels branches directly, builds
+  constants with MOVW and MOVT (D1564), tests zero with CBZ and CBNZ
+  (D1768) and moves packed fields with UBFX and BFI (D1773), and divides
+  by a constant power of two with shifts (D1626). Xtensa places every word of a routine without
   an assembly block, its selection's scratch words and each scalar value
   and unaddressed slot, over the routine's own liveness in a2-a6, which a
   call preserves, and a10-a15, dropping operations nothing reads, folding
