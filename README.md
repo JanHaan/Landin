@@ -191,17 +191,41 @@ building the compiler itself. See
 
 ### With nix
 
-This command builds `refine` from source and puts it on your `PATH`. The
-first build also fetches the pinned toolchain, which takes a few minutes:
+This command installs the prebuilt compiler and puts `refine` on your
+`PATH`:
 
 ```sh
 nix --extra-experimental-features 'nix-command flakes' \
     profile install github:701-dev/Landin
 ```
 
+It works on Linux x86-64, Linux arm64 and macOS arm64. It fetches the
+latest release archive, about 17 MB, and compiles nothing, so it takes
+seconds.
+
 You can leave the `--extra-experimental-features` option out once
 `experimental-features = nix-command flakes` is in `~/.config/nix/nix.conf`.
-In a clone, `nix build .#refine` builds the same into `result/`.
+
+To run `refine` without installing it, use `nix run`. Everything after
+`--` goes to `refine`:
+
+```sh
+nix run github:701-dev/Landin -- version
+nix run github:701-dev/Landin -- run main.ldn
+```
+
+The second line runs [the first program](#your-first-program).
+
+To build from source instead, for example to get unreleased changes from
+main, install `#refine`. The first source build also fetches the pinned
+toolchain, which takes a few minutes:
+
+```sh
+nix profile install github:701-dev/Landin#refine
+```
+
+In a clone, `nix build .#refine` builds the checkout into `result/`, and
+`nix build` alone fetches the release.
 
 ### From source
 
