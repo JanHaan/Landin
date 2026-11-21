@@ -161,6 +161,7 @@ LIVE_DOCS = FILES + ["AGENTS.md", "README.md", "handoff.md", "examples.md",
                      "docs/targets.md",
                      "docs/benchmarks.md",
                      "docs/measurement.md",
+                     "docs/process.md",
                      "docs/capabilities.md",
                      "compiler/ada/README.md",
                      "core/README.md",
@@ -10645,6 +10646,165 @@ def check_record_hints(full_run):
     return out
 
 
+#  The documents whose anchors other files link to, and which therefore
+#  must keep every anchor a link names.  Twenty-three links in a dozen files
+#  point into docs/process.md's sections, and nothing noticed when a
+#  heading was renamed.
+ANCHORED_DOCUMENTS = ("docs/process.md",)
+#  Text files that may link to such an anchor: documents, scripts and
+#  workflows.
+ANCHOR_SOURCES = (".md", ".py", ".sh", ".yml", ".yaml", ".nix", ".adb",
+                  ".ads", ".json")
+
+
+def heading_anchors(text):
+    """The anchors GitHub gives a Markdown document's headings.
+
+    Lower case, every character but a letter, a digit, a space, `-` or `_`
+    dropped, each space a `-`; a repeated anchor gains `-1`, `-2` and so
+    on.  Headings inside a fenced listing are not headings.
+    """
+    anchors, seen, fence = set(), {}, None
+    for line in text.splitlines():
+        marker = re.match(r"\s*(`{3,}|~{3,})", line)
+        if marker:
+            if fence is None:
+                fence = marker.group(1)
+            elif marker.group(1)[0] == fence[0] and len(marker.group(1)) >= len(fence):
+                fence = None
+            continue
+        if fence is not None:
+            continue
+        heading = re.match(r"#{1,6}\s+(.*?)\s*#*\s*$", line)
+        if not heading:
+            continue
+        slug = re.sub(r"[^\w\- ]", "", heading.group(1).lower()).replace(" ", "-")
+        count = seen.get(slug, 0)
+        seen[slug] = count + 1
+        anchors.add(slug if count == 0 else "%s-%d" % (slug, count))
+    return anchors
+
+
+def check_document_anchors(full_run):
+    """Every link to an anchor of an ANCHORED_DOCUMENTS file resolves.
+
+    A link elsewhere names the document by any relative path ending in its
+    file name, `process.md#closing-an-item` or
+    `../../docs/process.md#the-mechanical-gate`; the document's own links
+    are `(#anchor)`.  A renamed or removed heading leaves such a link
+    pointing at the top of the page, which no renderer reports.
+    """
+    if not full_run:
+        return []
+    out = []
+    targets = {}
+    for document in ANCHORED_DOCUMENTS:
+        path = os.path.join(ROOT, document)
+        if not os.path.exists(path):
+            out.append((document, 1, "this file is needed by a check and is not here"))
+            continue
+        targets[document] = heading_anchors(read_file(path, encoding="utf-8"))
+    for here, dirs, files in os.walk(ROOT):
+        dirs[:] = sorted(d for d in dirs
+                         if d not in (".git", "build", ".scratch", ".claude",
+                                      "node_modules", "site", "__pycache__"))
+        for name in sorted(files):
+            if not name.endswith(ANCHOR_SOURCES):
+                continue
+            path = os.path.join(here, name)
+            relative = os.path.relpath(path, ROOT).replace(os.sep, "/")
+            try:
+                text = read_file(path, encoding="utf-8")
+            except (UnicodeDecodeError, OSError):
+                continue
+            for document, anchors in targets.items():
+                base = re.escape(os.path.basename(document))
+                own = r"\]\(#([\w-]+)\)" if relative == document else None
+                pattern = r"(?<![\w.-])(?:[\w./-]*/)?%s#([\w-]+)" % base
+                for n, line in enumerate(text.splitlines(), 1):
+                    found = [m.group(1) for m in re.finditer(pattern, line)]
+                    if own:
+                        found += [m.group(1) for m in re.finditer(own, line)]
+                    for anchor in found:
+                        if anchor not in anchors:
+                            out.append((relative, n,
+                                        "%s has no heading whose anchor is "
+                                        "#%s; link to an anchor it has, or "
+                                        "keep the heading" % (document, anchor)))
+    return out
+
+
+#  The bytes each `##` section of docs/process.md may hold, its heading and
+#  its subsections included, and the preamble's under "".  Set at the
+#  sections' size when history left the file, plus a margin; the loop and
+#  the closing checklist, which every item reads, have the least.
+PROCESS_SECTION_BUDGETS = {
+    "": 1000,
+    "The loop that runs now": 9200,
+    "Running an item": 4200,
+    "Closing an item": 6000,
+    "Local agent feedback": 16800,
+    "Parallel sessions and shared resources": 14600,
+    "Command reference": 8400,
+    "The mechanical gate": 48000,
+    "Releasing a version": 11400,
+}
+
+
+def process_sections(text):
+    """docs/process.md as (title, first line, bytes) per `##` section."""
+    sections, title, start, size, fence = [], "", 1, 0, None
+    for n, line in enumerate(text.splitlines(True), 1):
+        marker = re.match(r"\s*(`{3,}|~{3,})", line)
+        if marker:
+            fence = None if fence else marker.group(1)
+        elif fence is None and line.startswith("## "):
+            sections.append((title, start, size))
+            title, start, size = line[3:].strip(), n, 0
+        size += len(line.encode("utf-8"))
+    sections.append((title, start, size))
+    return sections
+
+
+def check_process_budgets(full_run):
+    """Each section of docs/process.md stays within its byte budget.
+
+    The file grew by fifteen hundred lines in seven weeks, every incident's
+    lesson added where it happened and nothing ever leaving, until rules
+    sat inside historical accounts where no reader found them.  A budget
+    makes the choice explicit: what does not fit goes to its owner, a
+    script's `--help`, the subsystem's reference or the commit message.
+    """
+    if not full_run:
+        return []
+    document = "docs/process.md"
+    path = os.path.join(ROOT, document)
+    if not os.path.exists(path):
+        return [(document, 1, "this file is needed by a check and is not here")]
+    out = []
+    for title, line, size in process_sections(read_file(path, encoding="utf-8")):
+        budget = PROCESS_SECTION_BUDGETS.get(title)
+        name = "the preamble" if not title else "section \"%s\"" % title
+        if budget is None:
+            out.append((document, line,
+                        "%s has no budget; add it to check.py's "
+                        "PROCESS_SECTION_BUDGETS with the section" % name))
+        elif size > budget:
+            out.append((document, line,
+                        "%s is %d bytes, over its budget of %d: move detail "
+                        "to the script's --help or the subsystem's reference "
+                        "and history to the commit message, or raise the "
+                        "budget in the same change, saying why"
+                        % (name, size, budget)))
+    for title in sorted(set(PROCESS_SECTION_BUDGETS) -
+                        {t for t, _, _ in process_sections(
+                            read_file(path, encoding="utf-8"))}):
+        out.append((document, 1,
+                    "check.py budgets a section \"%s\" the file no longer "
+                    "has; remove its budget" % title))
+    return out
+
+
 AGENT_GUIDANCE_MAX_BYTES = 24 * 1024
 
 
@@ -12357,6 +12517,8 @@ def main(argv):
     stale_paths = LIVE_DOCS if full_run else paths
     extra += check_stale_backlog(stale_paths, full_run)
     extra += check_agent_guidance(full_run)
+    extra += check_document_anchors(full_run)
+    extra += check_process_budgets(full_run)
     extra += check_document_reachability(full_run)
     extra += check_project_status(full_run)
     extra += check_roadmap_citations(full_run)

@@ -1659,6 +1659,79 @@ class DeveloperLoops(unittest.TestCase):
         self.assertTrue(said)
 
 
+class DocumentAnchors(unittest.TestCase):
+    """A link to a section of docs/process.md names a heading it has."""
+
+    PROCESS = ("# Process\n\n## The loop\n\nSee [closing](#closing-an-item).\n\n"
+               "### Integration, publication and CI\n\n"
+               "```sh\n# not a heading\n```\n\n## Closing an item\n")
+
+    #  Written as LINK % anchor so that check.py, reading this file, does
+    #  not take these deliberate faults for links of its own.
+    LINK = "[x](process" ".md#%s)"
+
+    def said(self, other):
+        return faults(checker.check_document_anchors,
+                      written={"docs/process.md": self.PROCESS,
+                               "docs/other.md": other})
+
+    def test_the_real_tree_passes(self):
+        self.assertEqual(faults(checker.check_document_anchors, copied=[
+            "docs/process.md", "AGENTS.md", "docs/environments.md",
+            "compiler/tests/README.md", "environments/xtensa/README.md"]), [])
+
+    def test_links_by_any_relative_path_resolve(self):
+        self.assertEqual(self.said(
+            self.LINK % "the-loop" + " [b](../docs/process" ".md#integration"
+            "-publication-and-ci) `docs/process" ".md#closing-an-item`\n"), [])
+
+    def test_a_missing_anchor_is_named_with_its_line(self):
+        said = self.said("ok\n" + self.LINK % "not-a-heading" + "\n")
+        self.assertEqual([(path, line) for path, line, _ in said],
+                         [("docs/other.md", 2)])
+        self.assertIn("#not-a-heading", said[0][2])
+
+    def test_a_comment_in_a_listing_is_no_heading(self):
+        self.assertTrue(self.said(self.LINK % "not-a-heading" + "\n"))
+
+    def test_the_documents_own_links_are_held(self):
+        text = self.PROCESS.replace("#closing-an-item", "#closing")
+        said = faults(checker.check_document_anchors,
+                      written={"docs/process.md": text})
+        self.assertEqual([path for path, _, _ in said], ["docs/process.md"])
+
+    def test_a_repeated_heading_gains_a_number(self):
+        self.assertEqual(checker.heading_anchors("## A\n\n## A\n"),
+                         {"a", "a-1"})
+
+
+class ProcessBudgets(unittest.TestCase):
+    """Each section of docs/process.md stays within its byte budget."""
+
+    def test_the_real_file_passes(self):
+        self.assertEqual(faults(checker.check_process_budgets,
+                                copied=["docs/process.md"]), [])
+
+    def test_an_oversized_section_is_named_with_where_text_goes(self):
+        limit = checker.PROCESS_SECTION_BUDGETS["Running an item"]
+        text = "# P\n\n## Running an item\n\n" + "x" * limit + "\n"
+        said = faults(checker.check_process_budgets,
+                      written={"docs/process.md": text})
+        self.assertTrue(any("Running an item" in why and "--help" in why
+                            for _, _, why in said))
+
+    def test_a_new_section_needs_a_budget(self):
+        said = reasons(checker.check_process_budgets,
+                       written={"docs/process.md": "# P\n\n## Something new\n"})
+        self.assertTrue(any("Something new" in why and "no budget" in why
+                            for why in said))
+
+    def test_a_heading_in_a_listing_starts_no_section(self):
+        sections = checker.process_sections(
+            "# P\n\n## A\n\n```sh\n## not one\n```\n")
+        self.assertEqual([title for title, _, _ in sections], ["", "A"])
+
+
 class LoopTable(unittest.TestCase):
     """A command in docs/process.md's loop table runs as written."""
 

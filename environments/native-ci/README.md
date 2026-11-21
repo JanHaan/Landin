@@ -80,8 +80,9 @@ or incremental acceptance. `HOST-ONLY` is allowed only in routine debug scope;
 release runtime/ABI execution remains complete. Private font absence is
 recorded explicitly; publication still requires the licensed fonts.
 
-See [the validation workflow](../../docs/process.md) for the measured costs,
-development cadence, parallelism and deferred Nix CI work.
+The [validation workflow](../../docs/process.md) describes the development
+loop that replaced it; the measured costs of this one are in that file's
+history.
 
 ## Resource containment
 

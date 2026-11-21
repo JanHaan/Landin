@@ -4,11 +4,15 @@ The loop below is the one that runs now, and the
 [gate reference](#the-mechanical-gate) describes its jobs and reuse rules;
 `ROADMAP.md` owns the work left on this process. The gate is a safety net
 rather than a verdict: green says a tree passed there, and nothing accepts a
-revision. The exact-revision native acceptance that approved every revision
-through 0.2.0 was retired with SourceHut and `scripts/ci/` is gone; the
-sections headed Historical record how its approvals were chosen and what
-they cost. `D586` names a decision recorded in `spec.md`, and
+revision. `D586` names a decision recorded in `spec.md`, and
 `refine explain D586` prints its title.
+
+Each `##` section has a byte budget that `python3 check.py` holds
+(`PROCESS_SECTION_BUDGETS`). This file says what is done now and why;
+an account of how a rule came about goes in its commit message, a figure
+measured once goes in the commit or the measurement it belongs to, and a
+section that would pass its budget sends its detail to the script's
+`--help` or the subsystem's own reference.
 
 ## The loop that runs now
 
@@ -18,70 +22,76 @@ they cost. `D586` names a decision recorded in `spec.md`, and
 | edit/test loop | `./scripts/dev-test.sh` with the affected exact `--suite`, `--case` and `--fixture` selectors in one invocation | checksum-safe feedback; the transcript says `FILTERED` |
 | Mac compiler host | `./scripts/dev-test.sh --host --target=linux-x86-64` | compiler checks only; every selected case passes, and no Linux workload is emitted or run |
 | another Linux architecture from this host | `./scripts/dev-test.sh --target=linux-arm64 --runner=qemu-aarch64` with the affected selectors, inside `nix develop` | a cross lane under QEMU: the emitted code's evidence, not the pinned toolchain's. The development shell has the cross driver under the name `refine` asks for; elsewhere `--toolchain=` names it, as [the lanes](../compiler/tests/README.md#lanes) say |
-| before pushing a candidate | affected exact developer cases/suites and script controls; `python3 check.py` after documentation changes | focused feedback; the complete matrix runs once in CI |
+| before pushing a candidate | affected exact developer cases/suites and script controls; `python3 check.py` after documentation changes; `./highlight/test.sh --integration` when the grammar, `highlight/tree-sitter/`, a positive, runtime or ABI fixture or `core/` changed | focused feedback; the complete matrix runs once in CI |
 | before pushing explanatory-only prose | `python3 check.py` and review the prose against what it describes | every document invariant and the accuracy of the explanation |
 | after touching the harness | `./scripts/parallel-equivalence.sh --suite='fixture execution'` | a wider run reaches the same verdicts, byte for byte |
 | before pushing a Darwin change | focused native Mac checks, with LLDB in an appropriate security audit session when affected | native developer feedback; full host/parity/debugger coverage runs in CI |
 | candidate push or pull request | `.github/workflows/gate.yml` | every target, unless identical-tree reuse or an explanatory edit applies; the [job table](#the-mechanical-gate) says what each job runs |
 | physical boards for a candidate | `item.py boards ITEM`, or `gh workflow run gate.yml --ref BRANCH -f scope=boards`, by the maintainer or an item's agent, once `main` is an ancestor of the head | each port's RAM run, then its boot check, on the rig through `environments/boards/gate.py`, with `inputs`, documents and scripts, and the timing jobs unless a dispatch on the branch already timed the same key (D1649); never a software pass. A run that failed in timing alone [re-runs its failed jobs](#a-timing-failure-is-not-a-boards-failure) |
-| promotion to main | the [promotion rule](#physical-boards-and-promotion): the candidate's complete software gate, a passed boards dispatch on the identical tree, then main's own push gate followed to its end; an item's agent promotes without asking again unless the item says `Promotion: maintainer` (`ROADMAP.md`'s Mechanics), in [the promotion queue's](#the-promotion-queue) order | the push reuses the full candidate software pass and takes the boards of the passed dispatch on the same tree, or before only explanatory commits (D1647); documents and script controls still run |
+| promotion to main | the [promotion rule](#physical-boards-and-promotion): the candidate's complete software gate, a passed boards dispatch on the same tree, or before only explanatory commits, then main's own push gate followed to its end; an item's agent promotes without asking again unless the item says `Promotion: maintainer` (`ROADMAP.md`'s Mechanics), in [the promotion queue's](#the-promotion-queue) order | the push reuses the full candidate software pass and takes the boards of the passed dispatch on the same tree, or before only explanatory commits (D1647); documents and script controls still run |
 | closing an item | `python3 scripts/activations.py`, then the steps in [closing an item](#closing-an-item) | the register rows whose activation the item's changes met, and the passes only the gate runs that the changes reach |
 
-Every software lane runs on GitHub-hosted images; the FreeBSD lanes boot
-their VMs inside the job. Only the physical board legs run on the rig's
-self-hosted runner, and only for a push to `main`, the weekly schedule or a
-manual dispatch.
-See [the runner requirements](environments.md#github-actions-runners) for
-labels, tools and scheduling.
+Linux, Darwin and Cortex-M runtime and debugger evidence comes from the
+gate, or from a host you run yourself; the
+[gate reference](#the-mechanical-gate) says where each lane runs.
 
-From a modern checkout on a Mac, choose the affected exact case or suite.
-The host selector accepts a suite or case, not a fixture selector. With the
-default `darwin-arm64` build tag, an example is:
+On a Mac, run `./scripts/dev-test.sh --host --target=linux-x86-64` with the
+affected exact cases or suites, and expect every selected case to pass. The
+host selector takes a suite or a case, not a fixture. The unfiltered
+harness emits and runs Linux workloads and fails without their toolchain,
+so a Mac runs no Linux containers, no Linux workload emission and no
+repeated complete suites. With the default `darwin-arm64` build tag:
 
 ```sh
 ./scripts/dev-build.sh
 LANDIN_TEST_JOBS=1 ./scripts/dev-test.sh --host --target=linux-x86-64 --suite=checking
 ```
 
+A Darwin change receives focused checks on a Mac before it is pushed, and,
+when a Mac is available, so does a change to the harness or to fixtures
+the Darwin lanes run: `darwin-parity` and `darwin-host` are the lanes such
+changes most often fail. The full Darwin suites run in the candidate's
+gate. LLDB must inherit a graphical or terminal security audit session; an
+arbitrary background session may not launch a debugged process, whatever
+its debugger rights, while the hosted macOS image's runner session may.
+
 For debugger changes, run an affected native workload/profile with
 `scripts/debug.sh` after building this checkout's compiler. A second run
 replaces its own earlier output; an `--output` naming any other nonempty
 directory is refused. Full native parity and debugger matrices belong to
-the candidate CI run, rather than every local editing loop.
-
-When a push is authorized, push the final candidate to a branch and let its
-complete gate finish. Use completion notifications and investigate failed logs instead of repeatedly
-watching or rerunning the matrix. A failed gate reports itself only when its
-last lane ends, so follow it with `python3 scripts/gate_watch.py`, which
-returns at the first failed job with its step and log command; a pushed fix
-cancels the superseded run. Before promotion, verify the complete job
-listing and the tested tree; a changed merge tree needs its own full pass.
-Promotion also needs a passed boards dispatch on that tree, unless the edit
-is explanatory, and `main`'s own gate followed to its end, as the
-[promotion rule](#physical-boards-and-promotion) says.
-An item may close in the candidate itself or after its gate. A closing
-commit made after the branch's full gate reuses that gate, on the branch and
-again when main is promoted to it, when it changes only the content of
-`README.md`, `ROADMAP.md`, `handoff.md`, `AGENTS.md` and the guides
-`gate_inputs.py`'s `DOCUMENTS` names, `docs/capabilities.md` and this file
-among them, or anything under `roadmap/`, the register's rows and overview,
-the questions and the inputs included, under `docs/site/`, or the boards'
-cycles baselines, and says `Gate: explanatory` (D586, D1373, D1648,
-D1650). A close that changes any other file, `docs/commands.md`,
-`docs/library.md`, `docs/format.md` and `docs/from-c.md` among them, which
-lanes read, is a new tree and needs its own full gate.
-The [gate reference](#the-mechanical-gate) states both reuse conditions,
-identical-tree reuse and an explanatory edit; neither ever takes local
-filtered transcripts or build caches as evidence.
+the candidate's gate, rather than every local editing loop.
 
 Choose the smallest test that can expose the changed behavior first, broaden
-only for another affected subsystem, and let the full CI gate validate the
-final candidate once. Run a complete local suite when an investigation needs
-it, rather than as a duplicate mandatory pre-push step. The
-explanatory-only prose path does not cover generated Ada or catalogues,
-executable examples or fixtures, or grammar and semantic rules in `spec.md`.
-Documentation changes still receive the full `check.py`; its mechanical
-checks do not establish prose accuracy.
+only for another affected subsystem, and let the gate validate the final
+candidate once. Run a complete local suite when an investigation needs it,
+never as a mandatory step before pushing, and never as a substitute for the
+multi-host gate. After any documentation change run the full
+`python3 check.py`, then review the prose against what it describes: its
+checks are mechanical and do not establish accuracy. There is no separate
+lint or typecheck step: the pinned build treats every warning as an error
+and enforces GNAT style checks. Do not silence a warning without a recorded
+reason (`compiler/ada/TOOLCHAIN.md` holds the policy).
+
+When a push is authorized, push the final candidate to a branch and let its
+complete gate finish. A failed gate reports itself only when its last lane
+ends, so follow it with `python3 scripts/gate_watch.py`, which returns at
+the first failed job with its step and log command, and investigate the
+log rather than rerunning the matrix; a pushed fix cancels the superseded
+run. Promotion follows the [promotion rule](#physical-boards-and-promotion):
+the candidate's complete software gate, a passed boards dispatch on its
+tree, or before only explanatory commits, unless the edit is itself
+explanatory, and `main`'s own gate followed to its end. A changed merge tree needs
+new evidence; neither reuse condition ever takes local filtered transcripts
+or build caches as evidence.
+
+An item may close in the candidate itself or after its gate. A closing
+commit made after the branch's full gate reuses that gate, on the branch and
+again when `main` is promoted to it, only when it is an
+[explanatory edit](#reusing-a-pass): confined to the files that rule
+lists and declared `Gate: explanatory`. `docs/capabilities.md` and this
+file are among them; `docs/commands.md`, `docs/library.md`,
+`docs/format.md` and `docs/from-c.md` are not, since lanes read them, and a
+close that changes one of those is a new tree with its own full gate.
 
 The parallel-equivalence wrapper builds once under the standard mode lock,
 then holds the same binaries across both runs. Its printed evidence directory,
@@ -91,16 +101,17 @@ Verdict text is compared byte for byte; only the exact elapsed field of a
 progress line is normalized. Matching case failures establish equivalence
 but are printed explicitly and still need investigation.
 
-On Linux, `scripts/test.sh` (also used by `dev-test.sh`) and
-`scripts/parallel-equivalence.sh` disable glibc's per-thread allocation cache
-in the fresh test process, preserving other allocator tunables. This lets the
-memory controls distinguish live small allocations from freed cached blocks;
-each measurement first checks that a held 512-byte block is counted and that
-freeing it restores the baseline exactly. Direct test-binary invocations
-whose meter fails that check refuse with the launcher route. The initial build
-retains its inherited allocator settings; test subprocesses inherit the
-prepared test setting. Ordinary `refine` invocations keep their defaults. The
-worker comparison records the effective setting alongside each command.
+Run the test program through `scripts/test.sh`, `scripts/dev-test.sh` or
+`scripts/parallel-equivalence.sh` rather than as its binary directly: on Linux
+they disable glibc's per-thread allocation cache in the fresh test process,
+preserving other allocator tunables, so that the memory controls tell live
+small allocations from freed cached blocks. Each measurement first checks
+that a held 512-byte block is counted and that freeing it restores the
+baseline exactly, and a direct invocation whose meter fails that check
+refuses and names the launcher route. The initial build keeps its
+inherited allocator settings; test subprocesses inherit the prepared test
+setting. Ordinary `refine` invocations keep their defaults. The worker
+comparison records the effective setting alongside each command.
 
 ## Running an item
 
@@ -112,7 +123,7 @@ puts the steps in order:
 
 | step | command | what it does |
 |---|---|---|
-| start | `item.py start ITEM` | refuses a complete item or one with an incomplete dependency; makes `../Landin-ITEM` and its branch from `origin/main`; reserves blocks of decision, row and question numbers no other running item of the clone holds, which `register_next.py` then gives out first; marks the item active, moves a pointer naming it, commits that as `Gate: explanatory`; writes `brief.md` |
+| start | `item.py start ITEM` | refuses a complete item or one with an incomplete dependency; makes `../Landin-ITEM` and its branch from `origin/main`; reserves blocks of decision, row and question numbers no other running item of the clone holds, which `register_next.py` then gives out first; marks the item active, moves a pointer naming it, commits that as `Gate: explanatory`; writes the item's brief |
 | after a reopen | `item.py resume [ITEM]` | the worktree, every recorded run as running, finished or lost, the gate runs, the journal's last lines and the next step |
 | along the way | `item.py note ITEM TEXT`, `item.py run ITEM NAME --limit S [--cwd DIR] -- COMMAND` | a dated journal line; a detached `run_logged.py` run kept in the state, in the item's worktree or DIR |
 | push | `item.py push ITEM [--watch]` | refuses a stale `citations.txt`, which names the compiler sources' digest and so goes stale over a merge, and says how to regenerate it; pushes the head and records its gate runs as `gate` does |
@@ -221,12 +232,6 @@ Before an item closes:
    **Roadmap endpoint: ITEM — TITLE (complete).**
    ```
 
-An item worked in parallel streams merges each stream's branch with git.
-When a stream's work is passed as a patch instead, make it with
-`git add -N . && git diff HEAD --binary`: `git diff --binary` alone compares
-the working tree with the index, so a change already staged, a file removed
-with `git rm` among them, is silently missing from the patch.
-
 ## Local agent feedback
 
 Gather independent searches and reads in one tool response before deciding
@@ -253,10 +258,10 @@ nix develop -c python3 scripts/run_logged.py \
 Choose the selectors for the change. `dev-test.sh` checks its own build;
 a preceding `dev-build.sh` is useful when compilation feedback is needed,
 rather than a mandatory separate step before each suite. Leave its worker
-count at the project's `-j0`, every core: a build of the whole compiler took
-190 seconds at `-j4` and 72 at the default on a 32-core host, and the kernel
-shares the cores between concurrent builds better than a `-j` or a `taskset`
-chosen for each one. When several related commands are necessary, enter
+count at the project's `-j0`, every core, and add no `taskset`: a build of
+the whole compiler at `-j4` takes 2.6 times as long as at the default on a
+32-core host, and the kernel shares the cores between concurrent builds
+better than a `-j` or a `taskset` chosen for each one. When several related commands are necessary, enter
 `nix develop` once and run them inside it. Use `sh -eu -c` for dependent
 commands, so an earlier failure stops the sequence.
 
@@ -287,12 +292,14 @@ built-in command uses the `refine` installed beside the split
 (`lane_refine.command` and `lane_refine.dispatcher`).
 
 The test program's workers are another matter, and a brief names them.
-`LANDIN_TEST_JOBS` is one by default and reaches only the two corpus-wide
-cases of `fixture execution`; a run that selects that suite, or runs the
-complete one, sets `LANDIN_TEST_JOBS=8`. Beside nine other builds on a
-32-core host the suite took thirteen minutes at eight workers and did not
-finish in two hours at one. The example above selects two suites it does
-not reach, so the count there changes nothing.
+`LANDIN_TEST_JOBS` splits the corpus fixtures across workers, which is most
+of what the suite costs. It is one by default and reaches only the two
+corpus-wide cases of `fixture execution`; a run that selects that suite, or
+runs the complete one, sets `LANDIN_TEST_JOBS=8`, since at one worker it
+runs for hours on a loaded host. `scripts/parallel-equivalence.sh` is what
+holds a wider run to the same verdicts. The `checking-and-lowering`
+example selects two suites it does not reach, so the count there changes
+nothing.
 
 `./scripts/dev-test.sh --cases=SUITE` lists a suite's cases as `--case=`
 takes them, so a brief's exact selectors are read from the test program
@@ -319,27 +326,24 @@ reaches every Bash command of the session and of its subagents:
   "command": "s=\"$CLAUDE_PROJECT_DIR/scripts/agent_env.sh\"; e=\"$CLAUDE_ENV_FILE\"; [ -x \"$s\" ] && [ -n \"$e\" ] && f=$(\"$s\") && [ -n \"$f\" ] || exit 0; m=\"# landin agent_env\"; for o in \"${e%/*}\"/*-hook-[0-9]*.sh; do [ \"$o\" = \"$e\" ] || ! grep -q -e \"^$m\" -e \"^export LANDIN_ENV_KEY=\" \"$o\" 2>/dev/null || : > \"$o\"; done; : > \"$e\"; n=$(cat \"${e%/*}\"/*-hook-[0-9]*.sh \"$f\" 2>/dev/null | wc -c); if [ \"$n\" -lt 65536 ]; then { echo \"$m $(cksum < \"$f\")\"; cat \"$f\"; } > \"$e\"; else echo \"landin: the pinned environment is not loaded: with it this session's hook scripts would hold $n bytes, past the 64 KiB that leaves a command room in Linux's 128 KiB for one argument; start a fresh session\" >&2; fi; exit 0"}]}]}}
 ```
 
-Claude Code names the file the hook writes after the hook's place among
-those it runs, `sessionstart-hook-N.sh` in the session's directory under
-`~/.claude/session-env/`, and keeps it across a resume, which runs the hook
-again. Before every Bash command it puts every one of those files, verbatim,
-into the single `bash -c` argument that runs the command, and Linux refuses
-one argument over 128 KiB with E2BIG, "Argument list too long". Appending on
-each resume, and appending again under another number when the hook's place
-moved, a session on 2026-11-17 held 93,519 and 46,807 bytes, six copies of
-two environments, and every command failed at 137.8 KB. So the hook
-replaces its own file with the one environment of the checkout the session
-started in, empties any other of the session's files that holds a Landin
-environment, and writes nothing when the session's files with it would pass
-64 KiB, saying so: an environment is about 23 KB, and the rest of the
-argument is Claude Code's own preamble, under 1 KB, and the command. A
-session's files therefore hold one environment, whatever the number of
-resumes. `scripts/tests/test_agent_env.py` runs the command above as
-written here, and `python3 scripts/agent_hook.py --install` writes it into
-`~/.claude/settings.json`, where one copy serves every checkout and
+Claude Code keeps the file a hook writes, one per hook position in the
+session's directory under `~/.claude/session-env/`, across a resume, which
+runs the hook again and appends to it, and writes another under a new
+number when the hook's position moves. Before every Bash command it puts every one of those
+files, verbatim, into the single `bash -c` argument that runs the command,
+and Linux refuses one argument over 128 KiB with E2BIG, "Argument list too
+long". So the hook replaces its own file with the one environment of the
+checkout the session started in, empties any other of the session's files
+that holds a Landin environment, and writes nothing when the session's
+files with it would pass 64 KiB, saying so: an environment is about 23 KB,
+and the rest of the argument is Claude Code's own preamble, under 1 KB, and
+the command. A session's files therefore hold one environment, whatever the
+number of resumes. `scripts/tests/test_agent_env.py` runs the command above
+as written here, and `python3 scripts/agent_hook.py --install` writes it
+into `~/.claude/settings.json`, where one copy serves every checkout and
 worktree and does nothing in a project without `scripts/agent_env.sh`;
-`--check` names a copy that is older than this one, the state that took a
-session's shell on 2026-11-16 and again on 2026-11-17.
+`--check` names a copy older than this one, which can break every command
+of a session, so run it after this command changes.
 The file is the environment of the checkout the session started in; in a
 worktree whose flake or pins differ, `. "$(./scripts/agent_env.sh)"` run
 there adds that worktree's. The hook is
@@ -411,11 +415,11 @@ waiting shell's own command line, so the wait never ends. A live progress
 inspection is appropriate when diagnosing a stall, rather than as a timer.
 
 A harness limits how long a background command may run, two hours in
-Claude Code, and stops it there. One run is known to pass that on a loaded
-host: `./scripts/parallel-equivalence.sh --suite='fixture execution'` runs
-the suite twice, the first time on one worker, which took 7,082 seconds
-beside nine other builds. Start such a run in a session of its own, so
-that it outlives the command that started it, and wait on its directory:
+Claude Code, and stops it there. `./scripts/parallel-equivalence.sh
+--suite='fixture execution'` runs the suite twice, the first time on one
+worker, and takes about two hours on a loaded host. Start such a run in a
+session of its own, so that it outlives the command that started it, and
+wait on its directory:
 
 ```sh
 setsid nohup python3 scripts/run_logged.py \
@@ -465,6 +469,29 @@ agent. CPU time includes reaped children; peak child RSS is a process peak,
 not the simultaneous memory of all workers. These measurements can identify
 expensive commands, but do not establish a CPU or SSD bottleneck alone.
 
+`scripts/test.sh` builds and runs the complete Linux test program.
+Staleness is decided by source checksums, not timestamps: `build.sh` rebuilds
+from clean when the manifest disagrees, because an edited-and-reverted file
+keeps a newer mtime than the object built from it and gprbuild would serve the
+stale object. The developer wrappers instead pass the pinned GPRbuild's `-m2`
+checksum mode; source inventory or project-file changes still force a clean
+tree, and a failed developer build is resumed rather than cleaned. A clean
+tree keeps `bin/` and `libexec/`: executables are linked into `link/` and
+published into `bin/` by a rename, only while no corpus lane or manifest run
+holds the build's readers lock (`scripts/build_lock.py`). Each split command
+`compiler/ada/split-commands.json` lists is built with `refine`, with or
+without `--compiler-only`, and published as `libexec/landin/refine-NAME`,
+the directory there even when the list is empty, as in a release archive
+([split commands](../compiler/ada/README.md#split-commands)). A compiler-only build records `refine` as current without claiming that
+`landin_tests` is current; the next full build still builds the test program.
+
+`check.py` uses only the Python standard library and changes to its own
+directory, so it can also be invoked by absolute path from elsewhere. It is
+a heuristic invariant checker, not a parser, compiler, formatter, or
+semantic test suite. Checking a single file, `tour.md` by absolute path for
+instance, does not run every citation check, so a documentation change
+runs the full command.
+
 ## Parallel sessions and shared resources
 
 Name one integrator for each candidate and one owner for each resource the
@@ -494,9 +521,8 @@ snapshot is clear; a run that changes build outputs must respect the
 existing build locks and its checkout's ownership.
 
 A harness may cut a child's worktree from another commit than the one its
-brief names: an agent's isolated worktree started from `origin/main` when
-the brief named the session branch's commit, and lacked the skill the
-brief said to read first. So the brief names the base commit and tells the
+brief names, an agent's isolated worktree from `origin/main` for one, so
+the brief names the base commit and tells the
 child to check it before reading anything:
 
 ```sh
@@ -523,9 +549,13 @@ immutable handoff; further changes get a new commit and an updated handoff.
 Say who may commit, push stream branches, update the integration branch and
 promote main. Carry existing user authorization into each brief; do not
 ask for it again at every handoff. A stream can finish with a local commit
-when its integrator owns publication. Merge each stream's branch with Git,
-as the closing recipe describes, so staged additions and removals survive.
-Reconcile semantics and fixtures as well as textual conflicts.
+when its integrator owns publication. Merge each stream's branch with Git, so
+staged additions and removals survive, and reconcile semantics and
+fixtures as well as textual conflicts. When a stream's work is passed as a
+patch instead, make it with `git add -N . && git diff HEAD --binary`:
+`git diff --binary` alone compares the working tree with the index, so a
+change already staged, a file removed with `git rm` among them, is silently
+missing from the patch.
 
 A generated file is never merged by hand. `python3 check.py --help` lists
 them. Every stream that adds a decision to `spec.md` rewrites one,
@@ -560,12 +590,24 @@ Rebasing a private branch before handoff can update its base. Coordinate a
 rewrite once another session depends on its commits; never silently change
 what a reported commit denotes. Fetch main again before promotion. If it
 advanced, integrate its changes and obtain the gate evidence for the
-resulting tree under the [reuse rules](#the-mechanical-gate). A green gate
+resulting tree under the [reuse rules](#reusing-a-pass). A green gate
 on a stream's old tree does not cover a changed merge. Promote the tested
 tree with a normal fast-forward push; a rejected race calls for another
-fetch and integration, not a force push. Before deleting refs, compare
-GitHub and the mirror as the gate reference requires, and remove only the
-task's refs and worktrees after their owner has released them.
+fetch and integration, not a force push. Remove only the task's refs and
+worktrees after their owner has released them, comparing GitHub and the
+mirror first, as the next paragraph says.
+
+GitHub is canonical and takes pushes directly; git.sr.ht is a mirror, kept
+in step by a second push URL on the same remote rather than by a job. The mirror therefore holds only what a
+push through that remote sent it: a branch or tag made on GitHub itself —
+the release tags, a branch opened from the web — is not on it, and a ref
+deleted on GitHub alone stays on it. A deletion reaches it only when
+`git push origin --delete` runs from a clone with both push URLs, and git
+refuses that whole push to sr.ht when any ref it names is missing there,
+while GitHub still accepts it. Compare `git ls-remote` of
+<https://github.com/701-dev/Landin> and <https://git.sr.ht/~sinnfrei/landin>
+before deleting, and delete what is only on one of them from that one by its
+URL. Nothing reports a disagreement between the two.
 
 ### Paseo coordination
 
@@ -842,9 +884,9 @@ in jobs that report separate verdicts. RV64 runs under QEMU's user
 emulation on an x86-64 runner, which is evidence about its emitted code and
 none about RV64 hardware; its jobs on RISE's physical runners stay skipped
 until they are dependable. Two reuse conditions, identical-tree reuse and
-an explanatory edit, both described below, let a push reuse a full pass
-instead. Each host's compiler builds hand checked executables to that
-host's consumers, the debug compilers for cross-host determinism among
+an explanatory edit, let a push reuse a full pass instead, as
+[reusing a pass](#reusing-a-pass) says. Each host's compiler builds hand
+checked executables to that host's consumers, the debug compilers for cross-host determinism among
 them. The final `gate` job, the aggregate job, requires every build and
 verification job, cross-host determinism included, to succeed or to be
 skipped under verified reuse or the event's scope; document and script
@@ -856,13 +898,13 @@ the run's complete job listing, every page of it, with each job name
 judged by its newest attempt:
 
 ```sh
-gh api --paginate 'repos/{owner}/{repo}/actions/runs/RUN/jobs?filter=all&per_page=100'
+gh api --paginate 'repos/{owner}/{repo}/actions/runs/RUN/jobs?filter=all&per_page=30'
 ```
 
-The `filter=latest` listing is not that reading. After a rerun of failed
-jobs it holds only the jobs the last attempt ran: a run whose first
-attempt had 53 jobs listed 45 after three were rerun, without the eight
-that had succeeded and were not rerun, so it cannot show that every
+Keep the pages at thirty jobs: GitHub answers hundred-job pages of a large
+run with 502. The `filter=latest` listing is not that reading: after a
+rerun of failed jobs it holds only the jobs the last attempt ran, without
+those that had succeeded and were not rerun, so it cannot show that every
 required job passed.
 
 Read a job's evidence from its attempt's log archive, a zip holding each
@@ -872,9 +914,8 @@ step's own file:
 gh api 'repos/{owner}/{repo}/actions/runs/RUN/attempts/N/logs' > logs.zip
 ```
 
-`gh run view RUN --job JOB --log` and the jobs API's log can end early:
-they returned 1,880 lines of a `release` job, labelled `UNKNOWN STEP`, and
-stopped before its GDB step, which the archive held whole. A job that a
+`gh run view RUN --job JOB --log` and the jobs API's log can end early,
+labelled `UNKNOWN STEP`, where the archive holds the job whole. A job that a
 rerun carried over has no log in the later attempt; its log is in the
 archive of the attempt that ran it, the job's `run_attempt` in the
 `filter=all` listing.
@@ -887,51 +928,6 @@ and executes the same C adapters inside its guest, the attached-program
 runner's signal-forwarding controls among them. That is native system
 call evidence, separate from the Linux-hosted compiler and the generated
 program corpus; it is not a FreeBSD-hosted Ada compiler claim.
-
-Identical-tree reuse: a branch push or same-repository pull request by an
-author with write access may reuse a complete successful push run from this repository from the
-preceding seven days when the entire tracked tree is identical. This key
-includes every byte, path and mode, the workflows and tool pins, and all
-documents. A pull request compares its merge checkout, not just its head.
-The complete GitHub job listing must contain every required matrix leg with
-success; filtered local runs, cache entries, incomplete listings and runs
-that themselves reused evidence cannot supply this pass. Main promotion
-therefore does not repeat a candidate's full matrix when its tree is unchanged.
-A manual dispatch of scope `full`, the default, runs the full matrix and the
-boards. Superseded pushes to a branch and updates to a pull request are
-cancelled. A manual dispatch, a push to `main` and the schedule each have a
-concurrency group of their own, so none of them cancels another: a shared
-group would still cancel its pending run when a third arrived, whatever
-`cancel-in-progress` says. Unrelated forks' pull requests cannot cancel
-each other.
-
-An explanatory edit: a declared edit confined to the content of `README.md`,
-`ROADMAP.md`, `handoff.md`, `AGENTS.md` and the guides under `docs/` that
-`gate_inputs.py`'s `DOCUMENTS` names, and to anything under `roadmap/` and
-`docs/site/` and the boards' `*.cycles.json` baselines, files added and
-deleted there included (D1373, D1648, D1650), may reuse a
-complete successful push run of this repository from the preceding seven
-days, of `main` or of any other branch, whose commit is an ancestor of the
-edit (D586). So a
-documents-only commit that closes an item after its branch's full gate
-reuses that gate on the branch and again when main is promoted to it. A
-branch's run is as trustworthy a base as main's: only someone with write
-access can push to a branch, and the tree key covers the workflow that run
-executed and every tool pin.
-Every intervening commit must carry the exact line `Gate: explanatory`;
-the event must be a push to a branch of this repository, `main` or another,
-or a same-repository pull request whose author has write access. Declare
-only changes to explanation, with no
-change to language rules, targets, scope or acceptance claims. The source
-tree key preserves all other bytes, paths and modes. Missing, partial,
-expired or mismatching evidence runs everything. Documents and script
-checks always run, and a reused run can never itself supply the full pass.
-The aggregate gate covers each build, test and determinism host separately.
-
-For a successful reuse, the `inputs` log names the source commit and links
-the full run being reused. Target and build jobs, including `determinism`,
-appear as skipped; `inputs`, `documents`, `scripts` and the final `gate`
-still succeed. The linked full run contains the target-test results.
 
 | job | runner | runs |
 |---|---|---|
@@ -982,17 +978,15 @@ still succeed. The linked full run contains the target-test results.
 
 Linux and Darwin lanes run on GitHub-hosted images for every event, as do
 the called determinism workflow and the links, Pages and release workflows;
-the registered runners measured slower and are no longer selected. The
-board legs alone run on the self-hosted rig runner described below. The
+the board legs alone run on the self-hosted rig runner described below,
+and only for a push to `main`, the weekly schedule or a manual dispatch. The
 FreeBSD lanes boot their VMs inside the hosted job, arm64 under emulation
 because GitHub's arm64 images offer no KVM. See [the runner environment requirements](environments.md#github-actions-runners).
 
-The gate's evidence used to come only from compilers built from clean.
-The rule is now that every verdict the gate counts was made with
-executables a clean build of the tree produced: built from clean, or the
-same files, byte for byte, as the clean build's. Linux x86-64's release
-executables use the second form, and so now do Darwin's, which were
-built from clean only before. `linux-release-clean` builds them
+Every verdict the gate counts was made with executables a clean build of
+the tree produced: built from clean, or the same files, byte for byte, as
+the clean build's. Linux x86-64's and Darwin's release executables use the
+second form. `linux-release-clean` builds them
 from clean, as every other build job does. `linux-release-build` builds
 them with `scripts/dev-build.sh` over the object tree an earlier run left in
 the cache, recompiling by checksum what changed, so the jobs waiting for a
@@ -1012,21 +1006,15 @@ clean build and takes as long as one.
 
 The comparison can be of whole files because the build records no compiler
 switches in its debugging information (`-gno-record-gcc-switches` in
-`compiler/ada/landin_common.gpr`). GPRbuild hands each compilation
-temporary files under `/tmp/GPR.PID/`, and GCC wrote their names into each
-unit's `DW_AT_producer` string, so two builds of one tree run by different
-GPRbuild processes differed in `.debug_str`, and in `.debug_info`'s
-references into it, and nowhere else. The cache entry is the build tree
+`compiler/ada/landin_common.gpr`, whose reason `compiler/ada/TOOLCHAIN.md`
+gives). The cache entry is the build tree
 without `bin/` and `link/`, about 120 MB compressed. Its key names what
 the objects were compiled against that the build's manifest does not
 record, the C library headers the C adapters read and the C compiler's
 version (`scripts/release_cache_key.py`), and the digest of
-`environments/pins.sh`. It used to name the runner image's version, and
-GitHub serves one run two image versions while it rolls an image out, so
-a job found the saved entry only when it shared an image with the job
-that saved it: run 44030898347's `linux-release-build` ran on image
-20261111.370.1, main's entry was from 20261111.127.1, and it built from
-clean. A run restores the newest entry of its own branch
+`environments/pins.sh`, and not the runner image's version, since GitHub
+serves one run two image versions while it rolls an image out and a key
+naming it misses the saved entry. A run restores the newest entry of its own branch
 or, failing that, of `main`, and `build.sh` still rebuilds from clean when
 the source inventory, a project file, the switches or the toolchain differ
 from what the restored tree records. A push saves its tree once the
@@ -1048,15 +1036,10 @@ and only the comparison takes the clean one. Apple's `ar` writes each
 member's modification time into the library archive and Apple's linker
 writes each object's time, or that archive date, into the executable's
 debug map, the `N_OSO` entries LLDB reads to find the DWARF that stays in
-the object files; the ad hoc signature hashes those pages. Measured on a
-Mac with the pinned GNAT and the Command Line Tools' `ld-1267`, those
-times and the signature hashes were the only differences between two
-clean builds of one tree, and between a clean build and an incremental
-one over an older tree's objects; the `LC_UUID`, every section, the other
-symbols and the strings were the same, and so were the object files.
-Both build jobs therefore set `ZERO_AR_DATE=1`, which has `ar` and the
-linker write 0, and with it the three builds were the same files. LLDB
-still finds the source lines of `refine` through such a debug map, and the
+the object files; the ad hoc signature hashes those pages. Those times
+and hashes are the only differences between two builds of one tree, so
+both build jobs set `ZERO_AR_DATE=1`, which has `ar` and the linker write
+0, and the builds are then the same files. LLDB still finds the source lines of `refine` through such a debug map, and the
 Darwin LLDB sessions pass with a compiler built so; a time of 0 only
 stops LLDB refusing an object rebuilt since the link, which on a runner,
 where no object outlives its job, cannot happen. The cache is keyed and
@@ -1076,271 +1059,97 @@ Both caches carry the sources' modification times with the objects
 that depend on an unchanged source but recompiles every unit whose own
 source's time stamp differs from the one its ALI file recorded, and goes
 by time stamps alone for C; a checkout gives every file the time of the
-checkout, so until the times were carried a build over a restored tree
-recompiled all of it and took as long as a clean build, as
-`linux-release-build` did on run 44052328931 over an unchanged tree. The
-build job gives each source whose SHA-256 is the one recorded the recorded
+checkout, so without the carried times a build over a restored tree
+recompiles all of it and takes as long as a clean build. The build job gives each source whose SHA-256 is the one recorded the recorded
 time, and leaves every other file newer than its objects.
 
-The Darwin jobs were arranged for GitHub's limit of five macOS jobs at once
-per account, which holds on every plan below Enterprise unless GitHub
-Support raises it. On 2026-11-20 GitHub Support raised the organisation
-`701-dev`'s limits to fifteen macOS jobs and sixty jobs in all at once
-(raisable to 120 on request), so every macOS job of one run now has a
-runner at once; what follows records how the five shaped the
-arrangement. In the runs of
-2026-11-15 and 11-16 the seven Darwin jobs took about 100 job-minutes:
-the debug build ended about 8 minutes after the run was created and the
-release build, twelve minutes of compilation, about 15; `darwin-host` ran
-25 to 31 minutes on one runner, and `darwin-parity` waited for the release
-build and then for a free macOS runner, ending 36 to 41 minutes in. A
-macOS job's setup, checkout, toolchain and artifact restore take under a
-minute, so the long jobs run as shards: `darwin-host` in two,
+The Darwin lanes are divided so that no macOS job
+holds the longest path alone: `darwin-host` runs in two shards,
 `darwin-host-release` in two and `darwin-parity` in three, each division
-holding every case once. With both Darwin determinism manifests that is
-eleven macOS jobs, about 110 job-minutes, and the arrangement was modelled
-to end about 30 minutes after the run is created, 31 on the slower of the
-two runs; the five runners then sit idle only while the debug build is the
-one job ready. What remained above the Linux lanes' end was the release
-build's twelve minutes before `darwin-parity` and `darwin-host-release`
-could start, which the cached Darwin build shortens to under two minutes
-when the tree's sources are unchanged (1.6 on run 44070770890). It adds a
-macOS job, the clean build, of about nine minutes, and so twelve jobs
-share the five runners, and the order they take them in decides the end.
-On run 44070770890 the release lanes, ready at the cached build's end,
-took the runners `darwin-host-1` needed at the debug build's end, and that
-shard, the longest path at sixteen minutes, started 7.7 minutes late; the
-gate ended at 31.5 minutes. `darwin-host-release` therefore waited for
-`darwin-release-compare`, which ends after the debug build, so that the
-two `darwin-host` shards and the two Darwin determinism manifests took the
-runners first; with fifteen runners it starts at the cached build's end,
-as the parity shards do. On run 44076856511 the gate
-so arranged ended at 30.5 minutes, the last Darwin job at 30.2 and the
-last Linux one at 21.3: the twelve macOS jobs held about 115 job-minutes,
-which five runners take at least 23 minutes over from the run's third
-minute, and the clean build, nine minutes on one run and fourteen on that
-one, decides when the release lanes start. A list-scheduling model of
-those durations puts the arrangement at 27.5 to 30 minutes by the clean
-build's time, against about 32.6 for building Darwin's release
-executables once from clean, the arrangement before; what would lower the
-floor is fewer macOS job-minutes or more macOS runners.
-
-The cap is the account's, not a run's: two items' gates running at once
-share the macOS runners, five then and fifteen now, and the account's
-Linux runners too. Run
-44062808053, beside another item's gate, took 51
-minutes, its Darwin lanes queued behind the other run's and its Linux lanes
-waiting up to nine minutes for a runner.
+holding every case once, and `darwin-host-release` and the parity shards
+start at the cached build's end. The organisation `701-dev` may run fifteen
+macOS jobs and sixty jobs in all at once (GitHub raises the sixty to 120 on
+request), enough for every macOS job of one run at once. The cap is the
+account's, not a run's: two items' gates running at once share its macOS
+and Linux runners, and each takes longer.
 
 A compile error surfaces in its host's debug or release build job; Linux
-arm64's release lane still builds its own. In
-[run 37227405592](https://github.com/JanHaan/Landin/actions/runs/37227405592),
-the successful shared release-build jobs took 300 seconds on Linux and 447
-on Darwin; their compilation steps took 273 and 425 seconds respectively.
-Successful verification jobs took 328 seconds for `release`, 153 for
-`scaling`, 102 for the then separate `lldb` job and 486 for `darwin-parity`.
-These whole-job times
-include setup and artifact handling, but exclude queueing and waiting for
-the shared build dependency.
-
-The determinism manifest jobs covering all nine optimization/specialization
-combinations took 150 seconds on Linux x86-64, 137 on Linux arm64 and 276 on
-Darwin arm64; manifest emission itself took 50, 40 and 105 seconds
-respectively. The agreement job took five seconds. These are single-run
-observations, not a comparison, and exclude failed jobs whose durations
-cover only part of their work.
+arm64's release lane still builds its own.
 
 The gate keeps artifacts, never an acceptance record: among them a failed
 Cortex-M job's diagnostic output, when there is any, and a failed LLDB
 session's transcripts, images and dSYMs from `darwin-host-release-2`, in
-one archive as `darwin-lldb-evidence`, for 14 days, the determinism workflow's assembly
-manifests, and each board leg's evidence for 90 days. Same-run build archives are only inputs to later jobs.
+one archive as `darwin-lldb-evidence`, for 14 days, the determinism
+workflow's assembly manifests, and each board leg's evidence for 90 days.
+Same-run build archives are only inputs to later jobs.
 
-The gate calls `determinism.yml`, which
-requires every host in its matrix to emit the same bytes; it emits and hashes
-but never assembles, links or runs. It also supports manual dispatch.
-`pages.yml` publishes <https://www.701.dev>
-when a site input changes on `main`, or when dispatched manually. `links.yml`
-checks changed documents on a push and every document weekly or manually.
-Changes to link checker configuration and unknown changed ranges also check
-every document.
-`release.yml` is tag-driven: a `v*` tag builds and publishes the `refine`
-assets that `nix build .#refine-bin` consumes, and the two container
-images; [releasing a version](#releasing-a-version) gives the recipe
-around it. Its first job,
-`scripts/release.py gated`, refuses a tag whose commit is not on `main` or
-whose own push gate on `main` did not succeed, so a tag on an unmerged or
-ungated commit publishes nothing. Its last, `scripts/release.py publish`,
-makes the release a draft, uploads every asset, reads the list back and
-only then publishes it; a run that stops part-way leaves a draft that the
-next run empties and fills, and an asset of a published release is never
-replaced. The archives record root as every member's owner.
+The gate calls `determinism.yml`, which requires every host in its matrix
+to emit the same bytes; it emits and hashes but never assembles, links or
+runs. It also supports manual dispatch. `pages.yml` publishes
+<https://www.701.dev> when a site input changes on `main`, or when
+dispatched manually; it fetches the licensed code face from object storage
+because it is not in this repository, renders and verifies, and runs no
+compiler test. `scripts/site.sh` renders and packages and does not publish.
+`links.yml` checks changed documents on a push and every document weekly or
+manually; a change to the link checker's configuration, or an unknown
+changed range, checks every document. `release.yml` is tag-driven and
+[releasing a version](#releasing-a-version) describes it. The repository
+submits no build manifests, and Nix CI is the gate's `flake` job alone,
+which builds the flake on every run that does not reuse a pass (D585): no
+derivation is cached, and `rv64-qemu` takes only its emulator from the
+flake.
 
-A release also rests on two repository settings and an attestation
-(D1337), which `gh api` reads back:
+### Reusing a pass
 
-- The ruleset `version tags`, `gh api repos/701-dev/Landin/rulesets/27105000`,
-  is active on `refs/tags/v*` and refuses creating, moving, deleting and
-  force-moving such a tag to everyone but the repository's
-  administrators, who bypass it: its bypass list names the role
-  Repository admin, and the ruleset's `current_user_can_bypass` says
-  whether the account about to push can. The move to `701-dev` emptied
-  that list, and 0.2.11's tag was refused until it was restored; a
-  refused push asks no one for approval. git.sr.ht has no tag protection, so a
-  `v*` tag there proves nothing: a release tag is made on GitHub, by a
-  push of it or with the release, and the mirror holds it only if it was
-  pushed through both URLs.
-- The environment `release`, `gh api repos/701-dev/Landin/environments/release`
-  and its `deployment-branch-policies`, deploys only from a tag matching
-  `v*` and requires JanHaan's approval; it lets JanHaan approve his own
-  run, and an administrator may bypass it. Only the publishing job runs
-  in it, so the run waits after the builds have passed and logged their
-  checksums: approve it under "Review deployments" on the run's page
-  once they are what was meant. A dispatch runs on the tag, `gh workflow
-  run release.yml --ref vX.Y.Z -f tag=vX.Y.Z`; `scripts/release.py ref`
-  refuses one made on a branch before anything is built.
-- The publishing job alone holds `id-token: write` and
-  `attestations: write`, and attests every archive with
-  `actions/attest-build-provenance` before the release is published. The
-  `.sha256` beside an asset is written by the same job with the same
-  token, so it says the file arrived whole and not who built it; the
-  attestation says this workflow built it from that tag. The release
-  notes give the check:
+Identical-tree reuse: a branch push or same-repository pull request by an
+author with write access may reuse a complete successful push run from this repository from the
+preceding seven days when the entire tracked tree is identical. This key
+includes every byte, path and mode, the workflows and tool pins, and all
+documents. A pull request compares its merge checkout, not just its head.
+The complete GitHub job listing must contain every required matrix leg with
+success; filtered local runs, cache entries, incomplete listings and runs
+that themselves reused evidence cannot supply this pass. Main promotion
+therefore does not repeat a candidate's full matrix when its tree is unchanged.
+A manual dispatch of scope `full`, the default, runs the full matrix and the
+boards. Superseded pushes to a branch and updates to a pull request are
+cancelled. A manual dispatch, a push to `main` and the schedule each have a
+concurrency group of their own, so none of them cancels another: a shared
+group would still cancel its pending run when a third arrived, whatever
+`cancel-in-progress` says. Unrelated forks' pull requests cannot cancel
+each other.
 
-```sh
-gh attestation verify landin-VERSION-PLATFORM.tar.gz --repo 701-dev/Landin \
-  --signer-workflow 701-dev/Landin/.github/workflows/release.yml \
-  --source-ref refs/tags/vVERSION --deny-self-hosted-runners
-```
+An explanatory edit: a declared edit confined to the content of `README.md`,
+`ROADMAP.md`, `handoff.md`, `AGENTS.md` and the guides under `docs/` that
+`gate_inputs.py`'s `DOCUMENTS` names, and to anything under `roadmap/` and
+`docs/site/` and the boards' `*.cycles.json` baselines, files added and
+deleted there included (D1373, D1648, D1650), may reuse a
+complete successful push run of this repository from the preceding seven
+days, of `main` or of any other branch, whose commit is an ancestor of the
+edit (D586). So a
+documents-only commit that closes an item after its branch's full gate
+reuses that gate on the branch and again when main is promoted to it. A
+branch's run is as trustworthy a base as main's: only someone with write
+access can push to a branch, and the tree key covers the workflow that run
+executed and every tool pin.
+Every intervening commit must carry the exact line `Gate: explanatory`;
+the event must be a push to a branch of this repository, `main` or another,
+or a same-repository pull request whose author has write access. Declare
+only changes to explanation, with no
+change to language rules, targets, scope or acceptance claims: an
+explanatory edit never covers generated Ada or catalogues, executable
+examples or fixtures, or the grammar and semantic rules in `spec.md`, and
+a guide the key does not leave out, `docs/commands.md`, `docs/library.md`,
+`docs/format.md` and `docs/from-c.md` among them, is read by lanes and is
+not explanatory. The source
+tree key preserves all other bytes, paths and modes. Missing, partial,
+expired or mismatching evidence runs everything. Documents and script
+checks always run, and a reused run can never itself supply the full pass.
+The aggregate gate covers each build, test and determinism host separately.
 
-Releases up to 0.2.10 were built before the repository moved from the
-account `JanHaan` to the organisation `701-dev`, and their attestations
-name the old owner: for those, write `JanHaan` for `701-dev` in both
-options.
-
-A tag on a commit older than these steps runs that commit's workflow,
-which has neither the environment nor the attestation; the ruleset leaves
-making one to an administrator.
-
-Two installers follow a published release, and neither is moved by the
-release workflow. The flake's `releaseVersion` and `releaseHashes` are
-written by hand from the publishing job's log, as `flake.nix` says beside
-them. The Homebrew formula, `Formula/landin.rb` in
-<https://github.com/JanHaan/homebrew-tap>, is moved by that tap's
-`bump-landin` workflow, which runs daily and points the formula at
-GitHub's latest release. Right after publishing, run it at once rather
-than waiting for the schedule:
-
-```sh
-gh workflow run bump-landin.yml --repo JanHaan/homebrew-tap -f version=X.Y.Z
-```
-
-Then check it: the tap's `main` gains the commit `Landin formula X.Y.Z`,
-and on a Mac with Apple Silicon and on Linux `brew update && brew upgrade
-landin` (or `brew install janhaan/tap/landin`) followed by `brew test
-landin` passes; the formula's test runs `refine version`, which must name
-X.Y.Z, `refine svd --help`, a split command found in the keg's
-`libexec/landin` only through `refine`'s resolved path, and `refine run`
-of the README's first program. The tap is the maintainer's own
-repository, outside this one's gate.
-
-The formula depends on these properties of a release, so a change to any
-of them changes the formula first, in the tap:
-
-- the assets are `landin-X.Y.Z-PLATFORM.tar.gz` under the tag `vX.Y.Z` of
-  `701-dev/Landin`, for exactly the platforms `aarch64-darwin`,
-  `aarch64-linux` and `x86_64-linux`, which the tap's
-  `scripts/bump-landin.py` lists and the formula names one by one;
-- beside each archive a `.sha256` file whose first field is the archive's
-  SHA-256 sum; the bump reads those and downloads nothing else;
-- the archive is an installed prefix with no top-level directory —
-  `bin/refine`, `libexec/landin/refine-NAME` and `lib/landin` — which the
-  formula installs whole into its keg;
-- `refine` finds `lib/landin` and `libexec/landin` from its own resolved
-  executable, because Homebrew links the keg's `bin` and `lib` into its
-  prefix but not its `libexec`;
-- the release is GitHub's latest one, which a draft or a prerelease is
-  not, and the formula's test program still compiles and runs.
-
-The repository submits no build manifests. GitHub is canonical and takes
-pushes directly; git.sr.ht is a mirror, kept in step by a second push URL on
-the same remote rather than by a job. The mirror therefore holds only what a
-push through that remote sent it: a branch or tag made on GitHub itself —
-the release tags, a branch opened from the web — is not on it, and a ref
-deleted on GitHub alone stays on it. A deletion reaches it only when
-`git push origin --delete` runs from a clone with both push URLs, and git
-refuses that whole push to sr.ht when any ref it names is missing there,
-while GitHub still accepts it. Compare `git ls-remote` of
-<https://github.com/701-dev/Landin> and <https://git.sr.ht/~sinnfrei/landin>
-before deleting, and delete what is only on one of them from that one by its
-URL. Nothing reports a disagreement between the two. `pages.yml` fetches the licensed code
-face from object storage because it is not in this repository; it renders and
-verifies, and runs no compiler test. `scripts/site.sh` renders and packages
-and does not publish. Nix CI is limited to the gate's `flake` job, which
-builds the flake on every run that does not reuse a pass (D585); no derivation is cached, `rv64-qemu` takes only its emulator from
-the flake, and the former automatic Nix manifest is retired. Historical SourceHut gate links
-remain evidence for their original revisions.
-
-`check.py` uses only the Python standard library and changes to its own directory, so it can also be invoked by absolute path from elsewhere. It is a heuristic invariant checker, not a parser, compiler, formatter, or semantic test suite. Run the full command after documentation changes; targeted checking of an absolute `tour.md` path does not run all citation checks.
-
-Use `scripts/dev-test.sh --host --target=linux-x86-64` on the Mac for
-compiler-host feedback, and expect every selected case to pass. The unfiltered harness includes Linux
-execution and fails without its target toolchain, so do not run Linux
-containers, Linux workload emission or repeated complete suites on the Mac as
-routine feedback. Run changed-component tests while editing, then push the
-final candidate to a branch for one complete CI matrix. Do not repeat the
-complete local matrix merely before pushing and watching the same CI tests.
-Before promoting the candidate to main, verify its complete gate succeeded,
-that a boards dispatch passed on the same tree unless the edit is
-explanatory, and that the promoted tree
-is the one tested; merge changes require new evidence. A full local run remains useful when an investigation requires it,
-and is not a substitute for the multi-host gate.
-After documentation changes run the full `python3 check.py` and review the
-prose against what it describes. The explanatory reuse exception does not
-cover generated Ada or catalogues, executable examples or fixtures, or the
-grammar and semantic rules in `spec.md`. `LANDIN_TEST_JOBS` splits the corpus fixtures across
-workers, which is most of what the suite costs. One worker is still the
-default, and `scripts/parallel-equivalence.sh` is what holds a wider run to
-the same verdicts.
-
-Linux, Darwin and Cortex-M runtime and debugger evidence comes from the
-gate, or from a host you run yourself.
-A Darwin change receives focused checks on a Mac before it is pushed, and so,
-when a Mac is available, does a change to the harness or to fixtures the
-Darwin lanes run: `darwin-parity` and `darwin-host` were the lanes most often
-red in October's gate runs. The full Darwin suites run in the candidate's CI
-matrix. LLDB must inherit a
-graphical or terminal security audit session; an arbitrary background
-session may not launch a debugged process, regardless of debugger rights.
-The hosted macOS image's runner session may launch one. The first native Mac run's retained
-expected-refusal transcript, in which the unfiltered harness failed only for
-want of a Linux driver, is historical bootstrap evidence, never a current
-success rule.
-
-`scripts/test.sh` builds and runs the complete Linux test program on native
-Linux. Its `--host` selector retains compiler checks on the Mac. `scripts/dev-build.sh` and
-`scripts/dev-test.sh` use GPRbuild's checksum mode for fast feedback, and the
-latter accepts exact `--suite`, `--case` and `--fixture` selectors, as many
-as a change reaches in one run; each named fixture executes in turn. A
-filtered run says `FILTERED` in its transcript and is not gate evidence. There
-is no separate lint or typecheck step: the pinned build treats every warning
-as an error and enforces GNAT style checks. Warnings are policy, not preference
-— do not silence one without a recorded reason.
-
-Staleness is decided by source checksums, not timestamps: `build.sh` rebuilds
-from clean when the manifest disagrees, because an edited-and-reverted file
-keeps a newer mtime than the object built from it and gprbuild would serve the
-stale object. The developer wrappers instead pass the pinned GPRbuild's `-m2`
-checksum mode; source inventory or project-file changes still force a clean
-tree, and a failed developer build is resumed rather than cleaned. A clean
-tree keeps `bin/` and `libexec/`: executables are linked into `link/` and
-published into `bin/` by a rename, only while no corpus lane or manifest run
-holds the build's readers lock (`scripts/build_lock.py`). Each split command
-`compiler/ada/split-commands.json` lists is built with `refine`, with or
-without `--compiler-only`, and published as `libexec/landin/refine-NAME`,
-the directory there even when the list is empty, as in a release archive
-([split commands](../compiler/ada/README.md#split-commands)). A compiler-only build records `refine` as current without claiming that
-`landin_tests` is current; the next full build still builds the test program.
+For a successful reuse, the `inputs` log names the source commit and links
+the full run being reused. Target and build jobs, including `determinism`,
+appear as skipped; `inputs`, `documents`, `scripts` and the final `gate`
+still succeed. The linked full run contains the target-test results.
 
 ### The controls that hold the job inventory
 
@@ -1431,10 +1240,12 @@ secret, and their token can only read the contents and the actions.
 A candidate reaches `main` in three steps:
 
 1. Its complete software push gate passes on its branch.
-2. A dispatch of scope `boards` passes on the identical tree,
-   `gh workflow run gate.yml --ref BRANCH -f scope=boards`. An edit declared
-   `Gate: explanatory` skips this step: its main push takes the boards of
-   a passed run before it, or runs them when there is none.
+2. A dispatch of scope `boards` passes on the identical tree, or on an
+   ancestor separated from it only by commits declared
+   `Gate: explanatory`, `gh workflow run gate.yml --ref BRANCH -f
+   scope=boards`. An edit declared `Gate: explanatory` skips this step:
+   its main push takes the boards of a passed run before it, or runs them
+   when there is none.
 3. `main`'s own push gate, which takes the boards of that dispatch, is
    followed to its end. A failure there is investigated, never rerun
    blindly.
@@ -1442,9 +1253,7 @@ A candidate reaches `main` in three steps:
 #### The promotion queue
 
 A candidate gated while another item lands has to merge `main` again and
-run its whole gate and boards again: in the three days before the queue,
-eight merged trees were an item's second or third. So promotions take
-turns. The clone holds one promotion token, `landin-items/queue.json`.
+run its whole gate and boards again, so promotions take turns. The clone holds one promotion token, `landin-items/queue.json`.
 `item.py merge-main` takes it before an item's final merge of `main`, and
 `item.py promote` before pushing; the holder keeps it through its merged
 tree's gate, its boards, its promotion and `main`'s gate on it, and gives
@@ -1566,10 +1375,10 @@ each loads the same bytes. It lists twelve names of each kind, and
 
 A release is the maintainer's: the version, the declaration and the tag
 are named by the maintainer, never chosen by an item or an agent, and the
-project does not assume SemVer. The recipe below is the order every release
-since 0.2.8 has followed. Its settings, the tag ruleset, the `release`
-environment and the attestations, are described with the
-[release workflow in the gate reference](#the-mechanical-gate); the
+project does not assume SemVer. The recipe below is the order a release
+follows. Its settings, the tag ruleset, the `release` environment and the
+attestations, are described with
+[the release workflow](#the-release-workflow-and-its-settings); the
 comments of `.github/workflows/release.yml` and of `flake.nix` beside
 `releaseVersion` say why each step is the way it is.
 
@@ -1607,7 +1416,8 @@ comments of `.github/workflows/release.yml` and of `flake.nix` beside
    commit, pushed to GitHub through `origin`, whose second push URL sends
    it to the git.sr.ht mirror too. Only an administrator may push it, and
    the push asks for no approval: the ruleset's bypass list must name the
-   role, as the release settings say.
+   role, as [the release settings](#the-release-workflow-and-its-settings)
+   say.
 5. **Approve.** The tag's push runs `release.yml`: the checks, the three
    builds and the image jobs, as in the rehearsal. The publishing job then
    waits in the `release` environment. Read the builds' checksums and the
@@ -1643,8 +1453,8 @@ comments of `.github/workflows/release.yml` and of `flake.nix` beside
    also prints. `nix build .#refine-bin` must then print `refine X.Y.Z`
    from `result/bin/refine version` and run the first program. The commit
    is gated and promoted like any other.
-8. **Move Homebrew**, as the paragraph after the release settings says:
-   run the tap's `bump-landin` workflow and check the formula.
+8. **Move Homebrew**, as [the installers](#the-installers) say: run the
+   tap's `bump-landin` workflow and check the formula.
 
 The images are built only here (D1667, D1668): never from `main` or a
 commit, so the Debian packages inside one are those of the day its
@@ -1654,291 +1464,102 @@ from its own packaged compiler, in `outside-user-stock` on amd64 and
 contributor image, whose build fetches the toolchain and builds the
 compiler, is built only by the release workflow and a rehearsal.
 
-## Historical: choosing acceptance scope
+### The release workflow and its settings
 
-The maintainer's decision for the retired acceptance was: full
-gates only at major milestones, Linux work on native Linux, debugger checks
-only for substantial regression risk, and Nix CI deferred. The rest of this
-section is that policy as it stood at 0.2.0.
+`release.yml` is tag-driven: a `v*` tag builds and publishes the `refine`
+assets that `nix build .#refine-bin` consumes, and the two container
+images. Its first job,
+`scripts/release.py gated`, refuses a tag whose commit is not on `main` or
+whose own push gate on `main` did not succeed, so a tag on an unmerged or
+ungated commit publishes nothing. Its last, `scripts/release.py publish`,
+makes the release a draft, uploads every asset, reads the list back and
+only then publishes it; a run that stops part-way leaves a draft that the
+next run empties and fills, and an asset of a published release is never
+replaced. The archives record root as every member's owner.
 
-| stage | work | evidence |
-|---|---|---|
-| edit/test loop | checksum-based build and exact affected case/suite/fixture selectors; affected Python tests | development feedback |
-| Mac compiler host | `scripts/dev-test.sh --host`; diagnostics, compiler units and complete IR golden | explicit host scope; no Linux workload emission/execution |
-| Linux development | `scripts/ci/controller.py dev --slot NAME -- COMMAND...` on the native runner | focused native feedback; no approval |
-| native Darwin candidate | schema-4 debug/release host checks and complete release source/runtime/ABI, derived programs and bindings | required matching archive and compatible Linux scope |
-| routine main promotion | five committed jobs: debug host suite, full release suite/runtime/ABI and native report identity, release object quality, bindings, documents/tooling | exact-commit routine approval |
-| substantial debugging risk | routine coverage plus full native release GDB and LLDB | exact-commit routine approval that includes the debugger job |
-| major phase/parity milestone | full Linux suite/quality/GDB and Darwin host/source/runtime/ABI/bindings/LLDB in both compiler modes, plus documents/tooling | exact-commit milestone approval |
-| publication | verified export, annotated approval, atomic main/tag promotion, guarded Pages rendering | delivery of the approved revision |
+A release also rests on two repository settings and an attestation
+(D1337), which `gh api` reads back:
 
-Do not run Linux containers or Linux workload matrices on the Mac during
-development. In-process compiler units may still inspect target-specific data;
-that is host-compiler coverage, not Linux execution. `--host` excludes the two
-native target-workload cases and requires every remaining case to pass. The
-IR comparison that exposed the first native Mac run's Ada argument-order defect
-remains included.
-
-Choose the smallest test that can expose the changed behavior first. When it
-passes, broaden only for another affected subsystem or a remaining concern.
-Run routine acceptance once for the final committed promotion candidate;
-Linux can resume verified successful jobs after interruption. Darwin has no
-resume path: interrupted or failed runs require a new run. Failed Linux jobs
-or changed source also require a new acceptance run. Do not repeat full local matrices before
-that gate. Documentation changes still receive full `check.py`; the checker
-retains every invariant and fixture.
-
-Debugger risk means changed debug metadata, source/variable locations,
-unwind/frame conventions, debugger transport, debugger checks, or acceptance
-selection/verification of debugger evidence. Record the
-reason for enabling it. A status-page edit or an unrelated tool change is not
-a reason to run debugger matrices. An Ada evaluation-order repair that changed
-no debug encoding, location or unwind code and passed the unchanged IR golden
-used routine scope without GDB; a change to debugger selection and
-verification used routine scope with full release GDB and LLDB.
-
-The judgments made under these definitions ran as follows. Noreturn and panic
-control flow, frames and source-site identity needed debugger-risk coverage,
-and so did the generated device fixtures' debugger-controlled boot and stack
-assertions. A new debugger-visible type — the several-atom pointer union, with
-GDB and LLDB presentation checks — selected routine scope with debugger
-coverage; it closed no phase and added no target, ABI convention or
-instruction selection, so milestone scope was not warranted. Committing a
-check that reads and verifies debug metadata on all three targets forced
-debugger coverage even though no emission changed, because selecting or
-verifying debugger evidence is itself debugger risk; the size of the run did
-not make it a milestone. The derived prototype coverage register changed no
-debug metadata and selected or verified no debugger evidence, so it ran at
-routine scope without debugger coverage: every result it records came from a
-job routine scope runs anyway, and running the prototypes according to the
-applicability matrix is not a parity claim.
-
-Milestone scope was selected for a phase or parity closure: complete hosted
-parity, the freestanding evidence that closed the Cortex-M0 work, and the
-first roadmap's endpoint. The endpoint changed no compiler code, which is why
-the items before it that closed no phase ran routine; a phase closure is
-answered by milestone scope whatever the code change, because a routine
-approval cannot later be cited as a milestone result. Its debugger coverage
-arrived with the full matrix rather than with a risk.
-
-Before a major milestone, select and commit milestone scope with the closure
-candidate. A routine approval cannot be cited as a full milestone result.
-Subsequent development returns to routine scope.
+- The ruleset `version tags`, `gh api repos/701-dev/Landin/rulesets/27105000`,
+  is active on `refs/tags/v*` and refuses creating, moving, deleting and
+  force-moving such a tag to everyone but the repository's
+  administrators, who bypass it: its bypass list must name the role
+  Repository admin, and the ruleset's `current_user_can_bypass` says
+  whether the account about to push can. Check it before tagging: a
+  transfer of the repository empties the list, and a refused push asks no
+  one for approval. git.sr.ht has no tag protection, so a
+  `v*` tag there proves nothing: a release tag is made on GitHub, by a
+  push of it or with the release, and the mirror holds it only if it was
+  pushed through both URLs.
+- The environment `release`, `gh api repos/701-dev/Landin/environments/release`
+  and its `deployment-branch-policies`, deploys only from a tag matching
+  `v*` and requires JanHaan's approval; it lets JanHaan approve his own
+  run, and an administrator may bypass it. Only the publishing job runs
+  in it, so the run waits after the builds have passed and logged their
+  checksums: approve it under "Review deployments" on the run's page
+  once they are what was meant. A dispatch runs on the tag, `gh workflow
+  run release.yml --ref vX.Y.Z -f tag=vX.Y.Z`; `scripts/release.py ref`
+  refuses one made on a branch before anything is built.
+- The publishing job alone holds `id-token: write` and
+  `attestations: write`, and attests every archive with
+  `actions/attest-build-provenance` before the release is published. The
+  `.sha256` beside an asset is written by the same job with the same
+  token, so it says the file arrived whole and not who built it; the
+  attestation says this workflow built it from that tag. The release
+  notes give the check:
 
 ```sh
-python3 scripts/ci/policy.py routine
-python3 scripts/ci/policy.py routine --debugger
-python3 scripts/ci/policy.py milestone
+gh attestation verify landin-VERSION-PLATFORM.tar.gz --repo 701-dev/Landin \
+  --signer-workflow 701-dev/Landin/.github/workflows/release.yml \
+  --source-ref refs/tags/vVERSION --deny-self-hosted-runners
 ```
 
-These commands edit both native policy files; commit them before acceptance.
-Darwin schema 4 records host modes, hosted modes and debugger modes explicitly.
-Routine retains complete release coverage; `--debugger` adds every release
-native debugger profile and derivative. Milestones run both modes. Approval
-validates the exact commands, selected scope and matching archive. Historical
-Linux schema-1 approvals remain full eight-job evidence; Darwin schemas 1/2/3
-retain their original contracts, including schema 3's Linux milestone rule. The native
-operations guide documents acceptance, export, approval and promotion.
+The attestations of releases up to 0.2.10 name the repository's former
+owner, the account `JanHaan`: for those, write `JanHaan` for `701-dev` in
+both options.
 
-## What the measurements say
+A tag on a commit older than these steps runs that commit's workflow,
+which has neither the environment nor the attestation; the ruleset leaves
+making one to an administrator.
 
-The retained full Linux run `20260914T204024Z-147ccbe20b60` ran its eight jobs
-concurrently. Its slowest job determined about 91 minutes of wall time:
+### The installers
 
-| component | debug compiler, seconds | release compiler, seconds |
-|---|---:|---:|
-| complete suite command | 4738.5 | 1096.4 |
-| object-quality command | 5438.8 | 1070.2 |
-| native debugger command | 2823.9 | 555.8 |
+Two installers follow a published release, and neither is moved by the
+release workflow. The flake's `releaseVersion` and `releaseHashes` are
+written by hand from the publishing job's log, as `flake.nix` says beside
+them. The Homebrew formula, `Formula/landin.rb` in
+<https://github.com/JanHaan/homebrew-tap>, is moved by that tap's
+`bump-landin` workflow, which runs daily and points the formula at
+GitHub's latest release. Right after publishing, run it at once rather
+than waiting for the schedule:
 
-The document/tooling job took 111.0 seconds, including 88.2 in `check.py`,
-10.5 in CI failure-path tests and 2.1 in rendering. The complete first native
-Mac harness took 2522.2 seconds in debug and 911.3 in release, largely compiling
-Linux workloads before the inevitable missing-tool refusal. Those runs remain
-historical evidence, not the future development cadence.
+```sh
+gh workflow run bump-landin.yml --repo JanHaan/homebrew-tap -f version=X.Y.Z
+```
 
-A local Python profile put 99.9 of 106.5 instrumented seconds in the grammar
-corpus check: 50.9 in recognition and 44.7 in lexical membership. The lexical
-matcher was called 952266 times. It now reuses repeated spellings within one
-file with a bounded cache. Grammar edits cannot reuse answers from a previous
-invocation, and token offsets/refusals remain checked. No corpus is skipped
-and no persistent cache supplies acceptance evidence.
+Then check it: the tap's `main` gains the commit `Landin formula X.Y.Z`,
+and on a Mac with Apple Silicon and on Linux `brew update && brew upgrade
+landin` (or `brew install janhaan/tap/landin`) followed by `brew test
+landin` passes; the formula's test runs `refine version`, which must name
+X.Y.Z, `refine svd --help`, a split command found in the keg's
+`libexec/landin` only through `refine`'s resolved path, and `refine run`
+of the README's first program. The tap is the maintainer's own
+repository, outside this one's gate.
 
-The subsequent same-host profile took 72.6 seconds, about 32% less. Lexical
-membership fell to 101568 calls and 8.2 instrumented seconds. The new debug
-host run passed 711 cases and 192905 checks; its transcript timestamps span
-about 280 seconds including incremental rebuilding. These local measurements
-describe this checkout and host, not fixed performance bounds.
+The formula depends on these properties of a release, so a change to any
+of them changes the formula first, in the tap:
 
-The first routine run, `20260915T082011Z-70a07a37aea3`, measured 1208.5
-seconds for its slowest job. Release suite and quality commands took 1094.9
-and 1081.5 seconds; their separate bootstrap builds took 111.6 and 113.8.
-Debug host checks took 437.3 seconds after a 46.1-second build. Documents
-and bindings jobs took 84.1 and 60.6 seconds. These are measured results,
-not fixed performance bounds.
-
-## Parallel work and build reuse
-
-The outer jobs already run in parallel. The remaining opportunity is inside
-long jobs: independent workload/profile compilations run sequentially, and
-the same compiler mode or workload is built for several consumers.
-
-The proposed build graph is: one compiler build per mode, independent program
-builds keyed by their complete inputs and flags, then separate execution,
-quality and debugger consumers. Share immutable artifacts with verified
-identities, not mutable output paths. Use one aggregate CPU/memory budget;
-nested unrestricted worker pools would oversubscribe the runner. Keep
-GPRbuild's existing Ada dependency and checksum handling.
-
-An evaluation compared one and two workers on native Linux using the same
-immutable release compiler and fresh outputs for the parser/container
-programs under none/off and size/auto. The four compilations took 111.15
-seconds sequentially and 55.55 with two workers; every assembly hash matched.
-Individual peak RSS was at most 50372 KiB. These samples justify two-worker
-experimentation; they do not bound memory for the whole fixture matrix.
-
-The evaluated dependency graph keys a compiler artifact by complete source,
-project/pin inventory, host/tool identities, mode, flags and path mapping.
-A workload artifact additionally keys reached source/roots, configuration,
-profile, debug settings, compiler identity, adapter inputs and target tools.
-Execution, quality and debugger consumers retain independent run records.
-The two existing release compiler artifacts have different binary hashes and
-sizes in their different build contexts; they cannot simply be exchanged
-under today's acceptance identity records. Their builds already overlap, so
-sharing would save CPU but is not a measured 112-second wall-time improvement.
-
-The production scheduler/cache remains deferred to the scale and self-hosting
-successor that `ROADMAP.md`'s register names. Integrating bounded workers
-requires shared cancellation, timeout ownership and aggregate resource tests;
-artifact sharing requires an acceptance-schema change for producer identities.
-The quality command's second compilation deliberately checks determinism and
-must stay fresh. Cache hits must be labelled as reuse, and native execution
-must still run. This closes the evaluation without weakening those oracles or
-introducing nested worker pools into the routine gate.
-
-## Nix later
-
-The current `flake.nix` supplies development shells and two `refine`
-packages, one built from the checkout and one fetched from a release. It does
-not define the project's test derivations. More `nix develop` invocations
-alone would not remove repeated compilation. The gate's `flake` job builds
-both packages, evaluates every output of every system and enters the shell
-on every gate run that does not reuse a pass (D585); that is the whole of
-Nix CI today, and what follows is what it does not do.
-
-Nix could later own compiler packages and suitable `checks` with narrow,
-complete inputs, and schedule them on the correct native builders. Its flake
-checks build the declared check derivations; distributed builds and separate
-job/core controls provide the scheduling mechanisms.
-[Flake checks](https://nix.dev/manual/nix/2.35/command-ref/new-cli/nix3-flake-check.html),
-[distributed builds](https://nix.dev/tutorials/nixos/distributed-builds-setup.html),
-[job/core controls](https://nix.dev/manual/nix/2.32/advanced-topics/cores-vs-jobs).
-
-Nix CI beyond building the flake is explicitly deferred. A later evaluation
-must account for the pinned Apple SDK, native debugger permissions, input selection, cache provenance and
-the existing native acceptance record. Build reuse cannot replace the native
-Darwin, Linux or freestanding executions required at a milestone.
-
-
-## Historical Darwin acceptance progression
-
-Native Darwin lowering added `scripts/ci/darwin.py accept COMMIT` to ordinary
-promotion. It ran the committed native Mac policy and exported source, tools,
-artifacts and execution evidence. Approval used `approve LINUX_BUNDLE --darwin
-DARWIN_BUNDLE`; the two bundles had to describe exactly the same archive, and
-the annotated approval bound both. macOS source debugging added native LLDB
-acceptance and selected the sixth Linux routine job, release GDB, because DWARF
-serialization became shared. Full hosted parity was a separate milestone scope.
-
-The Darwin lowering work used a focused LLDB session to locate an Ada
-precondition failure in variant emission and a native C frame-chain probe for
-the newly implemented arm64 frame convention. No Linux GDB matrix was selected:
-Linux frame layout, DWARF and instruction selection were unchanged. Nix CI
-remained deferred.
-
-macOS source debugging used the exact same archived source for the native LLDB
-policy and Linux routine acceptance with GDB. Native debugger, dsymutil and
-dwarfdump versions were checked against the Mac policy, with binary hashes
-retained. Source maps, Mach-O UUIDs, dSYM identities and stripped behavior were
-required evidence. The production scheduler/cache and broader resource
-dispositions stayed as recorded; Nix CI stayed deferred.
-
-Hosted parity selected and committed `policy.py milestone` before its closure
-candidate. Its Linux gate ran the complete suite, quality and native GDB in both
-compiler modes, plus bindings and documents/tooling. Matching Mac schema-3
-acceptance ran compiler-host checks, the complete shared source/runtime/ABI
-corpus and all three derived programs with native LLDB in both compiler modes.
-The [parity guide](../compiler/tests/darwin/README.md) records exact coverage
-and platform limits. The accepted revision kept its milestone policy; routine
-scope returned only in subsequent development. No local Linux containers,
-production scheduler/cache changes or Nix CI were added.
-
-## Historical Cortex-M environment acceptance
-
-The Linux documents job additionally ran the pinned
-[Cortex-M environment probes](../environments/cortex-m/README.md) and their
-failure controls. Its exported `cortex-m` artifacts bound the live result to
-the accepted archive. Missing tools or failed probes refused acceptance.
-Adding the environment selected routine debugger-risk coverage for its debugger
-controls and acceptance command/retention changes, not the full milestone
-matrix. Darwin kept native hosted/LLDB validation.
-
-The Cortex-M0 layout and ABI work kept compatible routine policies with release
-native GDB/LLDB because it added ABI/frame obligations and executable debugger
-assertions. The Linux embedded path also ran the layout/ABI controls; the
-original CPU, peripheral and Renode-lock regression obligations stayed
-mandatory. Pure target/compiler checks used the Mac host selector; embedded
-execution used only the supported Linux runner.
-
-The concurrency memory model kept compatible routine debugger-risk policies:
-new instruction selection, scratch use, alignment traps and verifier coverage
-affect the native code/debug boundary. Full release GDB/LLDB accompanied
-complete release hosted coverage and both Mac compiler-host modes. The Linux
-embedded evidence export also included the memory controls and models, from
-the identical candidate archive. Nix CI remained deferred.
-
-Packed images selected routine debugger risk because packed
-extraction/selection, verification and raw-carrier DWARF changed. The Linux
-documents job built the committed debug compiler before the mandatory combined
-embedded probe. The probe exported compiler-generated native/Renode execution
-alongside independent M0 C/assembly and model controls, with existing lock
-cleanup and ABI/memory lanes preserved. These development or model results did
-not authorize promotion; matching native archive acceptance and the guarded
-publication path did.
-
-Generated Cortex-M0 code ran through the supported native Linux runner and the
-existing Cortex probe/export path. The complete corpus ran under an external
-startup/linker test harness. Its physical-limit and source-restriction records
-remain distinct from execution passes. This changed neither native
-Linux/Darwin acceptance nor the firmware publication path; the identical
-archive still needed both native bindings before approval and promotion.
-
-Compiler-owned firmware added mandatory execution to that same embedded
-probe/export command. Its fresh-image comparisons, QEMU boot/exception runs,
-Renode device traces and independent C/assembly controls remain
-distinguishable from the old external backend harness. Startup, frame and
-exception changes selected routine acceptance **with debugger risk**: full
-release Linux GDB and Darwin LLDB, debug compiler-host checks and complete
-release hosted execution. Both policies were committed before the closure
-candidate, and all embedded artifacts bound to that archive.
-
-The derived driver kept routine debugger-risk scope because it exposed a
-checking control-flow defect and a firmware ELF load-address defect. Both native
-policies had to match; the mandatory embedded lane included every inherited
-probe plus `environments/cortex-m/driver.py`. Its complete program and protocol
-ran on native Linux, while Mac development used `--host`. The exact accepted
-archive bound the source, model premises, literal oracles, firmware/linker
-artifacts and bounded resource observations.
-
-The freestanding evidence selected compatible **milestone** policies on both
-native hosts before the closure candidate. They kept debug/release
-compiler-host, hosted execution, quality and native debugger coverage plus every
-inherited embedded lane. The mandatory embedded entry also invoked
-`evidence.py`: complete-driver resource scenarios, Cortex source sessions,
-source/debug selection refusals and independent stack/exception controls.
-Cortex remote GDB is distinct from native Linux GDB and native Darwin LLDB. An
-isolated development function call did not replace execution through this
-mandatory entry or exact-revision acceptance, and failed or interrupted
-resource runs remained failed evidence. That closure needed both native
-archives and all of its embedded gates to pass; delivery promoted precisely
-that shared revision, without a later bookkeeping commit.
+- the assets are `landin-X.Y.Z-PLATFORM.tar.gz` under the tag `vX.Y.Z` of
+  `701-dev/Landin`, for exactly the platforms `aarch64-darwin`,
+  `aarch64-linux` and `x86_64-linux`, which the tap's bump script
+  lists and the formula names one by one;
+- beside each archive a `.sha256` file whose first field is the archive's
+  SHA-256 sum; the bump reads those and downloads nothing else;
+- the archive is an installed prefix with no top-level directory —
+  `bin/refine`, `libexec/landin/refine-NAME` and `lib/landin` — which the
+  formula installs whole into its keg;
+- `refine` finds `lib/landin` and `libexec/landin` from its own resolved
+  executable, because Homebrew links the keg's `bin` and `lib` into its
+  prefix but not its `libexec`;
+- the release is GitHub's latest one, which a draft or a prerelease is
+  not, and the formula's test program still compiles and runs.

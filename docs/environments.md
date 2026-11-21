@@ -104,7 +104,7 @@ what they were.
 
 No build manifest is submitted. GitHub is canonical and git.sr.ht is a mirror,
 kept in step by a second push URL on the same remote (the
-[gate reference](process.md#the-mechanical-gate) says what the mirror holds
+[integration recipe](process.md#integration-publication-and-ci) says what the mirror holds
 and how a deletion reaches it); the Pages and
 GitHub-mirror manifests are retired with the SourceHut gate, and
 `scripts/site.sh` renders and packages without publishing.
@@ -373,7 +373,7 @@ the maintainer's tap, outside this repository and its gate, and needs the
 Xcode command-line tools on macOS and the system's GCC driver on Linux to
 link, as an unpacked archive does. What the formula depends on in a
 release, and the step that moves it, are in
-[the gate reference](process.md#the-mechanical-gate)'s release paragraphs.
+[the installers](process.md#the-installers).
 
 The shell sets `LANDIN_BUILD_TAG=nix-${system}`: `nix-x86_64-linux`,
 `nix-aarch64-linux` or `nix-aarch64-darwin`. Shells sharing a checkout
@@ -620,5 +620,5 @@ GDB/LLDB; no Cortex debugger session replaces a native one. See the
 
 Through 0.2.0 a controller under the removed `scripts/ci/` accepted each
 revision on a native Linux runner and a Mac against one archive; the
-[native acceptance operations](../environments/native-ci/README.md) and the
-historical sections of the [validation workflow](process.md) describe it.
+[native acceptance operations](../environments/native-ci/README.md) describe
+it, and the history of `docs/process.md` holds how its scope was chosen.

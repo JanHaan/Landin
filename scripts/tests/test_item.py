@@ -146,6 +146,11 @@ class Start(Clone):
         self.assertIn(str(worktree), brief)
         self.assertIn("item.py resume %s" % FIRST, brief)
         self.assertIn("Authority paragraph", brief)
+        #  The brief rules of docs/process.md: selectors, workers, the
+        #  environment and the wait.
+        for rule in ("exact `dev-test.sh` selectors", "no `-j` or `taskset`",
+                     "agent_env.sh", "run_logged.py --wait"):
+            self.assertIn(rule, brief)
 
     def test_start_from_another_worktree_places_it_beside_the_main_one(self):
         elsewhere = self.top / "elsewhere" / "checkout"
