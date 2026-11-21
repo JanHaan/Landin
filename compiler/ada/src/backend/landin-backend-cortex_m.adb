@@ -485,8 +485,8 @@ package body Landin.Backend.Cortex_M is
             else [1 .. 0 => 0]);
          Offered : constant Register_List := Floats &
            (if High then
-              (if Calls then [4, 5, 6, 7, 3, 1, 12]
-               else [3, 1, 12, 5, 4, 6, 7])
+              (if Calls then [4, 5, 6, 7, 3, 1, 12, 8, 10]
+               else [3, 1, 12, 5, 4, 6, 7, 8, 10])
             elsif Calls then [4, 5, 6, 7, 3, 1] else [3, 1, 5, 4, 6, 7]);
          type Prefix_Table is array (Offered'Range) of
            Count_Buffers.Buffer (Value_Count + 2);
@@ -2558,8 +2558,16 @@ package body Landin.Backend.Cortex_M is
            VFP_Bytes (Saved_Run);
          VFP_Save_Offset : constant Landin.Targets.Byte_Count :=
            Extent (Layout) + VFP_Save;
+         --  D1772: r8 and r10's save, between d8-d15's and the incoming
+         --  register homes, when Registers holds either.
+         High_Save : constant Landin.Targets.Byte_Count :=
+           (if Registers /= null
+              and then (Registers.Held and (Bit (8) or Bit (10))) /= 0
+            then 8 else 0);
+         High_Save_Offset : constant Landin.Targets.Byte_Count :=
+           Extent (Layout) + VFP_Save + High_Save;
          Homes : constant Landin.Targets.Byte_Count :=
-           Extent (Layout) + VFP_Save + Home_Bytes;
+           Extent (Layout) + VFP_Save + High_Save + Home_Bytes;
          Hard_Trap : constant String := Label (Item, 1) & "_trap";
          Return_Label : constant String := Label (Item, 1) & "_return";
          Exit_Count : Natural := 0;
@@ -3592,11 +3600,19 @@ package body Landin.Backend.Cortex_M is
                if Debug /= null then
                   Emit (".cfi_remember_state");
                end if;
+               if High_Save > 0 then
+                  Emit ("ldrd r8, r10, [sp, #"
+                    & Trimmed (Home_Bytes'Image) & "]");
+                  if Debug /= null then
+                     Emit (".cfi_restore r8");
+                     Emit (".cfi_restore r10");
+                  end if;
+               end if;
                for Reg in Saved_Run.Low .. Saved_Run.High loop
                   exit when VFP_Save = 0;
                   Emit ("vldr d" & Trimmed (Reg'Image) & ", [sp, #"
                     & Trimmed (Landin.Targets.Byte_Count'Image
-                      (Home_Bytes + Landin.Targets.Byte_Count
+                      (Home_Bytes + High_Save + Landin.Targets.Byte_Count
                          (Reg - Saved_Run.Low) * 8)) & "]");
                   if Debug /= null then
                      Emit (".cfi_restore d" & Trimmed (Reg'Image));
@@ -3630,6 +3646,14 @@ package body Landin.Backend.Cortex_M is
             end if;
             if Debug /= null then
                Emit (".cfi_remember_state");
+            end if;
+            if High_Save > 0 then
+               Frame_Address_Through (High_Save_Offset, "r6");
+               Emit ("ldrd r8, r10, [r6]");
+               if Debug /= null then
+                  Emit (".cfi_restore r8");
+                  Emit (".cfi_restore r10");
+               end if;
             end if;
             if VFP_Save > 0 then
                Frame_Address_Through (VFP_Save_Offset, "r6");
@@ -7518,7 +7542,7 @@ package body Landin.Backend.Cortex_M is
                for Reg in Saved_Run.Low .. Saved_Run.High loop
                   Emit ("vstr d" & Trimmed (Reg'Image) & ", [sp, #"
                     & Trimmed (Landin.Targets.Byte_Count'Image
-                      (Home_Bytes + Landin.Targets.Byte_Count
+                      (Home_Bytes + High_Save + Landin.Targets.Byte_Count
                          (Reg - Saved_Run.Low) * 8)) & "]");
                end loop;
             else
@@ -7535,6 +7559,29 @@ package body Landin.Backend.Cortex_M is
                        - Landin.Targets.Byte_Count (Reg - Saved_Run.Low)
                          * 8)));
                end loop;
+            end if;
+         end if;
+         if High_Save > 0 and then not Probe then
+            if Leaf then
+               Emit ("strd r8, r10, [sp, #"
+                 & Trimmed (Home_Bytes'Image) & "]");
+            else
+               Frame_Address_Through (High_Save_Offset, "r6");
+               Emit ("strd r8, r10, [r6]");
+            end if;
+            if Debug /= null then
+               declare
+                  Base : constant Landin.Targets.Byte_Count :=
+                    (if Leaf then Save_Count
+                     else 24 + Landin.Targets.Byte_Count (Kept));
+               begin
+                  Emit (".cfi_offset r8, -" & Trimmed
+                    (Landin.Targets.Byte_Count'Image
+                       (Base + High_Save_Offset)));
+                  Emit (".cfi_offset r10, -" & Trimmed
+                    (Landin.Targets.Byte_Count'Image
+                       (Base + High_Save_Offset - 4)));
+               end;
             end if;
          end if;
          if Leaf and then Debug /= null then
@@ -9360,7 +9407,9 @@ package body Landin.Backend.Cortex_M is
                         Placed : aliased constant Register_Plan :=
                           Allocate_Registers
                             (Of_Unit, Item, Facts, Options, Recording.all,
-                             High => Thumb2);
+                             High => Thumb2
+                               and then Options.Optimize
+                                 = Landin.Optimization.Speed);
                      begin
                         if Placed.Held /= 0 then
                            Restore;
