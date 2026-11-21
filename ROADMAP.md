@@ -2254,7 +2254,7 @@ render and the recipe. Q-65 is answered too: version tags only. Gate run
 
 ### R23.40 — Whether a static Linux `refine` can be built
 
-Status: planned
+Status: active
 Depends on: none
 
 A Linux `refine` linked statically, against musl, would run on Alpine,
