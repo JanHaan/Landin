@@ -1695,7 +1695,7 @@ class DocumentAnchors(unittest.TestCase):
         self.assertTrue(self.said(self.LINK % "not-a-heading" + "\n"))
 
     def test_the_documents_own_links_are_held(self):
-        text = self.PROCESS.replace("#closing-an-item", "#closing")
+        text = "# P\n\nSee [closing](#closing).\n\n## Closing an item\n"
         said = faults(checker.check_document_anchors,
                       written={"docs/process.md": text})
         self.assertEqual([path for path, _, _ in said], ["docs/process.md"])
