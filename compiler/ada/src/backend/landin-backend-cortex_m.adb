@@ -2972,6 +2972,7 @@ package body Landin.Backend.Cortex_M is
          procedure Jump (Target : String);
          procedure Long_Jump (Target : String);
          procedure Shorten_Local_Branches;
+         procedure Drop_Moves;
          procedure Extend (Register : String; Scalar : Landin.Types.Type_Kind);
          procedure Epilogue;
          procedure Restore_And_Return;
@@ -3132,6 +3133,84 @@ package body Landin.Backend.Cortex_M is
                    Unbounded.Null_Unbounded_String));
             end if;
          end Branch;
+
+         --  D1774: a register move that changes nothing goes: one into
+         --  its own source, one repeating the instruction before it, and
+         --  one copying back what that instruction copied, when nothing
+         --  but a debug directive lies between them.
+         procedure Drop_Moves is
+            Text : constant String := Unbounded.Slice
+              (Out_Text, Routine_Start, Unbounded.Length (Out_Text));
+            Kept : Unbounded.Unbounded_String;
+            Previous : Unbounded.Unbounded_String;
+            Changed : Boolean := False;
+            Line_First : Positive := Text'First;
+            HT : constant Character := Character'Val (9);
+
+            function Operands (Line : String; Second : Boolean)
+              return String;
+            function Operands (Line : String; Second : Boolean)
+              return String
+            is
+               Comma : constant Natural :=
+                 Ada.Strings.Fixed.Index (Line, ", ");
+            begin
+               return (if Second then Line (Comma + 2 .. Line'Last)
+                       else Line (Line'First + 5 .. Comma - 1));
+            end Operands;
+
+            function Is_Move (Line : String) return Boolean is
+              (Line'Length > 6
+               and then Line (Line'First .. Line'First + 4) = HT & "mov "
+               and then Ada.Strings.Fixed.Index (Line, ", ") > 0
+               and then Ada.Strings.Fixed.Index (Line, "#") = 0
+               and then Operands (Line, True)'Length in 2 .. 3
+               and then Operands (Line, True) (Operands (Line, True)'First)
+                 = 'r');
+         begin
+            for Index in Text'Range loop
+               if Text (Index) = LF then
+                  declare
+                     Line : constant String := Text (Line_First .. Index - 1);
+                     Debug_Line : constant Boolean :=
+                       Ada.Strings.Fixed.Index (Line, HT & ".loc ")
+                         = Line'First
+                       or else Ada.Strings.Fixed.Index (Line, HT & ".cfi_")
+                         = Line'First;
+                     Before : constant String :=
+                       Unbounded.To_String (Previous);
+                     Drop : Boolean := False;
+                  begin
+                     if Is_Move (Line) then
+                        if Operands (Line, False) = Operands (Line, True)
+                          or else Line = Before
+                          or else (Is_Move (Before)
+                                   and then Operands (Before, False)
+                                     = Operands (Line, True)
+                                   and then Operands (Before, True)
+                                     = Operands (Line, False))
+                        then
+                           Drop := True;
+                        end if;
+                     end if;
+                     if Drop then
+                        Changed := True;
+                     else
+                        Unbounded.Append (Kept, Line & LF);
+                        if not Debug_Line then
+                           Previous := Unbounded.To_Unbounded_String (Line);
+                        end if;
+                     end if;
+                  end;
+                  Line_First := Index + 1;
+               end if;
+            end loop;
+            if Changed then
+               Unbounded.Delete
+                 (Out_Text, Routine_Start, Unbounded.Length (Out_Text));
+               Unbounded.Append (Out_Text, Kept);
+            end if;
+         end Drop_Moves;
 
          --  Each ordinary Thumb instruction occupies at most four bytes;
          --  the compiler's in-routine data and alignment lines also occupy
@@ -7975,6 +8054,7 @@ package body Landin.Backend.Cortex_M is
             end;
          end if;
          Shorten_Local_Branches;
+         Drop_Moves;
          declare
             --  The frame is what the prologue reserves below what it
             --  pushes: the laid-out frame, d8-d15's save and the incoming
