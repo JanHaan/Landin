@@ -43,47 +43,70 @@ jobs:
         #  manifests.  A split by target was not: a Linux target's every
         #  request also compiles platform/linux, about fifteen times the
         #  work of any other target's, and x86-64's longer part, 23.7
-        #  minutes in run 44052328931, was the gate's last job.  Linux
-        #  x86-64 takes three shards, its runners being plentiful; the
-        #  macOS runners were not, five to an account until 2026-11-20, so
-        #  Darwin keeps two.
+        #  minutes in run 44052328931, was the gate's last job.  Darwin
+        #  takes four shards and the Linux hosts four and three: with two,
+        #  Darwin's took 14 to 24 minutes each after its debug build's
+        #  seven and were the gate's last jobs, and a slow x86-64 runner
+        #  took 13 minutes for a third of that host's requests.
         include:
           - runner: ubuntu-24.04
             platform: x86_64-linux
             build: linux-amd64
             shard: 1
-            shards: 3
+            shards: 4
           - runner: ubuntu-24.04
             platform: x86_64-linux
             build: linux-amd64
             shard: 2
-            shards: 3
+            shards: 4
           - runner: ubuntu-24.04
             platform: x86_64-linux
             build: linux-amd64
             shard: 3
+            shards: 4
+          - runner: ubuntu-24.04
+            platform: x86_64-linux
+            build: linux-amd64
+            shard: 4
+            shards: 4
+          - runner: ubuntu-24.04-arm
+            platform: aarch64-linux
+            build: linux-arm64
+            shard: 1
             shards: 3
           - runner: ubuntu-24.04-arm
             platform: aarch64-linux
             build: linux-arm64
-            shard: 1
-            shards: 2
+            shard: 2
+            shards: 3
           - runner: ubuntu-24.04-arm
             platform: aarch64-linux
             build: linux-arm64
-            shard: 2
-            shards: 2
+            shard: 3
+            shards: 3
           - runner: macos-26
             platform: aarch64-darwin
             build: darwin-arm64
             shard: 1
-            shards: 2
+            shards: 4
             developer-dir: /Applications/Xcode_26.6.app/Contents/Developer
           - runner: macos-26
             platform: aarch64-darwin
             build: darwin-arm64
             shard: 2
-            shards: 2
+            shards: 4
+            developer-dir: /Applications/Xcode_26.6.app/Contents/Developer
+          - runner: macos-26
+            platform: aarch64-darwin
+            build: darwin-arm64
+            shard: 3
+            shards: 4
+            developer-dir: /Applications/Xcode_26.6.app/Contents/Developer
+          - runner: macos-26
+            platform: aarch64-darwin
+            build: darwin-arm64
+            shard: 4
+            shards: 4
             developer-dir: /Applications/Xcode_26.6.app/Contents/Developer
     runs-on: ${{ matrix.runner }}
     env:
