@@ -6588,6 +6588,64 @@ package body Landin.Backend.Cortex_M is
                           (Landin.IR.Field_Of (Of_Unit, Item, Value)),
                         "r2", Nested => Landin.IR.Path_Of
                           (Of_Unit, Item, Value));
+                     --  D1773: at the Thumb-2 levels a field of a carrier
+                     --  of at most a word, with no atoms to translate, is
+                     --  extracted with UBFX and inserted with BFI.
+                     if Shape.Packing.Bits /= 0 and then Thumb2
+                       and then Shape.Kind /= Landin.IR.Array_Field_Shape
+                       and then Shape.Packing.Bits < 32
+                       and then Shape.Atoms = Landin.IR.No_Atom_Set
+                       and then Landin.Targets.Packed.Carrier
+                         (Shape.Packing.Storage) /= Landin.Targets.Byte_8
+                       and then Natural (Shape.Packing.First)
+                         + Natural (Shape.Packing.Bits)
+                         <= 8 * Landin.Targets.Bytes
+                           (Landin.Targets.Packed.Carrier
+                              (Shape.Packing.Storage))
+                       and then
+                         (if Op = Landin.IR.Store_Field
+                          then Size_Of_Value (Operand (1))
+                            /= Landin.Targets.Byte_8
+                          else Size_Of_Value (Value)
+                            /= Landin.Targets.Byte_8)
+                     then
+                        declare
+                           Carrier : constant Held_Size :=
+                             Landin.Targets.Packed.Carrier
+                               (Shape.Packing.Storage);
+                           Field_Bits : constant String :=
+                             "#" & Trimmed (Natural'Image
+                               (Natural (Shape.Packing.First)))
+                             & ", #" & Trimmed (Natural'Image
+                               (Natural (Shape.Packing.Bits)));
+                        begin
+                           if Op = Landin.IR.Load_Field then
+                              Memory (False, Carrier, "r0", "r2");
+                              Emit ("ubfx " & Result_In (Value)
+                                & ", r0, " & Field_Bits);
+                              Store_Value (Value, Result_In (Value),
+                                           Extended => True);
+                           else
+                              declare
+                                 Source : constant String :=
+                                   Operand_In (Operand (1), "r0");
+                                 Scratch : constant String :=
+                                   (if Source = "r0" then "r1" else "r0");
+                              begin
+                                 Emit ("lsrs " & Scratch & ", " & Source
+                                   & ", #" & Trimmed (Natural'Image
+                                     (Natural (Shape.Packing.Bits))));
+                                 Branch ("ne",
+                                   Trap (Landin.Panics.Bad_Conversion));
+                                 Memory (False, Carrier, Scratch, "r2");
+                                 Emit ("bfi " & Scratch & ", " & Source
+                                   & ", " & Field_Bits);
+                                 Memory (True, Carrier, Scratch, "r2");
+                              end;
+                           end if;
+                        end;
+                        return;
+                     end if;
                      if Shape.Packing.Bits /= 0 then
                         Immediate ("r4", Pattern (Shape.Packing.First));
                         Packed_Access
