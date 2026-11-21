@@ -5083,6 +5083,78 @@ package body Landin.Backend.Cortex_M is
                        Size_Of_Value (Value) = Landin.Targets.Byte_8;
                      Done : constant String := Fresh;
                   begin
+                     --  D1770: between integers of at most a word, the
+                     --  operand in place, one comparison with the range
+                     --  where the source's does not fit the result's.
+                     if Op = Landin.IR.Conversion
+                       and then From in Landin.Types.Integer_Name
+                       and then Into_Type in Landin.Types.Integer_Name
+                       and then not Wide
+                       and then Size_Of_Value (Operand (1))
+                         /= Landin.Targets.Byte_8
+                       and then Natural (Landin.Types.Width (From, Facts))
+                         in 8 | 16 | 32
+                       and then Natural (Landin.Types.Width (Into_Type, Facts))
+                         in 8 | 16 | 32
+                     then
+                        declare
+                           From_Bits : constant Natural := Natural
+                             (Landin.Types.Width (From, Facts));
+                           Into_Bits : constant Natural := Natural
+                             (Landin.Types.Width (Into_Type, Facts));
+                           Source : constant String :=
+                             Operand_In (Operand (1), "r0", From);
+                           Into : constant String := Result_In (Value);
+                           --  The largest result, compared unsigned with
+                           --  a source a negative value of makes larger.
+                           procedure Above (Largest : Pattern);
+                           procedure Above (Largest : Pattern) is
+                           begin
+                              if Largest <= 255 then
+                                 Emit ("cmp " & Source & ", #"
+                                   & Trimmed (Pattern'Image (Largest)));
+                              else
+                                 Immediate ("r4", Largest);
+                                 Emit ("cmp " & Source & ", r4");
+                              end if;
+                              Branch ("hi", Trap);
+                           end Above;
+                        begin
+                           if Unchecked then
+                              null;
+                           elsif not From_Signed and then not Into_Signed then
+                              if Into_Bits < From_Bits then
+                                 Above (2 ** Into_Bits - 1);
+                              end if;
+                           elsif From_Signed and then Into_Signed then
+                              if Into_Bits < From_Bits then
+                                 Emit ((if Into_Bits = 8 then "sxtb r4, "
+                                        else "sxth r4, ") & Source);
+                                 Emit ("cmp " & Source & ", r4");
+                                 Branch ("ne", Trap);
+                              end if;
+                           elsif not From_Signed then
+                              if Into_Bits <= From_Bits then
+                                 if Into_Bits = 32 then
+                                    Emit ("cmp " & Source & ", #0");
+                                    Branch ("lt", Trap);
+                                 else
+                                    Above (2 ** (Into_Bits - 1) - 1);
+                                 end if;
+                              end if;
+                           elsif Into_Bits >= From_Bits then
+                              Emit ("cmp " & Source & ", #0");
+                              Branch ("lt", Trap);
+                           else
+                              Above (2 ** Into_Bits - 1);
+                           end if;
+                           if Into /= Source then
+                              Emit ("mov " & Into & ", " & Source);
+                           end if;
+                           Store_Value (Value, Into);
+                        end;
+                        return;
+                     end if;
                      Load_Value (Operand (1));
                      Extend ("r0", From);
                      if From_Float and then Into_Float then
