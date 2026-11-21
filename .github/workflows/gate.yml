@@ -108,7 +108,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           python3 scripts/gate_inputs.py reuse gate.yml \
-            documents scripts linux-debug-build compiler-1 compiler-2 compiler-3 \
+            documents scripts linux-debug-build compiler-1 compiler-2 compiler-3 compiler-4 \
             compiler-checks linux-release-build \
             release bindings editor-grammar flake-compiler flake-ram-run flake-ram-run-rigpi \
             cortex-m-programs cortex-m-corpus \
@@ -116,24 +116,28 @@ jobs:
             xtensa-esp32s3-1 xtensa-esp32s3-2 xtensa-esp32s3-3 \
             scaling darwin-debug-build \
             darwin-release-build darwin-release-clean darwin-release-compare \
-            darwin-host-1 darwin-host-2 \
+            darwin-host-1 darwin-host-2 darwin-host-3 darwin-host-4 \
             darwin-host-release-1 darwin-host-release-2 \
-            darwin-parity-1 darwin-parity-2 darwin-parity-3 \
-            arm64-debug-build arm64-compiler-1 arm64-compiler-2 \
-            arm64-compiler-checks arm64-release \
+            darwin-parity-1 darwin-parity-2 \
+            arm64-debug-build arm64-compiler-1 arm64-compiler-2 arm64-compiler-3 \
+            arm64-compiler-checks arm64-release-build arm64-release arm64-release-checks \
             freebsd-amd64-runtime freebsd-amd64-debugger freebsd-amd64-abi \
             freebsd-arm64-runtime-1 freebsd-arm64-runtime-2 \
             freebsd-arm64-debugger freebsd-arm64-abi freebsd-amd64-size freebsd-arm64-size \
             measure-size build-modes-1 build-modes-2 \
-            build-modes-3 rv64-qemu-1 rv64-qemu-2 outside-user-stock \
+            build-modes-3 build-modes-4 rv64-qemu-1 rv64-qemu-2 outside-user-stock \
             linux-release-clean linux-release-compare \
             'determinism / manifest (x86_64-linux 1)' \
             'determinism / manifest (x86_64-linux 2)' \
             'determinism / manifest (x86_64-linux 3)' \
+            'determinism / manifest (x86_64-linux 4)' \
             'determinism / manifest (aarch64-linux 1)' \
             'determinism / manifest (aarch64-linux 2)' \
+            'determinism / manifest (aarch64-linux 3)' \
             'determinism / manifest (aarch64-darwin 1)' \
-            'determinism / manifest (aarch64-darwin 2)' 'determinism / agree' gate \
+            'determinism / manifest (aarch64-darwin 2)' \
+            'determinism / manifest (aarch64-darwin 3)' \
+            'determinism / manifest (aarch64-darwin 4)' 'determinism / agree' gate \
             >> "$GITHUB_OUTPUT"
       - name: Whether main's boards or a dispatch's timing were already passed for this tree
         id: physical
@@ -218,13 +222,15 @@ jobs:
           path: ${{ runner.temp }}/linux-amd64-debug.tar.gz
           retention-days: 1
 
-  #  The debug compiler's 800 cases, in three shards on three runners: on
+  #  The debug compiler's 800 cases, in four shards on four runners: on
   #  a hosted runner's four CPUs the whole program took 17.5 minutes, 567 s
-  #  of it fixture execution and 212 s one truncation sweep.  Each ordinary
+  #  of it fixture execution and 212 s one truncation sweep, and three
+  #  shards took 7.6 to 17.6 minutes each, the slow runners' share being
+  #  the gate's tail.  Each ordinary
   #  case runs in one shard; the long cases that loop over the corpus are
   #  divided, each shard taking its share of their fixtures, and the
-  #  harness's own `shards partition the inventory` holds the three to the
-  #  complete run.  All three are required.
+  #  harness's own `shards partition the inventory` holds the four to the
+  #  complete run.  All four are required.
   compiler:
     name: compiler-${{ matrix.shard }}
     needs: [inputs, linux-debug-build]
@@ -234,7 +240,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3]
+        shard: [1, 2, 3, 4]
     env:
       LANDIN_BUILD_REUSE: 'yes'
     steps:
@@ -267,10 +273,10 @@ jobs:
       #  LANDIN_TEST_TIMINGS puts the per-suite share and the slowest cases
       #  in the log, on standard error, so the next time this gets slow it
       #  says where rather than being inferred from timestamps.
-      - name: The fixture corpus, shard ${{ matrix.shard }} of 3
+      - name: The fixture corpus, shard ${{ matrix.shard }} of 4
         run: >-
           LANDIN_TEST_JOBS=8 LANDIN_TEST_TIMINGS=1
-          ./scripts/test.sh --shard=${{ matrix.shard }}/3
+          ./scripts/test.sh --shard=${{ matrix.shard }}/4
 
   #  The checks that need the debug compiler and no corpus, beside its
   #  shards rather than after one of them.
@@ -346,12 +352,11 @@ jobs:
   #  The Linux x86-64 release executables are built twice.  This job
   #  builds them over the object tree an earlier run left in the cache,
   #  recompiling by checksum only what changed (scripts/dev-build.sh), and
-  #  its archive is the compiler the lanes below take.  linux-release-clean
-  #  builds them from clean beside it, for the jobs whose claim is about
-  #  the built executable itself, and linux-release-compare requires the two
-  #  builds' executables to be the same files, byte for byte; `gate` needs
-  #  all three, so no lane's verdict counts on executables the clean build
-  #  did not also produce.  With no usable cache entry this is a clean
+  #  its archive is the compiler every lane below takes.  linux-release-clean
+  #  builds them from clean beside it, and linux-release-compare requires
+  #  the two builds' executables, those under libexec/ included, to be the
+  #  same files, byte for byte; `gate` needs all three, so no lane's
+  #  verdict counts on executables the clean build did not also produce.  With no usable cache entry this is a clean
   #  build, as long as linux-release-clean takes.
   #
   #  The cache holds the build tree without bin/ and link/: the objects,
@@ -435,9 +440,11 @@ jobs:
           path: ${{ runner.temp }}/linux-release-objects.tar
           retention-days: 1
 
-  #  The same executables from clean, which never sees the cache: the
-  #  compiler the release and outside-user-stock jobs test and package,
-  #  and the one linux-release-compare holds the cached build to.
+  #  The same executables from clean, which never sees the cache: the one
+  #  linux-release-compare holds the cached build to.  The release and
+  #  outside-user-stock jobs took this build until 2026-11-21 and so
+  #  started at its end, nine to fifteen minutes in; they take the cached
+  #  build, the same files, as Darwin's release lanes do.
   linux-release-clean:
     needs: inputs
     if: needs.inputs.outputs.software == 'true' && needs.inputs.outputs.reuse != 'true'
@@ -533,7 +540,7 @@ jobs:
   #  make those five times slower and add no coverage of their own.
   #  Measured: corpus 251 s, quality 26 s, GDB 36 s.
   release:
-    needs: [inputs, linux-release-clean]
+    needs: [inputs, linux-release-build]
     if: needs.inputs.outputs.software == 'true' && needs.inputs.outputs.reuse != 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 60
@@ -548,13 +555,13 @@ jobs:
 
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: linux-release-clean
-          path: ${{ runner.temp }}/linux-release-clean
+          name: linux-release
+          path: ${{ runner.temp }}/linux-release
 
       - name: Restore and verify release executables
         run: |
           mkdir -p compiler/ada/build/linux-amd64/release
-          tar -xzf "$RUNNER_TEMP/linux-release-clean/linux-release-clean.tar.gz" \
+          tar -xzf "$RUNNER_TEMP/linux-release/linux-release.tar.gz" \
             -C compiler/ada/build/linux-amd64/release
           ./scripts/build.sh -q
 
@@ -668,7 +675,7 @@ jobs:
   #  job refuses to run if one is reachable, since then it would prove
   #  nothing a stock system can do.
   outside-user-stock:
-    needs: [inputs, linux-release-clean]
+    needs: [inputs, linux-release-build]
     if: needs.inputs.outputs.software == 'true' && needs.inputs.outputs.reuse != 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
@@ -677,8 +684,8 @@ jobs:
 
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: linux-release-clean
-          path: ${{ runner.temp }}/linux-release-clean
+          name: linux-release
+          path: ${{ runner.temp }}/linux-release
 
       - name: The distribution's compiler and no other
         run: |
@@ -706,7 +713,7 @@ jobs:
           outside="$RUNNER_TEMP/outside"
           rm -rf "$outside"
           mkdir -p "$outside/release" "$outside/prefix"
-          tar -xzf "$RUNNER_TEMP/linux-release-clean/linux-release-clean.tar.gz" -C "$outside/release"
+          tar -xzf "$RUNNER_TEMP/linux-release/linux-release.tar.gz" -C "$outside/release"
           ./scripts/package.sh --debug "$outside/landin-debug.tar.gz" "$outside/release/bin/refine" "$outside/landin.tar.gz"
           tar -xzf "$outside/landin.tar.gz" -C "$outside/prefix"
           PATH=/usr/bin:/bin python3 scripts/outside_user.py --stock \
@@ -728,11 +735,11 @@ jobs:
   #  standard profiles, and must emit the same bytes.  Emission needs no
   #  assembler; the debug compiler is most of the cost.
   #
-  #  Every mode target's requests, dealt round three shards (D1365).  Split
+  #  Every mode target's requests, dealt round four shards (D1365).  Split
   #  by target, one part took 29.7 minutes of its 30 on a slow runner,
-  #  twice the time the same part took on a fast one; a shard is a third of
-  #  the work, about ten minutes on a fast runner and eighteen on the
-  #  slowest yet.
+  #  twice the time the same part took on a fast one; a third of the work
+  #  took about ten minutes on a fast runner and twenty on the slowest, so
+  #  a shard is a quarter.
   build-modes:
     name: build-modes-${{ matrix.shard }}
     needs: [inputs, linux-debug-build, linux-release-build]
@@ -742,7 +749,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3]
+        shard: [1, 2, 3, 4]
     env:
       LANDIN_BUILD_REUSE: 'yes'
     steps:
@@ -772,12 +779,12 @@ jobs:
           ./scripts/build.sh -q
           LANDIN_BUILD_MODE=release ./scripts/build.sh -q
 
-      - name: Both builds emit the same bytes, shard ${{ matrix.shard }} of 3
+      - name: Both builds emit the same bytes, shard ${{ matrix.shard }} of 4
         run: >-
           python3 scripts/emit_manifest.py modes
           compiler/ada/build/linux-amd64/debug/bin/refine
           compiler/ada/build/linux-amd64/release/bin/refine
-          . --shard=${{ matrix.shard }}/3
+          . --shard=${{ matrix.shard }}/4
 
   #  refine bindings, with the debug compiler, against its pinned Clang,
   #  including the byte-for-byte regeneration of the committed fixture.
@@ -1635,13 +1642,15 @@ jobs:
   #  The Darwin jobs share the macOS runners an account may hold at once,
   #  five until 2026-11-20 and fifteen since, and on one runner this took
   #  25 to 31 minutes, 19 to 24 of them
-  #  the host suite.  So the suite runs as two `--shard` jobs, which together
+  #  the host suite.  So the suite runs as four `--shard` jobs, which together
   #  are the complete --host run as the `compiler` shards are the complete
-  #  run, and the checks after it are divided between them by their
-  #  measured cost: the verifier observations and the closures up to the
-  #  native C controls in the first, about three minutes, publication,
-  #  cancellation and the server sessions in the second, about two and a
-  #  half.  Both are required.
+  #  run; two shards took 14 to 16 minutes each after the debug build's
+  #  seven and were, with determinism's Darwin shards, the gate's last
+  #  jobs.  The checks after the suite are divided by their measured cost:
+  #  the closures up to the native C controls in the first, about two and
+  #  a half minutes, publication, cancellation and the server sessions in
+  #  the second, about two and a half, the verifier observations in the
+  #  third, about one.  All four are required.
   darwin-host:
     name: darwin-host-${{ matrix.shard }}
     needs: [inputs, darwin-debug-build]
@@ -1651,7 +1660,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2]
+        shard: [1, 2, 3, 4]
     env:
       DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
       LANDIN_BUILD_MODE: debug
@@ -1678,22 +1687,22 @@ jobs:
 
       #  The host suite's shared verdicts are Linux x86-64's; a Mac's own
       #  compiler defaults to darwin-arm64 (D257), so the lane is named.
-      - name: The compiler host suite, shard ${{ matrix.shard }} of 2
+      - name: The compiler host suite, shard ${{ matrix.shard }} of 4
         run: >-
           LANDIN_TEST_TIMINGS=1
-          ./scripts/test.sh --host --target=linux-x86-64 --shard=${{ matrix.shard }}/2
+          ./scripts/test.sh --host --target=linux-x86-64 --shard=${{ matrix.shard }}/4
 
       # Representative process measurements; low-stack outcomes are recorded,
       # not required thresholds. The full scaling verdict has its own job.
       - name: Representative verifier resource observations
-        if: matrix.shard == 1
+        if: matrix.shard == 3
         run: >-
           python3 scripts/verifier_resources.py
           --refine "$PWD/compiler/ada/build/darwin-arm64/${{ env.LANDIN_BUILD_MODE }}/bin/refine"
           --output "$RUNNER_TEMP/verifier-resources"
 
       - name: Keep representative resource observations
-        if: always() && matrix.shard == 1
+        if: always() && matrix.shard == 3
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: verifier-resources-darwin-host-${{ env.LANDIN_BUILD_MODE }}
@@ -1902,10 +1911,12 @@ jobs:
   #  program on its first launch and admits roughly one at a time, so on an
   #  eight-core Mac this lane took 1,465 s at one worker and 755 s at four
   #  and at eight alike.  On the hosted image hosted parity alone took 17
-  #  to 18 minutes, after the release build's twelve, so it runs as three
-  #  shards, `check.py --parity --shard=I/3`: its fixtures are dealt round
-  #  them, so the three are every case once.  The source verdicts go with
-  #  the first and the bindings with the second.  All three are required.
+  #  to 18 minutes, after the release build's twelve.  It runs as two
+  #  shards, `check.py --parity --shard=I/2`: its fixtures are dealt round
+  #  them, so the two are every case once.  Three shards took four to six
+  #  minutes each and ended long before the debug lanes, so the third
+  #  macOS runner went to darwin-host instead.  The source verdicts go with
+  #  the first and the bindings with the second.  Both are required.
   darwin-parity:
     name: darwin-parity-${{ matrix.shard }}
     needs: [inputs, darwin-release-build]
@@ -1915,7 +1926,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3]
+        shard: [1, 2]
     env:
       DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
       LANDIN_BUILD_MODE: release
@@ -1947,10 +1958,10 @@ jobs:
         if: matrix.shard == 1
         run: python3 scripts/script_tests.py test_darwin_assembly
 
-      - name: Hosted parity, shard ${{ matrix.shard }} of 3
+      - name: Hosted parity, shard ${{ matrix.shard }} of 2
         run: |
           LANDIN_DARWIN_JOBS=3 python3 compiler/tests/darwin/check.py --parity \
-            --shard=${{ matrix.shard }}/3 \
+            --shard=${{ matrix.shard }}/2 \
             --refine "$PWD/compiler/ada/build/darwin-arm64/release/bin/refine" \
             --output "$RUNNER_TEMP/parity"
 
@@ -1998,8 +2009,8 @@ jobs:
           retention-days: 1
 
   #  Linux arm64 with the debug compiler: the whole test program, whose lane
-  #  is this host's own, in two shards as `compiler` runs three; its corpus
-  #  took 11.2 minutes on one hosted runner.
+  #  is this host's own, in three shards as `compiler` runs four; two
+  #  shards took 13 to 18 minutes each, the gate's longest Linux jobs.
   arm64-compiler:
     name: arm64-compiler-${{ matrix.shard }}
     needs: [inputs, arm64-debug-build]
@@ -2009,7 +2020,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2]
+        shard: [1, 2, 3]
     env:
       LANDIN_BUILD_REUSE: 'yes'
     steps:
@@ -2032,10 +2043,10 @@ jobs:
             -C compiler/ada/build/linux-arm64/debug
           ./scripts/build.sh -q
 
-      - name: The fixture corpus, shard ${{ matrix.shard }} of 2
+      - name: The fixture corpus, shard ${{ matrix.shard }} of 3
         run: >-
           LANDIN_TEST_JOBS=8 LANDIN_TEST_TIMINGS=1
-          ./scripts/test.sh --shard=${{ matrix.shard }}/2
+          ./scripts/test.sh --shard=${{ matrix.shard }}/3
 
   #  The checks that need the arm64 debug compiler and no corpus, the same
   #  as `compiler-checks` on the other architecture.
@@ -2099,15 +2110,14 @@ jobs:
           python3 compiler/tests/test_formatter_write_safety.py --refine "$refine" --scratch /dev/shm/landin-loop
           python3 compiler/tests/server/native_session.py --refine "$refine"
 
-  #  Linux arm64 with the release compiler: the corpus, the GDB sessions
-  #  with the GDB the pinned aarch64 GNAT bundles, and the generated
-  #  bindings for the standard AAPCS64 with the pinned Clang's arm64 build.
-  #  Eight minutes as a job.
-  arm64-release:
+  #  Compile the Linux arm64 release executables, from clean, once for
+  #  arm64-release and arm64-release-checks.  As one job of build, corpus
+  #  and checks this took 18 minutes, the gate's longest Linux job.
+  arm64-release-build:
     needs: inputs
     if: needs.inputs.outputs.software == 'true' && needs.inputs.outputs.reuse != 'true'
     runs-on: ubuntu-24.04-arm
-    timeout-minutes: 60
+    timeout-minutes: 30
     env:
       LANDIN_BUILD_MODE: release
     steps:
@@ -2120,6 +2130,47 @@ jobs:
 
       - name: Build release executables with bounded parallelism
         run: ./scripts/build.sh -j4
+
+      - name: Package release executables and both build manifests
+        run: >-
+          tar -czf "$RUNNER_TEMP/linux-arm64-release.tar.gz"
+          -C compiler/ada/build/linux-arm64/release bin libexec source-manifest.txt tests-manifest.txt
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: linux-arm64-release
+          path: ${{ runner.temp }}/linux-arm64-release.tar.gz
+          retention-days: 1
+
+  #  Linux arm64 with the release compiler: the corpus.  The checks that
+  #  need no corpus run beside it in arm64-release-checks.
+  arm64-release:
+    needs: [inputs, arm64-release-build]
+    if: needs.inputs.outputs.software == 'true' && needs.inputs.outputs.reuse != 'true'
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 60
+    env:
+      LANDIN_BUILD_MODE: release
+      LANDIN_BUILD_REUSE: 'yes'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install the pinned toolchain
+        uses: ./.github/actions/pinned-toolchain
+        with:
+          platform: aarch64-linux
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: linux-arm64-release
+          path: ${{ runner.temp }}/linux-arm64-release
+
+      - name: Restore and verify release executables
+        run: |
+          mkdir -p compiler/ada/build/linux-arm64/release
+          tar -xzf "$RUNNER_TEMP/linux-arm64-release/linux-arm64-release.tar.gz" \
+            -C compiler/ada/build/linux-arm64/release
+          ./scripts/build.sh -q
 
       - name: The fixture corpus
         run: LANDIN_TEST_JOBS=8 LANDIN_TEST_TIMINGS=1 ./scripts/test.sh
@@ -2139,6 +2190,39 @@ jobs:
           name: verifier-resources-arm64-release-release
           path: ${{ runner.temp }}/verifier-resources
           retention-days: 14
+
+  #  The arm64 release compiler's checks that need no corpus: the default
+  #  target and the server, the installed toolchain and the user image, the
+  #  GDB sessions with the GDB the pinned aarch64 GNAT bundles, and the
+  #  generated bindings for the standard AAPCS64 with the pinned Clang's
+  #  arm64 build.
+  arm64-release-checks:
+    needs: [inputs, arm64-release-build]
+    if: needs.inputs.outputs.software == 'true' && needs.inputs.outputs.reuse != 'true'
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 60
+    env:
+      LANDIN_BUILD_MODE: release
+      LANDIN_BUILD_REUSE: 'yes'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install the pinned toolchain
+        uses: ./.github/actions/pinned-toolchain
+        with:
+          platform: aarch64-linux
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: linux-arm64-release
+          path: ${{ runner.temp }}/linux-arm64-release
+
+      - name: Restore and verify release executables
+        run: |
+          mkdir -p compiler/ada/build/linux-arm64/release
+          tar -xzf "$RUNNER_TEMP/linux-arm64-release/linux-arm64-release.tar.gz" \
+            -C compiler/ada/build/linux-arm64/release
+          ./scripts/build.sh -q
 
       - name: The default target and the server
         run: |
@@ -2813,7 +2897,8 @@ jobs:
             darwin-release-build, darwin-release-clean, darwin-release-compare,
             darwin-host, darwin-host-release,
             darwin-parity, arm64-debug-build, arm64-compiler,
-            arm64-compiler-checks, arm64-release, freebsd, rv64-qemu,
+            arm64-compiler-checks, arm64-release-build, arm64-release,
+            arm64-release-checks, freebsd, rv64-qemu,
             determinism, board-bundles, board]
     runs-on: ubuntu-24.04
     steps:

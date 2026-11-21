@@ -40732,7 +40732,7 @@ replacing a tag; `scripts/tests/test_release.py`'s `Workflow` cases, which
 hold the push to after the release is public and to the publishing job
 alone; `check.py`'s pin agreement, which holds the recipe's base image to
 `environments/pins.sh`; and the gate's `outside-user-stock` and
-`arm64-release` steps that build and run it.
+`arm64-release-checks` steps that build and run it.
 
 ### D1668 — The contributor image is the pinned environment for both Linux architectures, read from pins.sh
 
@@ -40862,7 +40862,7 @@ newest release, which is rate-limited without a token; and running
 not have.
 
 **Pinned by** `scripts/install_check.py`, run in the gate's `release`,
-`arm64-release` and `darwin-host-release` jobs against each host's
+`arm64-release-checks` and `darwin-host-release` jobs against each host's
 packaged compiler served from 127.0.0.1 as a release is: the newest and a
 named version installed and running the first program, a reinstall, a
 foreign directory, a damaged archive, a missing version and two unserved
@@ -40906,10 +40906,12 @@ release lanes testing a dynamic compiler the release does not publish;
 randomisation for nothing; and a link switch the caller chooses, which
 `scripts/test.sh` and `dev-test.sh` would not pass on.
 
-**Pinned by** the gate's `release` and `arm64-release` jobs, whose test
-program, corpus and installed-toolchain checks run the static build
-natively on each architecture, and their step `The static archive without
-glibc` (D1790); `scripts/tests/test_static_archive.py` holds the link,
+**Pinned by** the gate's release lanes, whose test program, corpus and
+installed-toolchain checks run the static build natively on each
+architecture: `release` on x86-64, and `arm64-release` and
+`arm64-release-checks` on the build `arm64-release-build` makes; and the
+step `The static archive without glibc` of `release` and
+`arm64-release-checks` (D1790); `scripts/tests/test_static_archive.py` holds the link,
 its switches and every executable project's `Linker` package.
 
 ### D1788 — A static link that warns is refused, and the archive carries glibc's licence and names it
@@ -40981,7 +40983,7 @@ compiling and running the first program and the `--link=libc` runtime
 fixtures against musl.
 
 **Chosen:** `scripts/static_check.py`, a step of the gate's `release` and
-`arm64-release` jobs, takes the archive the job packaged and runs it under
+`arm64-release-checks` jobs, takes the archive the job packaged and runs it under
 bubblewrap with PATH and HOME alone. In an empty root holding the archive
 and nothing else, no C library, shell or linker, `refine version`,
 `refine check` and `refine compile --emit=asm` of the first program and
@@ -40996,8 +40998,8 @@ input, status or trap and output, at the default profile. The runner must
 allow unprivileged user namespaces, which the step sets.
 
 **The alternatives:** a job of its own, which would add two jobs that
-wait for a release build to rebuild or download what the release jobs
-already hold; Docker, which the development hosts lack and which would
+wait for a release build to download what the release jobs already
+hold; Docker, which the development hosts lack and which would
 fetch an image by tag rather than an archive by checksum; and running the
 fixtures through the test program inside Alpine, which tests the stages
 linked into it rather than the packaged `refine`.

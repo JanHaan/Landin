@@ -517,8 +517,15 @@ def fetch_github(path):
         return json.load(response)
 
 
+ANSWERS = {}
+
+
 def github(path):
-    return asked(path, fetch_github)
+    """GitHub's answer for PATH, asked once per process: the reuse check's
+    two deciders read the same listings."""
+    if path not in ANSWERS:
+        ANSWERS[path] = asked(path, fetch_github)
+    return ANSWERS[path]
 
 
 def checkout():
@@ -531,10 +538,28 @@ def checkout():
     return sha, [line.split()[1] for line in header if line.startswith("parent ")]
 
 
+FETCHED = {"HEAD"}
+
+
+def prefetch(revs):
+    """Fetch every one of REVS not yet here in one `git fetch`.
+
+    The reuse check keys up to thirty runs' commits; fetched one by one,
+    twice, they took two of the `inputs` job's two and a half minutes,
+    which every other job waits for.  A failure is left to the one-by-one
+    fetch, which reports it.
+    """
+    wanted = sorted(set(revs) - FETCHED)
+    if wanted and subprocess.run(["git", "fetch", "-q", "--no-tags", "--depth=1",
+                                  "origin", *wanted]).returncode == 0:
+        FETCHED.update(wanted)
+
+
 def fetched_key(rev, content_free=CONTENT_FREE):
-    if rev != "HEAD":
+    if rev not in FETCHED:
         subprocess.run(["git", "fetch", "-q", "--no-tags", "--depth=1",
                         "origin", rev], check=True)
+        FETCHED.add(rev)
     return key(rev, content_free=content_free)
 
 
@@ -839,6 +864,9 @@ def main(argv):
                 event = json.load(stream)
             checked_out = checkout()
             now = datetime.now(timezone.utc)
+            prefetch(run["head_sha"] for run in github(
+                "actions/workflows/%s/runs?event=push&status=success&per_page=30"
+                % argv[1]).get("workflow_runs", []))
             reuse, why = decide_candidate(
                 os.environ["GITHUB_EVENT_NAME"], event, github,
                 fetched_candidate_key, checked_out, argv[1], argv[2:], now)
