@@ -67,7 +67,8 @@ permissions:
 #  A manual dispatch, a push to main and the schedule each get a group of
 #  their own, so nothing cancels them: a shared group would still cancel
 #  its pending run when a third arrived, whatever cancel-in-progress says,
-#  and a main push's board evidence is its promotion's.  The rig's one
+#  and a main push's board evidence, run or taken from a passed run, is
+#  its promotion's.  The rig's one
 #  runner takes board jobs one at a time across runs anyway.
 concurrency:
   group: gate-${{ github.event_name == 'workflow_dispatch' && format('manual-{0}', github.run_id) || (github.event_name == 'schedule' || github.event_name == 'push' && github.ref == 'refs/heads/main') && format('main-{0}', github.run_id) || github.event.pull_request.number && format('pr-{0}', github.event.pull_request.number) || github.ref }}
@@ -86,8 +87,15 @@ jobs:
     outputs:
       reuse: ${{ steps.reuse.outputs.reuse }}
       software: ${{ steps.scope.outputs.software }}
-      boards: ${{ steps.scope.outputs.boards }}
-      timing: ${{ steps.scope.outputs.timing }}
+      #  Whether the board and timing jobs run: the event's scope, less what
+      #  a passed run stands in for (D1647, D1649), which the aggregate
+      #  accepts only where the scope allows it.
+      boards: ${{ steps.scope.outputs.boards == 'true' && steps.physical.outputs.boards-reuse != 'true' }}
+      boards-reuse: ${{ steps.physical.outputs.boards-reuse }}
+      boards-from: ${{ steps.physical.outputs.boards-from }}
+      timing: ${{ steps.scope.outputs.timing == 'true' && steps.physical.outputs.timing-reuse != 'true' }}
+      timing-reuse: ${{ steps.physical.outputs.timing-reuse }}
+      timing-from: ${{ steps.physical.outputs.timing-from }}
       scope: ${{ steps.scope.outputs.scope }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -127,6 +135,11 @@ jobs:
             'determinism / manifest (aarch64-darwin 1)' \
             'determinism / manifest (aarch64-darwin 2)' 'determinism / agree' gate \
             >> "$GITHUB_OUTPUT"
+      - name: Whether main's boards or a dispatch's timing were already passed for this tree
+        id: physical
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/gate_inputs.py physical gate.yml >> "$GITHUB_OUTPUT"
 
   #  Documents, grammar and the transcription tables.  Nothing to install
   #  and nothing to build, so this is the fastest verdict available.
@@ -1422,7 +1435,59 @@ jobs:
             !compiler/ada/build/darwin-arm64/release/link
           key: ${{ needs.darwin-release-build.outputs.key }}
 
-  #  main's entry, as board-bundles saves Linux x86-64's, so a branch's
+  #  main's Linux x86-64 entry, so that the first run on a new branch, which
+  #  reads its own entries and main's, starts from main.  board-bundles saved
+  #  it until main's push could take its boards from a passed run (D1647).
+  #  Named by the tree's gate key, as darwin-release-main-cache's is, so a
+  #  push whose entry exists builds nothing.
+  linux-release-main-cache:
+    needs: inputs
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      LANDIN_BUILD_MODE: release
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install the pinned toolchain
+        uses: ./.github/actions/pinned-toolchain
+
+      - name: Name the cache entry by C headers, C compiler, toolchain pins and the tree
+        id: objects
+        run: |
+          set -eu
+          headers="$(python3 scripts/release_cache_key.py linux)"
+          tree="$(python3 scripts/gate_inputs.py key)"
+          echo "key=linux-amd64-release-objects-$ImageOS-$headers-${{ hashFiles('environments/pins.sh') }}-main-$tree" >> "$GITHUB_OUTPUT"
+
+      - name: Whether main's entry for this tree exists
+        id: probe
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            compiler/ada/build/linux-amd64/release
+            !compiler/ada/build/linux-amd64/release/bin
+            !compiler/ada/build/linux-amd64/release/link
+          key: ${{ steps.objects.outputs.key }}
+          lookup-only: true
+
+      - name: Build release executables from clean
+        if: steps.probe.outputs.cache-hit != 'true'
+        run: >-
+          ./scripts/build.sh -j4 &&
+          python3 scripts/source_times.py save . compiler/ada/build/linux-amd64/release
+
+      - if: steps.probe.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            compiler/ada/build/linux-amd64/release
+            !compiler/ada/build/linux-amd64/release/bin
+            !compiler/ada/build/linux-amd64/release/link
+          key: ${{ steps.objects.outputs.key }}
+
+  #  main's entry, as linux-release-main-cache saves Linux x86-64's, so a branch's
   #  first run restores it rather than building from clean.  main's own
   #  push reuses the candidate's pass and runs no other macOS job, so this
   #  takes a runner nothing waits for, and `gate` does not need it.  The
@@ -1518,8 +1583,9 @@ jobs:
   #  without the two that execute Linux programs, then determinism closures,
   #  native report identity and the server.
   #
-  #  The Darwin jobs share the five macOS runners an account may hold at
-  #  once, and on one runner this took 25 to 31 minutes, 19 to 24 of them
+  #  The Darwin jobs share the macOS runners an account may hold at once,
+  #  five until 2026-11-20 and fifteen since, and on one runner this took
+  #  25 to 31 minutes, 19 to 24 of them
   #  the host suite.  So the suite runs as two `--shard` jobs, which together
   #  are the complete --host run as the `compiler` shards are the complete
   #  run, and the checks after it are divided between them by their
@@ -1613,18 +1679,15 @@ jobs:
   #  the first and the LLDB sessions with the second, whose checks are the
   #  shorter.  Both are required.
   #
-  #  They also wait for darwin-release-compare, which they need not
-  #  otherwise: a cached release build ends minutes before the debug
-  #  build, and these two jobs, ready then, took the macOS runners
-  #  darwin-host-1 needed at the debug build's end, so that shard, the
-  #  longest path, started 7.7 minutes late on run 44070770890 and the gate
-  #  ended at 31.5 minutes.  The comparison ends after the debug build, so
-  #  darwin-host and the Darwin determinism manifests take the runners
-  #  first; the three short parity shards still start at the release
-  #  build's end, while only the two builds hold runners (docs/process.md).
+  #  They start at the cached release build's end, as the parity shards
+  #  do.  Under the account's former cap of five macOS jobs they also
+  #  waited for darwin-release-compare, so that darwin-host took the
+  #  runners first; with fifteen since 2026-11-20 every Darwin job of a run
+  #  has one at once (docs/process.md), and the wait only delayed them.
+  #  The aggregate still needs the comparison.
   darwin-host-release:
     name: darwin-host-release-${{ matrix.shard }}
-    needs: [inputs, darwin-release-build, darwin-release-compare]
+    needs: [inputs, darwin-release-build]
     if: needs.inputs.outputs.software == 'true' && needs.inputs.outputs.reuse != 'true'
     runs-on: macos-26
     timeout-minutes: 60
@@ -1743,7 +1806,7 @@ jobs:
       #  the panic sessions and the source-debugging contract, with every
       #  dSYM, DWARF and Mach-O identity check.  41 s on a Mac; as a job of
       #  their own they took five minutes and one of the five macOS runners
-      #  the account may hold at once, for which darwin-parity then queued.
+      #  the account could then hold at once, for which darwin-parity queued.
       - name: LLDB source debugging
         if: matrix.shard == 2
         run: ./scripts/debug.sh --target=darwin-arm64 --parity --output "$RUNNER_TEMP/lldb"
@@ -2442,10 +2505,11 @@ jobs:
   #  step runs a job whose repository, event, ref or workflow it does not
   #  accept.  These jobs read no secret, and their token can only read.
   #
-  #  Physical evidence is never reused.  board-bundles and every board leg
-  #  run on each board-scope event whether or not the software lanes
-  #  reuse a pass, and the aggregate fails a board-scope event whose board
-  #  jobs were skipped, cancelled or failed.
+  #  board-bundles and every board leg run on each board-scope event
+  #  whether or not the software lanes reuse a pass, and the aggregate fails
+  #  a board-scope event whose board jobs were skipped, cancelled or failed,
+  #  with one exception: main's push takes the boards of a passed run of the
+  #  same tree, or of an explanatory base, when `inputs` finds one (D1647).
   #
   #  board-bundles builds the release compiler from this commit and every
   #  board's boot and RAM bundles, strict against the hardware records, so
@@ -2472,9 +2536,7 @@ jobs:
         uses: ./.github/actions/pinned-toolchain
 
       - name: Build release executables with bounded parallelism
-        run: >-
-          ./scripts/build.sh -j4 &&
-          python3 scripts/source_times.py save . compiler/ada/build/linux-amd64/release
+        run: ./scripts/build.sh -j4
 
       - name: Install the locked Cortex-M, RV32 and Xtensa tools
         run: python3 environments/cortex-m/setup.py --tools "$RUNNER_TEMP/cortex-m"
@@ -2508,26 +2570,6 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
           retention-days: 14
-
-      #  On main this clean build's objects also go to the cache, as a
-      #  linux-release-build would save them, so that the first run on a new
-      #  branch, which reads its own entries and main's, starts from main.
-      - name: Name the cache entry by C headers, C compiler and toolchain pins
-        if: github.ref == 'refs/heads/main'
-        id: objects
-        run: |
-          set -eu
-          headers="$(python3 scripts/release_cache_key.py linux)"
-          echo "key=linux-amd64-release-objects-$ImageOS-$headers-${{ hashFiles('environments/pins.sh') }}-${{ github.run_id }}-${{ github.run_attempt }}-boards" >> "$GITHUB_OUTPUT"
-
-      - if: github.ref == 'refs/heads/main'
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: |
-            compiler/ada/build/linux-amd64/release
-            !compiler/ada/build/linux-amd64/release/bin
-            !compiler/ada/build/linux-amd64/release/link
-          key: ${{ steps.objects.outputs.key }}
 
   #  One leg per port on the rig's one runner, one at a time; each leg is
   #  self-contained, RAM then boot, so legs of two runs may interleave.  On
