@@ -1,10 +1,10 @@
 {
   "status": "passed",
-  "image_sha256": "ed1f7a824788720831928f1f2ac93a8e924f43ed37279c530c3d9df15390e93a",
+  "image_sha256": "5061cd04ff917b5891975ab42094c5e60f33069c39ef4b50cc700d537e7edfa7",
   "image_name": "board.elf",
   "amoadd": [
     {
-      "address": "10002294",
+      "address": "10001e2c",
       "function": "add_u32"
     }
   ],
@@ -36,7 +36,7 @@
       "held_by_fifo": 32,
       "restarts": 3,
       "dma_completions": 2,
-      "timer_events": 1250,
+      "timer_events": 1625,
       "echoed": 11202,
       "sent": 11572
     },
@@ -64,22 +64,22 @@
     "reports": 7,
     "trans_count": 1094
   },
-  "uart_sha256": "59b08bb4d09748f4c12c338691fed4a286e06bc98a5c40898198fab3c5b0ab06",
+  "uart_sha256": "4810f56a8e319260d1dbb5be8a6a775a942caacdb4a7610039aae036d4ad1571",
   "mode": "boot",
   "fixed_restore": {
     "status": "passed",
-    "sha256": "7f60809077ba826a15b23e48252da09a3c0bf997c155b0216307c5617aa0b395",
+    "sha256": "b9b47025990eea4d5200d1659c47404ec94f5d98320f748ba44ca5cd9766d1c4",
     "marker": {
       "symbol": "_landin_fixed_ready",
       "address": 536870932,
       "value": 1279678513,
-      "elf_sha256": "7f60809077ba826a15b23e48252da09a3c0bf997c155b0216307c5617aa0b395"
+      "elf_sha256": "b9b47025990eea4d5200d1659c47404ec94f5d98320f748ba44ca5cd9766d1c4"
     }
   },
-  "seconds": 37.72,
+  "seconds": 36.259,
   "kernel_usb": {
-    "since": 1795054664.6952052,
-    "until": 1795054702.3975415,
+    "since": 1795233101.6268122,
+    "until": 1795233137.8670166,
     "lines": [],
     "status": "captured"
   },
@@ -97,7 +97,7 @@
       "h": "00002bc2",
       "c": "00000003",
       "d": "00000002",
-      "m": "000004e2",
+      "m": "00000659",
       "u": "00000001",
       "p": "8000000b",
       "n": "00000446",
