@@ -1484,6 +1484,23 @@ comments of `.github/workflows/release.yml` and of `flake.nix` beside
    release is announced. The scripts job holds the script's names to the
    text of `release.yml` (`scripts/tests/test_install_script.py`); this
    step holds them to what the release published.
+
+   Then each Linux archive as published, on a Linux host of its
+   architecture: it must be the static one, holding `NOTICE-GLIBC` and
+   `LICENSE-GLIBC`, and run where no glibc is (D1787, D1790):
+
+   ```sh
+   gh release download vX.Y.Z --repo 701-dev/Landin --pattern 'landin-X.Y.Z-x86_64-linux.tar.gz'
+   tar -xzOf landin-X.Y.Z-x86_64-linux.tar.gz NOTICE-GLIBC
+   (. environments/pins.sh && landin_fetch_alpine /tmp/alpine x86_64-linux)
+   python3 scripts/static_check.py --archive landin-X.Y.Z-x86_64-linux.tar.gz \
+     --alpine /tmp/alpine/alpine-3.24.4 --work /tmp/static-X.Y.Z
+   ```
+
+   The notice names the glibc the archive holds, from the runner's
+   `libc6-dev`. The release workflow ran the same
+   check on each archive before the approval, and the gate's release jobs
+   on every software run.
 7. **Move the flake.** On a branch from `main`, one commit moves
    `flake.nix`'s `releaseVersion` to X.Y.Z and its `releaseHashes` to the
    sums in the published `.sha256` files, which the publishing job's log

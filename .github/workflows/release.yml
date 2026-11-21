@@ -159,11 +159,12 @@ jobs:
           "$HOME/landin-toolchain/gnat-$LANDIN_GNAT_VERSION/bin/gnat" --version | head -1
 
       #  Release mode: a consumer wants the compiler, not its assertions.
-      #  -R is GPRbuild's "no run path": without it the Linux binary carried
-      #  an RPATH into the runner's build and toolchain trees, and RPATH is
-      #  searched before the system directories, so an installed refine
-      #  would look for libc beside wherever it was unpacked.  It needs
-      #  none: only the C library and the loader are NEEDED.
+      #  On Linux it links glibc in statically (D1787), so the archive runs
+      #  on any Linux, musl and NixOS ones and a glibc older than the
+      #  runner's among them.  -R is GPRbuild's "no run path", which
+      #  build.sh adds to a static link itself: glibc's static start kills
+      #  an executable that names one.  On Darwin it keeps an installed
+      #  refine from looking beside wherever the runner built it.
       - name: Build refine
         env:
           LANDIN_BUILD_MODE: release
@@ -237,6 +238,15 @@ jobs:
               echo "refine carries a run path" >&2
               exit 1
             fi
+            #  Static: no program interpreter and no shared library, a
+            #  tag older than D1787 excepted, whose build was dynamic.
+            if grep -q 'LANDIN_LINK' scripts/env.sh; then
+              if readelf -lW "$binary" | grep -q INTERP \
+                || readelf -d "$binary" | grep -q NEEDED; then
+                echo "refine is not linked statically" >&2
+                exit 1
+              fi
+            fi
           fi
 
       - name: Package it
@@ -266,6 +276,23 @@ jobs:
               "$unpacked/bin/refine" "$name" --help > /dev/null
               "$unpacked/bin/refine" "$name" --describe > /dev/null
             done
+          fi
+          #  The Linux archive where no glibc is: alone in an empty root, and
+          #  installed by install.sh on the pinned Alpine, running the first
+          #  program and the --link=libc fixtures against musl (D1790), as
+          #  the gate's release jobs run it on the same build.
+          if [ "$RUNNER_OS" = Linux ] && [ -f scripts/static_check.py ]; then
+            ./scripts/ci_packages.sh bubblewrap
+            if [ -e /proc/sys/kernel/apparmor_restrict_unprivileged_userns ]; then
+              sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+            fi
+            (
+              . ./environments/pins.sh
+              landin_fetch_alpine "$RUNNER_TEMP/alpine" '${{ matrix.platform }}'
+              python3 scripts/static_check.py --archive "$asset" \
+                --alpine "$RUNNER_TEMP/alpine/alpine-$LANDIN_ALPINE_VERSION" \
+                --work "$RUNNER_TEMP/static"
+            )
           fi
           for file in "$asset" "$debug"; do
             sum=$(shasum -a 256 "$file" | cut -d' ' -f1)

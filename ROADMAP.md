@@ -2299,7 +2299,7 @@ glibc with `-static-pie`, for x86-64 and arm64, as R23.40 found it builds
 with the pinned toolchain and no source change
 (`roadmap/inputs/static-linux-refine.md`); a musl build is not attempted,
 since no published GNAT targets musl. The static archive replaces the glibc
-archives under their names or is published beside them as Q-116 answers.
+archives under their names, as Q-116 answered.
 The install script takes it on a musl or NixOS host, and the user image
 takes it where it makes the image simpler. The archive carries glibc's
 licence and names the glibc it holds, and the build is refused when a

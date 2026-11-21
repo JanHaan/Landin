@@ -54,7 +54,7 @@ Use 0.2.9 or later: [the first program](#your-first-program) needs
 
 ### With the install script
 
-On Linux x86-64 or arm64 with glibc, or on a Mac with Apple Silicon:
+On Linux x86-64 or arm64, or on a Mac with Apple Silicon:
 
 ```sh
 curl -fsSL https://www.701.dev/install.sh | sh
@@ -77,9 +77,13 @@ curl -fsSL https://www.701.dev/install.sh | sh -s -- --version 0.2.11 --dir ~/op
 `--help` lists the options. The script is
 [`install.sh`](install.sh) in this repository, served unchanged; read it
 before you run it if you like. It refuses a host no archive serves,
-NixOS, musl distributions, Intel Macs, FreeBSD and Windows among them,
-and names nix and the source build instead. With the GitHub CLI installed
-it also prints the commands that check the archive's attestation, as
+Intel Macs, FreeBSD, Windows and other CPU architectures among them. It
+also refuses an archive whose `refine` does not start on your host, after
+downloading and checking it. That is what 0.2.11 and earlier do on NixOS,
+on musl distributions and with a glibc older than 2.38. In both cases it
+says so, installs nothing, and names nix and the source build instead.
+With the GitHub CLI installed it also prints the commands that check the
+archive's attestation, as
 [From a release](#from-a-release) describes. To remove the install,
 delete `~/.landin`.
 
@@ -116,10 +120,27 @@ The archive for your platform on
 under `lib/landin`, with no top-level directory. Unpack it into a directory of its own and put its `bin` on your
 `PATH`.
 
-A Linux archive's `refine` is linked against glibc and asks for the
-system's standard loader, `/lib64/ld-linux-x86-64.so.2` on x86-64 and
-`/lib/ld-linux-aarch64.so.1` on arm64. On NixOS or a musl distribution,
+From the release after 0.2.11, the `refine` in each Linux archive,
+`landin-VERSION-x86_64-linux.tar.gz` and
+`landin-VERSION-aarch64-linux.tar.gz`, is linked statically with glibc,
+and so are the commands it runs. It asks for no loader and no shared
+library, so it runs on any Linux: musl distributions such as Alpine,
+NixOS, and distributions whose glibc is older.
+
+The archives of 0.2.11 and earlier have the same names and stay
+published. They are linked dynamically against the glibc of Ubuntu 24.04.
+They need glibc 2.38 or later and its standard loader,
+`/lib64/ld-linux-x86-64.so.2` on x86-64 and `/lib/ld-linux-aarch64.so.1`
+on arm64. They do not start on Debian 12 (glibc 2.36), Ubuntu 22.04
+(2.35) or RHEL 9 (2.34), nor on NixOS or a musl distribution. There,
 install with nix or build from source.
+
+A static Linux archive holds two more files at its top level.
+`LICENSE-GLIBC` is the copyright file of the Debian or Ubuntu `libc6-dev`
+package whose `libc.a` was linked in, with glibc's licence, the LGPL,
+version 2.1 or later. `NOTICE-GLIBC` names that glibc by its package
+version and distribution, says where its source is, and says how to
+relink `refine` with a modified glibc from Landin's public source.
 
 Beside each archive is `landin-VERSION-PLATFORM.tar.gz.sha256`, one line
 in `sha256sum`'s own format: `SUM  landin-VERSION-PLATFORM.tar.gz`.
@@ -295,6 +316,9 @@ the build tag that keeps each host's objects apart.
 
 That is the debug build, which keeps the compiler's own internal checks
 on. `LANDIN_BUILD_MODE=release` builds the faster release one beside it.
+On Linux the release build links statically and needs glibc's static
+library, `libc.a`: `libc6-dev` has it on Debian and Ubuntu, and on Fedora
+you install `glibc-static`. The debug build does not need it.
 
 This `refine` reads the clone's library, so put its directory on your
 `PATH` rather than copying it elsewhere.
@@ -311,12 +335,16 @@ them is enough:
   takes;
 - `x86_64-linux-gnu-gcc`, on Debian and Ubuntu;
 - `x86_64-redhat-linux-gcc`, on Fedora;
-- `gcc`, which `nix-shell -p gcc` provides on NixOS.
+- `gcc`, which `nix-shell -p gcc` provides on NixOS and `apk add gcc`
+  on Alpine.
 
 On an arm64 machine the names are `aarch64-linux-gnu-gcc`,
 `aarch64-redhat-linux-gcc`, `aarch64-unknown-linux-gnu-gcc` and `gcc`, in
 that order. `--toolchain=NAME` names a driver yourself, and then `refine`
 tries that one alone.
+
+On Alpine, a program that links the C library, with `--link=libc`, also
+needs the `musl-dev` package.
 
 Without one, `refine` names each driver it looked for, in the same order,
 and says what to install. Checking, formatting, the

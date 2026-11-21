@@ -10747,8 +10747,9 @@ PROCESS_SECTION_BUDGETS = {
     "Parallel sessions and shared resources": 14600,
     "Command reference": 8400,
     "The mechanical gate": 48000,
-    #  Raised when the install script's check joined the recipe's step 6.
-    "Releasing a version": 12600,
+    #  Raised when the install script's check joined the recipe's step 6,
+    #  and again when the static Linux archive's check did.
+    "Releasing a version": 13000,
 }
 
 

@@ -237,10 +237,17 @@ The README has [the commands in brief](../README.md#refine-in-brief);
   `lib/landin`, each attested by the release workflow; Homebrew's
   `janhaan/tap/landin`, the flake's default package and the one-line
   `install.sh` the site serves install it, the flake's `nix run` runs it,
-  and its `refine` package builds from source. The script picks the
-  host's archive, refuses one whose `.sha256` differs and a host no archive
-  serves, and the gate runs it on all three hosts against its own packaged
-  compiler served as a release would be. The
+  and its `refine` package builds from source. From the release after
+  0.2.11, a Linux archive's `refine` and its commands are linked statically
+  with glibc (D1787) and run on any Linux, musl distributions and NixOS
+  included, and the archive carries `LICENSE-GLIBC` and `NOTICE-GLIBC`
+  (D1788); the archives of 0.2.11 and earlier need glibc 2.38 and its
+  loader. The script picks the host's archive, refuses one whose `.sha256`
+  differs, a host no archive serves and, rather than refusing hosts by
+  their loader, an archive whose `refine` does not start on the host
+  (D1789). The gate runs it on all three hosts against its own packaged
+  compiler served as a release would be, and runs the packaged static
+  compiler in an empty root and on Alpine (D1790). The
   [README's installing section](../README.md#installing) gives each route.
 - From the release after 0.2.11, a release also publishes two container
   images, each one tag of the version alone holding Linux amd64 and arm64
