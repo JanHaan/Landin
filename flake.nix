@@ -152,6 +152,10 @@
               buildInputs = lib.optionals pkgs.stdenv.hostPlatform.isLinux [
                 (lib.getLib pkgs.stdenv.cc.cc)
                 pkgs.expat
+                #  GPRbuild's arm64 Linux archive links its tools other than
+                #  gprbuild itself, gprconfig among them, against
+                #  libgmp.so.10; the x86-64 one does not.
+                pkgs.gmp
                 pkgs.ncurses
                 pkgs.xz
                 pkgs.zlib
