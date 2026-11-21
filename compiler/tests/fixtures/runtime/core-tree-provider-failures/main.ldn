@@ -60,10 +60,9 @@ exercise: (provider: type is mem.allocator, memory: provider)
         return when lenof text <> 8 or text[0] <> 'r'
         inc at
     end while
-    --  The growth asks to grow in place before it allocates (D356): two
-    --  permits cover both, whichever the provider grants.
-    two: usize = 2
-    fault.permit(counted, two)
+    --  The growth is one resize, which the provider answers in place or by
+    --  moving the block: one permit covers it either way.
+    fault.permit(counted, one)
     root: tree.node_id = tree.add_branch(value, counted, branch_name,
                                          tree.id(0), eight) else (problem)
         _ = problem
@@ -74,17 +73,17 @@ exercise: (provider: type is mem.allocator, memory: provider)
         return
     end
     tree.release(value, counted)
-    --  The refused leaf and branch were each refused growing in place and
-    --  allocating, so five refusals in all.  The first block, and the
-    --  growth, in place where the arena and the pool grow it and moved where
-    --  the heap does not, which spends an eighth attempt and gives a second
-    --  block; every block given is freed once.
+    --  The empty tree's first block, then the refused leaf's and branch's
+    --  resizes, were refused: three refusals in all.  The first block and
+    --  the resize gave a block each, the resize in place where the arena and
+    --  the pool grow it and moved by the heap itself where it does not, so
+    --  the release is the one free through the injector.
     okay = tree.ordinal(root) == 8 and leaves == 8
            and tree.length(value) == 0
-           and fault.injected_failures(counted) == 5
-           and fault.successes(counted) + fault.growths(counted) == 2
-           and fault.frees(counted) == fault.successes(counted)
-           and fault.frees(counted) == fault.attempts(counted) - 6
+           and fault.injected_failures(counted) == 3
+           and fault.attempts(counted) == 5
+           and fault.successes(counted) == 2 and fault.growths(counted) == 0
+           and fault.frees(counted) == 1
            and fault.live(counted) == 0
 end exercise
 
