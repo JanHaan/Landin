@@ -2215,7 +2215,8 @@ release runs `install_check.py --published`, holding the names to the
 release's assets, and the documented command. Met on the way and fixed:
 the links check would race the Pages deployment on the push that
 publishes the script, so `lychee.toml` leaves that one address to the
-render and the recipe. Q-65 is answered too: version tags only.
+render and the recipe. Q-65 is answered too: version tags only. Gate run
+44883850095 and boards run 44886149383 on e05e56389.
 
 ### R23.40 — Whether a static Linux `refine` can be built
 
