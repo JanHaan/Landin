@@ -153,7 +153,9 @@ package body Landin.Tests.Stack_Report_Suite is
    --  its caller had before the call: x86-64's return address and frame
    --  pointer, arm64's and RV64's frame record, Cortex-M0's pushed
    --  registers, the reference profile's frame and the area a call
-   --  reserves.  The depth is the frame plus the deepest callee's.
+   --  reserves.  RV64 saves no register its routines do not name
+   --  (D1688), so its frames are arm64's.  The depth is the frame plus
+   --  the deepest callee's.
    procedure A_Closed_Graph_On_Every_Target
      (Item : in out Landin.Testing.Context);
 
@@ -166,7 +168,7 @@ package body Landin.Tests.Stack_Report_Suite is
       --  D1565: a Cortex-M call passing scalars in registers reserves
       --  no area for them.
       Frames : constant array (Native'Range) of Expected :=
-        [(32, 48, 48), (32, 48, 48), (112, 128, 128), (28, 48, 40)];
+        [(32, 48, 48), (32, 48, 48), (32, 48, 48), (28, 48, 40)];
    begin
       for Index in Native'Range loop
          declare
@@ -933,7 +935,7 @@ package body Landin.Tests.Stack_Report_Suite is
      (Item : in out Landin.Testing.Context)
    is
       Own : constant array (Every_Backend'Range) of Natural :=
-        [1504, 1504, 1664, 1504, 1504, 1504, 1184];
+        [1504, 1504, 1568, 1504, 1504, 1504, 1184];
    begin
       for Index in Every_Backend'Range loop
          declare

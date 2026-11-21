@@ -9664,9 +9664,10 @@ package body Landin.Tests.Backend_Suite is
            (Item, Has (Small, HT & "j .L") and then Has (Small, ", .L")
               and then not Has (Small, "x26")
               and then not Has (Small, ".cfi_offset 26,")
-              and then Has (Small, "sd x25, 0(x5)")
-              and then Has (Small, ".cfi_offset 25,"),
-            "a small routine jumps near and neither saves nor describes x26");
+              and then not Has (Small, "sd x25, 0(x5)")
+              and then not Has (Small, ".cfi_offset 25,"),
+            "a small routine jumps near and neither saves nor describes x26"
+            & " nor any other register it does not name");
          Landin.Testing.Check
            (Item, Has (Bump, "lla x26, ") and then Has (Bump, "jr x26")
               and then Has (Bump, "sd x26, 0(x5)")
@@ -9853,6 +9854,107 @@ package body Landin.Tests.Backend_Suite is
          end loop;
       end loop;
    end RISCV_Keeps_Values_In_Registers;
+
+   --  D1687, D1688: RISC-V branches on a comparison's operands where they
+   --  are and computes a comparison's result with slt, sltu or seqz, so
+   --  a routine that only compares names none of x20, x21 and x23-x25;
+   --  a checked signed addition computes its overflow and no carry; and
+   --  a routine saves no callee-saved register its text does not name.
+   procedure RISCV_Compares_Operands_In_Place
+     (Item : in out Landin.Testing.Context);
+
+   procedure RISCV_Compares_Operands_In_Place
+     (Item : in out Landin.Testing.Context)
+   is
+      Source : constant String :=
+        "less: (a: u64, b: u64) -> (r: bool) =" & LF
+        & "    r = a < b" & LF
+        & "end less" & LF
+        & "pick: (a: i64, b: i64) -> (r: i64) =" & LF
+        & "    if a < b then" & LF
+        & "        r = a + b" & LF
+        & "    else" & LF
+        & "        r = 0" & LF
+        & "    end if" & LF
+        & "end pick" & LF
+        & "public main: () -> (code: i32) =" & LF
+        & "    code = i32(pick(3, 4) & 1)" & LF
+        & "    if less(1, 2) then" & LF
+        & "        code = 0" & LF
+        & "    end if" & LF
+        & "end main" & LF;
+
+      function Has (Text, Part : String) return Boolean
+        is (Index (Text, Part) /= 0);
+
+      --  The routine Name's text, from its label to its size directive.
+      function Routine (Text, Name : String) return String;
+      function Routine (Text, Name : String) return String is
+         First : constant Natural := Index (Text, LF & Name & ":" & LF);
+         Last : constant Natural :=
+           (if First = 0 then 0
+            else Ada.Strings.Fixed.Index
+              (Text, HT & ".size " & Name & ",", First));
+      begin
+         return (if Last = 0 then "" else Text (First .. Last));
+      end Routine;
+
+      --  Whether Text names any of the callee-saved registers x9 and
+      --  x18-x27, or the comparison registers among them.
+      function Names_Saved (Text : String) return Boolean is
+        (Has (Text, "x9") or else Has (Text, "x18")
+         or else Has (Text, "x19") or else Has (Text, "x2"));
+
+      type Facts_List is array (1 .. 2) of Landin.Targets.Target_Facts;
+      Walked : constant Facts_List :=
+        [Landin.Targets.Linux_RV64, Landin.Targets.RV32];
+   begin
+      for Which in Walked'Range loop
+         for Objective in Landin.Optimization.Objective loop
+            declare
+               Facts : constant Landin.Targets.Target_Facts := Walked (Which);
+               Work : Landin.Stages.Compilation :=
+                 Landin.Stages.Create (Facts);
+               Ran : Natural;
+               Report : Landin.Build_Reports.Report;
+               Assembly : Ada.Strings.Unbounded.Unbounded_String;
+               Name : constant String := Landin.Targets.Name (Facts) & " "
+                 & Landin.Optimization.Spelling (Objective);
+            begin
+               Lower (Work, Source, Ran);
+               Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
+               if Landin.Stages.Failed (Work) then
+                  return;
+               end if;
+               Landin.Backend.RiscV.Emit
+                 (Landin.Stages.Code (Work).all,
+                  Landin.Stages.Meanings (Work).all,
+                  Landin.Stages.Identities (Work).all, Facts,
+                  (Objective, Landin.Optimization.Off), Assembly, Report,
+                  Level => Landin.Targets.Levels.Default_Level (Facts));
+               declare
+                  Text : constant String :=
+                    Ada.Strings.Unbounded.To_String (Assembly);
+                  Less : constant String := Routine (Text, "less");
+                  Pick : constant String := Routine (Text, "pick");
+               begin
+                  Landin.Testing.Check
+                    (Item, Less /= "" and then Has (Less, "sltu ")
+                       and then not Names_Saved (Less),
+                     Name & ": a comparison's result is sltu's, and the "
+                     & "routine names and saves no callee-saved register");
+                  Landin.Testing.Check
+                    (Item, Pick /= "" and then Has (Pick, "x24")
+                       and then not Has (Pick, "x23")
+                       and then (Has (Pick, HT & "blt ")
+                                 or else Has (Pick, HT & "bge ")),
+                     Name & ": the branch reads its operands, and a checked "
+                     & "signed sum computes its overflow and no carry");
+               end;
+            end;
+         end loop;
+      end loop;
+   end RISCV_Compares_Operands_In_Place;
 
    --  D410: a scalar in a `layout(c, packed)` record may sit at any
    --  address, and RV64 moves it one byte at a time, because a misaligned
@@ -11563,6 +11665,9 @@ package body Landin.Tests.Backend_Suite is
       Landin.Testing.Register
         (Into, "backend", "RISC-V keeps values in registers",
          RISCV_Keeps_Values_In_Registers'Access);
+      Landin.Testing.Register
+        (Into, "backend", "RISC-V compares its operands where they are",
+         RISCV_Compares_Operands_In_Place'Access);
       Landin.Testing.Register
         (Into, "backend", "Darwin wide parts keep target offsets",
          Darwin_Wide_Parts_Keep_Target_Offsets'Access);
