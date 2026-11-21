@@ -82,8 +82,6 @@ Open:
 
 | Question | Default until answered | What waits on the answer |
 | --- | --- | --- |
-| [Q-65 — Does a release also move a `latest` tag on the container images?](questions/Q-65.md) | the images carry version tags only and no `latest`, and the documentation names the version. | nothing in R23.10's work; only the tags its release workflow step moves and the command the documentation prints. |
-| [Q-66 — From which address is the one-line install script served?](questions/Q-66.md) | the script is served from the project's site, `https://www.701.dev/install.sh`, published with it from the repository. | only the address R23.30 documents; the script and its controls do not depend on it. |
 | [Q-105 — May the register sweep of 2026-11-21 retire eight rows nobody is waiting on?](questions/Q-105.md) | all eight stay open in the register as they are. | nothing; the register is under its cap without it. |
 
 Answered:
@@ -103,6 +101,8 @@ Answered:
 - [Q-13 — Is cutting the `Driver.Library` to `Driver.Loading` edge R18's first step?](questions/Q-13.md)
 - [Q-19 — May R18.20 close with `Source_Maps` still linking the front end?](questions/Q-19.md)
 - [Q-59 — Retire thirteen register rows to bring the register well under its cap?](questions/Q-59.md)
+- [Q-65 — Does a release also move a `latest` tag on the container images?](questions/Q-65.md)
+- [Q-66 — From which address is the one-line install script served?](questions/Q-66.md)
 - [Q-67 — Are matrices of complex numbers in R22's linear algebra?](questions/Q-67.md)
 - [Q-68 — Do R22's sparse matrices bring direct factorizations?](questions/Q-68.md)
 - [Q-69 — Does R22's arbitrary precision include floating point?](questions/Q-69.md)

@@ -235,8 +235,12 @@ The README has [the commands in brief](../README.md#refine-in-brief);
 - A release publishes an archive for Linux x86-64, Linux arm64 and macOS
   arm64, an installed prefix of `bin/refine`, `libexec/landin` and
   `lib/landin`, each attested by the release workflow; Homebrew's
-  `janhaan/tap/landin` and the flake's default package install it, the
-  flake's `nix run` runs it, and its `refine` package builds from source. The
+  `janhaan/tap/landin`, the flake's default package and the one-line
+  `install.sh` the site serves install it, the flake's `nix run` runs it,
+  and its `refine` package builds from source. The script picks the
+  host's archive, refuses one whose `.sha256` differs and a host no archive
+  serves, and the gate runs it on all three hosts against its own packaged
+  compiler served as a release would be. The
   [README's installing section](../README.md#installing) gives each route.
 - From the release after 0.2.11, a release also publishes two container
   images, each one tag of the version alone holding Linux amd64 and arm64

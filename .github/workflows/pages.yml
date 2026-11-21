@@ -34,6 +34,7 @@ on:
       - 'docs/capabilities.md'
       - 'examples.md'
       - 'README.md'
+      - 'install.sh'
       - 'ROADMAP.md'
       - 'handoff.md'
       - 'compiler/ada/README.md'
